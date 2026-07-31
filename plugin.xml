@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension point="org.eclipse.ui.startup">
+      <startup class="com.sap.abap.ai.completion.Activator"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.preferencePages">
+      <page
+            id="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.AICompletionPreferencePage"
+            name="ABAP AI Completion">
+      </page>
+   </extension>
+
+   <extension point="org.eclipse.core.runtime.preferences">
+      <initializer class="com.sap.abap.ai.completion.preferences.PreferenceInitializer"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.commands">
+      <category
+            id="com.sap.abap.ai.completion.category"
+            name="ABAP AI Completion">
+      </category>
+      <command
+            id="com.sap.abap.ai.completion.completeCommand"
+            categoryId="com.sap.abap.ai.completion.category"
+            name="ABAP AI completion"
+            defaultHandler="com.sap.abap.ai.completion.editor.AICompletionHandler">
+      </command>
+   </extension>
+
+   <extension point="org.eclipse.ui.bindings">
+      <key
+            sequence="M1+M2+."
+            commandId="com.sap.abap.ai.completion.completeCommand"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            contextId="org.eclipse.ui.textEditorScope">
+      </key>
+   </extension>
+
+</plugin>

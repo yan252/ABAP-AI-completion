@@ -1,0 +1,17 @@
+# Eclipse compiled output
+bin/
+*.class
+
+# Eclipse generated files
+.metadata/
+.settings/
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*.log

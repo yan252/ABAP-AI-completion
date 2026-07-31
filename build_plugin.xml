@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="com.sap.abap.ai.completion" default="jar" basedir=".">
+
+    <description>Build script for ABAP AI Completion Eclipse plugin</description>
+
+    <property name="src.dir" value="src"/>
+    <property name="bin.dir" value="bin"/>
+    <property name="dist.dir" value="dist"/>
+
+    <target name="clean">
+        <delete dir="${bin.dir}"/>
+        <delete dir="${dist.dir}"/>
+    </target>
+
+    <target name="compile" depends="clean">
+        <mkdir dir="${bin.dir}"/>
+        <!-- Find all Eclipse plugin jars for classpath -->
+        <path id="eclipse.classpath">
+            <fileset dir="${eclipse.home}/plugins">
+                <include name="org.eclipse.osgi_*.jar"/>
+                <include name="org.eclipse.core.runtime_*.jar"/>
+                <include name="org.eclipse.core.resources_*.jar"/>
+                <include name="org.eclipse.ui_*.jar"/>
+                <include name="org.eclipse.ui.workbench_*.jar"/>
+                <include name="org.eclipse.ui.ide_*.jar"/>
+                <include name="org.eclipse.ui.editors_*.jar"/>
+                <include name="org.eclipse.ui.workbench.texteditor_*.jar"/>
+                <include name="org.eclipse.jface.text_*.jar"/>
+                <include name="org.eclipse.jface_*.jar"/>
+                <include name="org.eclipse.equinox.common_*.jar"/>
+                <include name="org.eclipse.osgi.services_*.jar"/>
+                <include name="org.eclipse.equinox.preferences_*.jar"/>
+                <include name="org.eclipse.core.commands_*.jar"/>
+                <include name="org.eclipse.core.jobs_*.jar"/>
+                <include name="org.eclipse.core.contenttype_*.jar"/>
+                <include name="org.eclipse.equinox.registry_*.jar"/>
+                <include name="org.eclipse.swt_*.jar"/>
+                <include name="org.eclipse.text_*.jar"/>
+                <include name="com.google.gson_*.jar"/>
+            </fileset>
+        </path>
+
+        <javac srcdir="${src.dir}" destdir="${bin.dir}" 
+               classpathref="eclipse.classpath"
+               source="17" target="17"
+               encoding="UTF-8"
+               includeantruntime="false">
+        </javac>
+    </target>
+
+    <target name="jar" depends="compile">
+        <mkdir dir="${dist.dir}"/>
+        <jar destfile="${dist.dir}/com.sap.abap.ai.completion_1.0.0.jar">
+            <fileset dir="${bin.dir}"/>
+            <fileset dir="." includes="plugin.xml"/>
+            <fileset dir="META-INF" includes="MANIFEST.MF"/>
+            <manifest>
+                <attribute name="Manifest-Version" value="1.0"/>
+                <attribute name="Bundle-ManifestVersion" value="2"/>
+                <attribute name="Bundle-Name" value="ABAP AI Completion"/>
+                <attribute name="Bundle-SymbolicName" value="com.sap.abap.ai.completion; singleton:=true"/>
+                <attribute name="Bundle-Version" value="1.0.0"/>
+                <attribute name="Bundle-Activator" value="com.sap.abap.ai.completion.Activator"/>
+                <attribute name="Bundle-Vendor" value="SAP ABAP AI Tools"/>
+                <attribute name="Require-Bundle" value="org.eclipse.ui,org.eclipse.core.runtime,org.eclipse.jface.text,org.eclipse.ui.workbench.texteditor,org.eclipse.core.resources,org.eclipse.ui.ide"/>
+                <attribute name="Bundle-RequiredExecutionEnvironment" value="JavaSE-17"/>
+                <attribute name="Automatic-Module-Permissions" value="true"/>
+                <attribute name="Export-Package" value="com.sap.abap.ai.completion,com.sap.abap.ai.completion.client,com.sap.abap.ai.completion.editor,com.sap.abap.ai.completion.parser,com.sap.abap.ai.completion.preferences"/>
+            </manifest>
+        </jar>
+        <echo>Plugin jar created at: ${dist.dir}/com.sap.abap.ai.completion_1.0.0.jar</echo>
+    </target>
+
+    <target name="deploy" depends="jar">
+        <fail unless="eclipse.dropins" message="Set -Declipse.dropins=path to deploy"/>
+        <copy file="${dist.dir}/com.sap.abap.ai.completion_1.0.0.jar" 
+              todir="${eclipse.dropins}"/>
+        <echo>Deployed to ${eclipse.dropins}</echo>
+    </target>
+
+</project>
