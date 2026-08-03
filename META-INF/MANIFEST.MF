@@ -27,5 +27,6 @@ Export-Package: com.sap.abap.ai.completion,
  com.sap.abap.ai.completion.client,
  com.sap.abap.ai.completion.editor,
  com.sap.abap.ai.completion.parser,
- com.sap.abap.ai.completion.preferences
+ com.sap.abap.ai.completion.preferences,
+ com.sap.abap.ai.completion.ui
 Automatic-Module-Permissions: true

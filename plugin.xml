@@ -40,13 +40,20 @@
       </key>
    </extension>
 
-   <!-- NOTE: The ABAP AI Completion status bar icon is NOT contributed via a
-        menuContribution to "toolbar:org.eclipse.ui.trim.status" anymore. That
-        locationURI creates a separate trim ROW whose height is only ~1/3 of the
-        status bar (Eclipse Bug 471313), so the icon was rendered too small.
-        Instead, the icon is injected programmatically into the workbench
-        window's IStatusLineManager (the main status line row, full height) by
-        Activator.earlyStartup(). This matches how other plugins render their
-        status bar icons at the full status bar height. -->
+   <!-- Status bar icon contributed to the status trim area.
+        Eclipse provides native drag-and-drop reordering for trim items.
+        The icon is painted to fill the entire trim row height. -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="toolbar:org.eclipse.ui.trim.status">
+         <toolbar
+               id="com.sap.abap.ai.completion.trimstatus.toolbar">
+            <control
+                  id="com.sap.abap.ai.completion.trimstatus.control"
+                  class="com.sap.abap.ai.completion.ui.AbapAIStatusLineContribution">
+            </control>
+         </toolbar>
+      </menuContribution>
+   </extension>
 
 </plugin>
