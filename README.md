@@ -36,7 +36,7 @@
 
 2. **安装到Eclipse**
 
-   将JAR文件复制到Eclipse的 `dropins` 目录：
+   将JAR文件复制到Eclipse的 `dropins` 目录，如不存在此目录请先创建目录：
    ```
    <你的Eclipse安装路径>/dropins/
    ```
