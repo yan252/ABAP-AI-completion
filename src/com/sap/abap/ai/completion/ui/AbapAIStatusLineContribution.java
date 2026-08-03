@@ -11,11 +11,12 @@ import org.eclipse.swt.events.MenuDetectEvent;
 import org.eclipse.swt.events.MenuDetectListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
+import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.ImageData;
 import org.eclipse.swt.graphics.Point;
 import org.eclipse.swt.graphics.Rectangle;
-import org.eclipse.swt.widgets.Canvas;
+import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Menu;
@@ -55,7 +56,7 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
     private static final int TARGET_HEIGHT = 22;
 
     private Image logoImage;
-    private Canvas canvas;
+    private Button button;
     private Composite comp;
 
     /** Guard flag to prevent recursive layout corrections. */
@@ -80,49 +81,21 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
         };
         comp.setLayout(null);
 
-        // Canvas that fills the composite and paints the icon top-aligned.
-        canvas = new Canvas(comp, SWT.NONE);
+        // Use a native Button instead of Canvas for INSTANT pressed visual feedback.
+        // SWT.PUSH gives standard button behavior; SWT.FLAT removes the border.
+        button = new Button(comp, SWT.PUSH | SWT.FLAT);
+        if (logoImage != null) {
+            button.setImage(logoImage);
+        }
+        button.setToolTipText("ABAP AI Completion");
+        button.pack();
+
+        // Position the button at (0,0) filling the composite.
         Rectangle initial = comp.getClientArea();
-        canvas.setBounds(0, 0, Math.max(initial.width, 1), TARGET_HEIGHT);
-
-        canvas.addPaintListener(e -> {
-            // Detect any drift caused by drag-induced relayout and fix synchronously.
-            // Paint fires after every layout, so this is the most reliable hook.
-            fixLayoutIfDrifted();
-
-            Rectangle cb = canvas.getBounds();
-            if (cb.width <= 0 || cb.height <= 0) return;
-
-            if (logoImage != null && !logoImage.isDisposed()) {
-                Rectangle ib = logoImage.getBounds();
-                if (ib.width <= 0 || ib.height <= 0) return;
-
-                int targetH = TARGET_HEIGHT;
-                int targetW = ib.width * targetH / ib.height;
-                if (targetW > cb.width) {
-                    targetW = cb.width;
-                    targetH = ib.height * targetW / ib.width;
-                }
-                if (targetH <= 0) targetH = 1;
-                if (targetW <= 0) targetW = 1;
-
-                int x = (cb.width - targetW) / 2;
-                int y = 0;
-                try {
-                    e.gc.drawImage(logoImage, 0, 0, ib.width, ib.height,
-                            x, y, targetW, targetH);
-                } catch (Exception ignored) {
-                }
-            } else {
-                e.gc.setForeground(parent.getDisplay().getSystemColor(SWT.COLOR_WIDGET_FOREGROUND));
-                e.gc.drawText("AI", 2, 0);
-            }
-        });
-
-        canvas.setToolTipText("ABAP AI Completion");
+        button.setBounds(0, 0, Math.max(initial.width, 1), TARGET_HEIGHT);
 
         // ====================================================================
-        // LAYOUT CORRECTION: Listen to Move/Resize on our composite, canvas,
+        // LAYOUT CORRECTION: Listen to Move/Resize on our composite, button,
         // and the entire parent chain up to the shell. When TrimBarLayout
         // shrinks the trim line or repositions us after a drag, we synchronously
         // force the trim line height back to TARGET_HEIGHT and our composite
@@ -131,22 +104,20 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
         installLayoutListeners(parent);
 
         // ---- Right-click: popup menu ----
-        canvas.addMenuDetectListener(new MenuDetectListener() {
+        button.addMenuDetectListener(new MenuDetectListener() {
             @Override
             public void menuDetected(MenuDetectEvent e) {
                 showPopupMenu();
             }
         });
 
-        // ---- Left-click: distinguish click from drag ----
-        final boolean[] dragged = { false };
-        canvas.addListener(SWT.DragDetect, e -> dragged[0] = true);
-        comp.addListener(SWT.DragDetect, e -> dragged[0] = true);
-        canvas.addListener(SWT.MouseUp, e -> {
-            if (e.button == 1 && !dragged[0]) {
+        // ---- Left-click: Button automatically handles pressed visual state ----
+        // SWT.PUSH button natively shows pressed effect on mouse down with zero delay.
+        button.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
                 showPopupMenu();
             }
-            dragged[0] = false;
         });
 
         // ---- Initial correction (async, covers first layout) ----
@@ -156,18 +127,18 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
     }
 
     /**
-     * Attach Move/Resize listeners to our composite, canvas, and every parent
+     * Attach Move/Resize listeners to our composite, button, and every parent
      * composite up to (but not including) the workbench shell.
      */
     private void installLayoutListeners(Composite parent) {
         try {
             org.eclipse.swt.widgets.Shell shell = findShell();
 
-            // Listen on our composite and canvas.
+            // Listen on our composite and button.
             comp.addListener(SWT.Move, e -> fixLayoutIfDrifted());
             comp.addListener(SWT.Resize, e -> fixLayoutIfDrifted());
-            canvas.addListener(SWT.Move, e -> fixLayoutIfDrifted());
-            canvas.addListener(SWT.Resize, e -> fixLayoutIfDrifted());
+            button.addListener(SWT.Move, e -> fixLayoutIfDrifted());
+            button.addListener(SWT.Resize, e -> fixLayoutIfDrifted());
 
             // Listen on every parent up to the shell.
             Composite p = parent;
@@ -234,11 +205,10 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
                 comp.setSize(sz.x, TARGET_HEIGHT);
             }
 
-            // Force canvas to fill the composite at (0, 0).
+            // Force button to fill the composite at (0, 0).
             Rectangle ca = comp.getClientArea();
             int w = Math.max(ca.width, 1);
-            canvas.setBounds(0, 0, w, TARGET_HEIGHT);
-            canvas.redraw();
+            button.setBounds(0, 0, w, TARGET_HEIGHT);
         } catch (Exception ignored) {
         } finally {
             correcting = false;
@@ -318,9 +288,9 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
 
     private void showPopupMenu() {
         try {
-            if (canvas == null || canvas.isDisposed()) return;
+            if (button == null || button.isDisposed()) return;
 
-            Menu popup = new Menu(canvas);
+            Menu popup = new Menu(button);
             try {
                 MenuItem prefsItem = new MenuItem(popup, SWT.PUSH);
                 prefsItem.setText("Preferences...");
