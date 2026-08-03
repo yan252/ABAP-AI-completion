@@ -1,7 +1,7 @@
 # Rebuild the plugin JAR with correct META-INF/MANIFEST.MF inclusion
 
 $JDK23 = "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre"
-$PROJ = "C:\Users\96000217\Documents\trae_projects\test\com.sap.abap.ai.completion"
+$PROJ = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $jar = "$JDK23\bin\jar"
 
 Write-Host "=== Rebuilding plugin JAR ==="

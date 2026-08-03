@@ -1,9 +1,9 @@
-$src = "C:\Users\96000217\Documents\trae_projects\test\com.sap.abap.ai.completion\src"
-$bin = "C:\Users\96000217\Documents\trae_projects\test\com.sap.abap.ai.completion\bin"
-$dist = "C:\Users\96000217\Documents\trae_projects\test\com.sap.abap.ai.completion\dist"
+$src = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\src"
+$bin = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\bin"
+$dist = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\dist"
 $jarPath = "$dist\com.sap.abap.ai.completion_1.0.0.jar"
 
-$ecj = "C:\Users\96000217\Documents\trae_projects\test\com.sap.abap.ai.completion\lib\ecj-4.34.jar"
+$ecj = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\lib\ecj-4.34.jar"
 $p2Pool = "C:\Users\96000217\.p2\pool\plugins"
 
 $deps = @(
@@ -51,7 +51,7 @@ Write-Host "=== Creating temporary JAR ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 cd "$bin"
 & "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe" cf "$jarPath.bak" com/
-cd "C:\Users\96000217\Documents\trae_projects\test\com.sap.abap.ai.completion"
+cd "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 & "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe" uf "$jarPath.bak" plugin.xml
 Move-Item "$jarPath.bak" "$jarPath" -Force
 
