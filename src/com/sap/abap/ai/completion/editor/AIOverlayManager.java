@@ -7,8 +7,6 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.KeyAdapter;
 import org.eclipse.swt.events.KeyEvent;
-import org.eclipse.swt.events.MouseAdapter;
-import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
@@ -76,17 +74,7 @@ public class AIOverlayManager {
         // Register keyboard interceptor
         registerKeyInterceptor(viewer);
 
-        // Register mouse click on overlay content -> accept
-        if (currentOverlay.getStyledText() != null && !currentOverlay.getStyledText().isDisposed()) {
-            currentOverlay.getStyledText().addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseUp(MouseEvent e) {
-                    acceptSuggestion();
-                }
-            });
-        }
-
-        // Register global mouse filter - click outside overlay -> dismiss
+        // Register global mouse filter - click inside overlay -> accept, click outside -> dismiss
         registerGlobalMouseFilter();
     }
 
@@ -110,8 +98,8 @@ public class AIOverlayManager {
 
     /**
      * Detects mouse clicks via a global Display filter.
-     * - Click inside overlay (on its StyledText) → accept suggestion
-     * - Click on editor widget or anywhere else → dismiss overlay
+     * - Click inside overlay (on its Shell or StyledText) → accept suggestion
+     * - Click anywhere else → dismiss overlay
      */
     private void registerGlobalMouseFilter() {
         unregisterGlobalMouseFilter();
@@ -141,8 +129,9 @@ public class AIOverlayManager {
                 }
             }
 
-            // If the click is on the overlay shell itself, ignore (overlay's own MouseListener handles it)
+            // If the click is on the overlay shell itself → accept suggestion and insert code
             if (widgetShell == overlayShell) {
+                acceptSuggestion();
                 return;
             }
 

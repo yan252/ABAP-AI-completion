@@ -18,6 +18,11 @@ Copy-Item -Recurse "$PROJ\bin\com" "$tmpDir\" -Force
 # Copy plugin.xml
 Copy-Item "$PROJ\plugin.xml" "$tmpDir\" -Force
 
+# Copy icons folder (resources needed at runtime, e.g. status line logo)
+if (Test-Path "$PROJ\icons") {
+    Copy-Item -Recurse "$PROJ\icons" "$tmpDir\" -Force
+}
+
 # Create a proper MANIFEST.MF (must have trailing newline, no extra spaces)
 @"
 Manifest-Version: 1.0
@@ -50,7 +55,8 @@ Export-Package: com.sap.abap.ai.completion,
  com.sap.abap.ai.completion.client,
  com.sap.abap.ai.completion.editor,
  com.sap.abap.ai.completion.parser,
- com.sap.abap.ai.completion.preferences
+ com.sap.abap.ai.completion.preferences,
+ com.sap.abap.ai.completion.ui
 
 "@ | Set-Content -Path "$tmpDir\META-INF\MANIFEST.MF" -Encoding ASCII -NoNewline
 
@@ -58,9 +64,13 @@ Write-Host "MANIFEST.MF content:"
 Get-Content "$tmpDir\META-INF\MANIFEST.MF"
 Write-Host "---"
 
-# Build the JAR - explicitly include META-INF/MANIFEST.MF
+# Build the JAR - explicitly include META-INF/MANIFEST.MF, plugin.xml, classes and icons
 Push-Location $tmpDir
-& $jar cfm "$PROJ\dist\com.sap.abap.ai.completion_1.0.0.jar" "META-INF\MANIFEST.MF" plugin.xml com\
+if (Test-Path "$tmpDir\icons") {
+    & $jar cfm "$PROJ\dist\com.sap.abap.ai.completion_1.0.0.jar" "META-INF\MANIFEST.MF" plugin.xml com\ icons\
+} else {
+    & $jar cfm "$PROJ\dist\com.sap.abap.ai.completion_1.0.0.jar" "META-INF\MANIFEST.MF" plugin.xml com\
+}
 Pop-Location
 
 Write-Host ""

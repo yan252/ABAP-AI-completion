@@ -12,6 +12,8 @@
 - **🌊 浮动覆盖层**: 代码建议以浮动覆盖层形式显示（类似Copilot风格）
 - **🎨 自定义样式**: 可自定义补全代码的显示颜色
 - **🔌 灵活配置**: 支持任何兼容OpenAI Chat Completions API的服务端点
+- ** 手动补全（Ctrl+Shift+.）会使用SKILL ：自动补全（ requestQuickCompletion ）用的是简化的独立 prompt，不会加载 SKILL 目录下的内容。
+- ** 补全模式配置 ：在偏好设置中可以选择手动补全是弹出覆盖层 ( overlay ) 还是直接插入 ( direct )，两者都会使用SKILL内容。
 
 ---
 
