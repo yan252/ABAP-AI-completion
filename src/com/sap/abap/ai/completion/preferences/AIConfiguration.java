@@ -85,15 +85,80 @@ public final class AIConfiguration {
 
     // === Skill & Prompt ===
 
+    /**
+     * 获取 Skill 目录路径。
+     * 如果用户未配置(空字符串),则返回默认路径:
+     * <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills
+     */
     public static String getSkillDirectory() {
-        return getStore().getString(PreferenceConstants.SKILL_DIR);
+        String configured = getStore().getString(PreferenceConstants.SKILL_DIR);
+        if (configured != null && !configured.trim().isEmpty()) {
+            return configured;
+        }
+        // 动态计算默认路径
+        return getDefaultSkillDirectory();
+    }
+
+    /**
+     * 计算默认 Skill 目录路径(公开方法,供 UI 显示默认值使用)。
+     */
+    public static String getDefaultSkillDirectory() {
+        try {
+            // 通过 Platform 获取工作区根路径
+            org.eclipse.core.resources.IWorkspace workspace =
+                    org.eclipse.core.resources.ResourcesPlugin.getWorkspace();
+            if (workspace != null && workspace.getRoot() != null) {
+                org.eclipse.core.runtime.IPath workspacePath = workspace.getRoot().getLocation();
+                if (workspacePath != null) {
+                    java.io.File skillDir = new java.io.File(
+                            workspacePath.toFile(),
+                            ".metadata/.plugins/" + com.sap.abap.ai.completion.Activator.PLUGIN_ID + "/skills");
+                    return skillDir.getAbsolutePath();
+                }
+            }
+        } catch (Exception e) {
+            // fallback
+        }
+        // 回退到用户主目录
+        String userHome = System.getProperty("user.home");
+        return new java.io.File(userHome, ".abap-ai-completion/skills").getAbsolutePath();
+    }
+
+    /**
+     * 确保 Skill 目录存在(如果未配置则创建默认目录)。
+     */
+    public static void ensureSkillDirectoryExists() {
+        String skillDirPath = getSkillDirectory();
+        if (skillDirPath != null && !skillDirPath.trim().isEmpty()) {
+            java.io.File skillDir = new java.io.File(skillDirPath);
+            if (!skillDir.exists()) {
+                try {
+                    skillDir.mkdirs();
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+        }
     }
 
     public static String getSystemPrompt() {
         return getStore().getString(PreferenceConstants.SYSTEM_PROMPT);
     }
 
+    /**
+     * 加载 Skill 内容(无类型筛选,加载所有 skill)。
+     */
     public static String loadSkillContents() {
+        return loadSkillContents(null);
+    }
+
+    /**
+     * 加载 Skill 内容,按代码类型筛选。
+     *
+     * @param codeType 代码类型,如 "ABAP"、"CDS"、"AI" 等;
+     *                 为 null 时不筛选,加载所有 skill
+     */
+    public static String loadSkillContents(String codeType) {
         String dirPath = getSkillDirectory();
         if (dirPath == null || dirPath.trim().isEmpty()) {
             return "";
@@ -105,6 +170,104 @@ public final class AIConfiguration {
         }
 
         StringBuilder sb = new StringBuilder();
+
+        // 查找所有子目录(每个子目录为一个 skill)
+        File[] subDirs = skillDir.listFiles(File::isDirectory);
+        if (subDirs != null && subDirs.length > 0) {
+            // 有子目录: 按 skill 子目录结构组织
+            for (File subDir : subDirs) {
+                // 按代码类型筛选 skill 目录
+                if (!matchesCodeType(subDir.getName(), codeType)) {
+                    continue;
+                }
+                loadSkillFromDirectory(subDir, sb);
+            }
+        } else {
+            // 无子目录: 回退到扁平文件模式(兼容旧结构)
+            loadSkillsFromFlatFiles(skillDir, sb);
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * 判断 skill 目录名称是否匹配代码类型。
+     * 匹配规则: 目录名称(大写)包含代码类型关键字(大写)。
+     *
+     * @param skillDirName skill 目录名称
+     * @param codeType     代码类型(如 "ABAP"、"CDS"),为 null 时返回 true
+     */
+    private static boolean matchesCodeType(String skillDirName, String codeType) {
+        if (codeType == null || codeType.trim().isEmpty()) {
+            return true; // 无筛选,加载所有
+        }
+        if (skillDirName == null) {
+            return false;
+        }
+        String upperDir = skillDirName.toUpperCase();
+        String upperType = codeType.toUpperCase();
+
+        // 特殊映射: "ABAP" 类型也匹配 "CLEAN-ABAP" 等包含 ABAP 的目录
+        // "CDS" 类型匹配包含 "CDS" 的目录
+        return upperDir.contains(upperType);
+    }
+
+    /**
+     * 从单个 skill 子目录加载内容。
+     * 优先读取 SKILL.md 作为主描述,然后读取其他参考文件。
+     */
+    private static void loadSkillFromDirectory(File skillDir, StringBuilder sb) {
+        String skillName = skillDir.getName();
+        sb.append("=== Skill: ").append(skillName).append(" ===\n");
+
+        // 1. 优先读取 SKILL.md (标准 SKILL 描述文件)
+        File skillMd = new File(skillDir, "SKILL.md");
+        if (skillMd.exists() && skillMd.isFile()) {
+            try {
+                String content = new String(
+                        java.nio.file.Files.readAllBytes(skillMd.toPath()),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                sb.append("--- SKILL.md ---\n");
+                sb.append(content).append("\n");
+            } catch (Exception e) {
+                // skip
+            }
+        }
+
+        // 2. 读取子目录下的所有参考文件(排除 SKILL.md 本身)
+        File[] refFiles = skillDir.listFiles((d, name) -> {
+            if (name.equalsIgnoreCase("SKILL.md")) return false;
+            String lower = name.toLowerCase();
+            return lower.endsWith(".abap")
+                    || lower.endsWith(".txt")
+                    || lower.endsWith(".skill")
+                    || lower.endsWith(".md")
+                    || lower.endsWith(".xml")
+                    || lower.endsWith(".json")
+                    || lower.endsWith(".sql");
+        });
+
+        if (refFiles != null) {
+            for (File f : refFiles) {
+                try {
+                    String content = new String(
+                            java.nio.file.Files.readAllBytes(f.toPath()),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    sb.append("--- ").append(f.getName()).append(" ---\n");
+                    sb.append(content).append("\n");
+                } catch (Exception e) {
+                    // skip unreadable files
+                }
+            }
+        }
+
+        sb.append("\n");
+    }
+
+    /**
+     * 扁平文件模式(兼容旧结构): 直接从 skill 目录读取文件。
+     */
+    private static void loadSkillsFromFlatFiles(File skillDir, StringBuilder sb) {
         File[] files = skillDir.listFiles((d, name) ->
                 name.toLowerCase().endsWith(".abap")
                 || name.toLowerCase().endsWith(".txt")
@@ -123,8 +286,56 @@ public final class AIConfiguration {
                 }
             }
         }
+    }
 
-        return sb.toString();
+    // === Parent Program Resolution ===
+
+    public static boolean isParentProgramResolutionEnabled() {
+        return getStore().getBoolean(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED);
+    }
+
+    public static int getAbapSearchDepth() {
+        try {
+            return Integer.parseInt(getStore().getString(PreferenceConstants.ABAP_SEARCH_DEPTH));
+        } catch (NumberFormatException e) {
+            return Integer.parseInt(PreferenceConstants.DEFAULT_ABAP_SEARCH_DEPTH);
+        }
+    }
+
+    public static int getMaxContextChars() {
+        try {
+            return Integer.parseInt(getStore().getString(PreferenceConstants.MAX_CONTEXT_CHARS));
+        } catch (NumberFormatException e) {
+            return Integer.parseInt(PreferenceConstants.DEFAULT_MAX_CONTEXT_CHARS);
+        }
+    }
+
+    // === Workspace Code Reference ===
+
+    public static boolean isWorkspaceCodeReferenceEnabled() {
+        return getStore().getBoolean(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED);
+    }
+
+    public static int getMaxWorkspaceCodeChars() {
+        try {
+            return Integer.parseInt(getStore().getString(PreferenceConstants.MAX_WORKSPACE_CODE_CHARS));
+        } catch (NumberFormatException e) {
+            return Integer.parseInt(PreferenceConstants.DEFAULT_MAX_WORKSPACE_CODE_CHARS);
+        }
+    }
+
+    public static int getWorkspaceCodeFileLimit() {
+        try {
+            return Integer.parseInt(getStore().getString(PreferenceConstants.WORKSPACE_CODE_FILE_LIMIT));
+        } catch (NumberFormatException e) {
+            return Integer.parseInt(PreferenceConstants.DEFAULT_WORKSPACE_CODE_FILE_LIMIT);
+        }
+    }
+
+    // === Interface Logging ===
+
+    public static boolean isInterfaceLoggingEnabled() {
+        return getStore().getBoolean(PreferenceConstants.INTERFACE_LOGGING_ENABLED);
     }
 
     // === Helpers ===

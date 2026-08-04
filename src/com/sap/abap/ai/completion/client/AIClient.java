@@ -7,6 +7,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
+import com.sap.abap.ai.completion.logging.AILogger;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
 
 /**
@@ -116,19 +117,54 @@ public class AIClient {
 
     // ==================== JSON Builder (no Gson) ====================
 
+    // 代码补全场景下 max_tokens 的合理上限
+    // 设置过大(如 240640)会导致 input + output 超过模型上下文窗口而报 HTTP 400
+    private static final int MAX_TOKENS_CAP = 4096;
+    private static final int MAX_TOKENS_MIN = 16;
+
     private static String buildRequestBody(String model, String systemPrompt,
                                            String userPrompt, int maxTokens,
                                            double temperature) {
+        // 限制 max_tokens 在合理范围内,避免配置过大导致上下文窗口溢出
+        int safeMaxTokens = maxTokens;
+        if (safeMaxTokens > MAX_TOKENS_CAP) {
+            AILogger.logError("AIClient",
+                    "[WARN] Configured max_tokens=" + maxTokens
+                    + " exceeds cap " + MAX_TOKENS_CAP
+                    + " (code completion does not need that many output tokens). "
+                    + "Auto-capping to " + MAX_TOKENS_CAP + ".");
+            safeMaxTokens = MAX_TOKENS_CAP;
+        }
+        if (safeMaxTokens < MAX_TOKENS_MIN) {
+            safeMaxTokens = MAX_TOKENS_MIN;
+        }
+
+        // 输入过长时截断(兜底保护,避免上下文窗口溢出)
+        // 粗略估计: 4 字符 ≈ 1 token, 保留 32K tokens 给 system+output
+        int maxInputChars = 120000;
+        String safeUserPrompt = userPrompt;
+        if (userPrompt != null && userPrompt.length() > maxInputChars) {
+            safeUserPrompt = userPrompt.substring(0, maxInputChars)
+                    + "\n\n... [truncated: input too long, kept first " + maxInputChars + " chars]";
+            AILogger.logError("AIClient",
+                    "[WARN] User prompt length=" + userPrompt.length()
+                    + " exceeds " + maxInputChars + " chars. Truncated to avoid context window overflow.");
+        }
+        String safeSystemPrompt = systemPrompt;
+        if (systemPrompt != null && systemPrompt.length() > 20000) {
+            safeSystemPrompt = systemPrompt.substring(0, 20000);
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         sb.append("\"model\":\"").append(escapeJson(model)).append("\",");
-        sb.append("\"max_tokens\":").append(maxTokens).append(",");
+        sb.append("\"max_tokens\":").append(safeMaxTokens).append(",");
         sb.append("\"temperature\":").append(temperature).append(",");
         sb.append("\"messages\":[");
         sb.append("{\"role\":\"system\",\"content\":\"")
-          .append(escapeJson(systemPrompt)).append("\"},");
+          .append(escapeJson(safeSystemPrompt)).append("\"},");
         sb.append("{\"role\":\"user\",\"content\":\"")
-          .append(escapeJson(userPrompt)).append("\"}");
+          .append(escapeJson(safeUserPrompt)).append("\"}");
         sb.append("]");
         sb.append("}");
         return sb.toString();

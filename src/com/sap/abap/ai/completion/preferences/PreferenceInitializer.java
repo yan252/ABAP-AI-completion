@@ -26,5 +26,22 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 
         store.setDefault(PreferenceConstants.SKILL_DIR, PreferenceConstants.DEFAULT_SKILL_DIR);
         store.setDefault(PreferenceConstants.SYSTEM_PROMPT, PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
+
+        store.setDefault(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED,
+                PreferenceConstants.DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED);
+        store.setDefault(PreferenceConstants.ABAP_SEARCH_DEPTH,
+                PreferenceConstants.DEFAULT_ABAP_SEARCH_DEPTH);
+        store.setDefault(PreferenceConstants.MAX_CONTEXT_CHARS,
+                PreferenceConstants.DEFAULT_MAX_CONTEXT_CHARS);
+
+        store.setDefault(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED,
+                PreferenceConstants.DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED);
+        store.setDefault(PreferenceConstants.MAX_WORKSPACE_CODE_CHARS,
+                PreferenceConstants.DEFAULT_MAX_WORKSPACE_CODE_CHARS);
+        store.setDefault(PreferenceConstants.WORKSPACE_CODE_FILE_LIMIT,
+                PreferenceConstants.DEFAULT_WORKSPACE_CODE_FILE_LIMIT);
+
+        store.setDefault(PreferenceConstants.INTERFACE_LOGGING_ENABLED,
+                PreferenceConstants.DEFAULT_INTERFACE_LOGGING_ENABLED);
     }
 }

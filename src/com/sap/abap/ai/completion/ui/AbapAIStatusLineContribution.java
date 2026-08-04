@@ -313,6 +313,16 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
                     }
                 });
 
+                final MenuItem workspaceCodeItem = new MenuItem(popup, SWT.CHECK);
+                workspaceCodeItem.setText("AI Reference Workspace Code");
+                workspaceCodeItem.setSelection(isWorkspaceCodeReferenceEnabled());
+                workspaceCodeItem.addSelectionListener(new SelectionAdapter() {
+                    @Override
+                    public void widgetSelected(SelectionEvent e) {
+                        setWorkspaceCodeReferenceEnabled(workspaceCodeItem.getSelection());
+                    }
+                });
+
                 new MenuItem(popup, SWT.SEPARATOR);
 
                 MenuItem completeItem = new MenuItem(popup, SWT.PUSH);
@@ -398,6 +408,29 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
             IPreferenceStore store = Activator.staticGetPreferenceStore();
             if (store == null) return;
             store.setValue(PreferenceConstants.PLUGIN_ENABLED, enabled);
+            try {
+                Activator.getDefault().savePluginPreferences();
+            } catch (Exception ignored) {
+            }
+        } catch (Exception e) {
+        }
+    }
+
+    private boolean isWorkspaceCodeReferenceEnabled() {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return PreferenceConstants.DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED;
+            return store.getBoolean(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED);
+        } catch (Exception e) {
+            return PreferenceConstants.DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED;
+        }
+    }
+
+    private void setWorkspaceCodeReferenceEnabled(boolean enabled) {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return;
+            store.setValue(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED, enabled);
             try {
                 Activator.getDefault().savePluginPreferences();
             } catch (Exception ignored) {

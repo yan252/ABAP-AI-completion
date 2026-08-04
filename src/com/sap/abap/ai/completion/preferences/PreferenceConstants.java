@@ -32,6 +32,19 @@ public final class PreferenceConstants {
     public static final String SKILL_DIR = "skillDirectory";
     public static final String SYSTEM_PROMPT = "systemPrompt";
 
+    // === Parent Program Resolution ===
+    public static final String PARENT_PROGRAM_RESOLUTION_ENABLED = "parentProgramResolutionEnabled";
+    public static final String ABAP_SEARCH_DEPTH = "abapSearchDepth";
+    public static final String MAX_CONTEXT_CHARS = "maxContextChars";
+
+    // === Workspace Code Reference ===
+    public static final String WORKSPACE_CODE_REFERENCE_ENABLED = "workspaceCodeReferenceEnabled";
+    public static final String MAX_WORKSPACE_CODE_CHARS = "maxWorkspaceCodeChars";
+    public static final String WORKSPACE_CODE_FILE_LIMIT = "workspaceCodeFileLimit";
+
+    // === Interface Logging ===
+    public static final String INTERFACE_LOGGING_ENABLED = "interfaceLoggingEnabled";
+
     // === Default Values ===
     public static final String DEFAULT_API_BASE_URL = "https://api.openai.com/v1";
     public static final String DEFAULT_API_MODEL = "gpt-4";
@@ -42,7 +55,7 @@ public final class PreferenceConstants {
     public static final String DEFAULT_AUTO_COMPLETE_DELAY = "2000";
     public static final String DEFAULT_COMPLETION_COLOR = "0,128,0";
     public static final String DEFAULT_MANUAL_COMPLETION_MODE = "direct";
-    public static final String DEFAULT_SKILL_DIR = "d:\\temp\\skill";
+    public static final String DEFAULT_SKILL_DIR = ""; // 默认使用 <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills
     public static final String DEFAULT_SYSTEM_PROMPT =
             "You are an expert SAP ABAP developer assistant. Analyze the provided ABAP code context "
             + "(including referenced INCLUDE programs and available skill files) and suggest the next "
@@ -56,4 +69,17 @@ public final class PreferenceConstants {
             + "6. Pay attention to code comments that describe what should be implemented next.\n"
             + "7. Use ABAP-specific patterns: DATA declarations, LOOPs, SELECTs, FORM routines, etc.\n"
             + "8. Maintain consistent naming conventions with the existing code.";
+
+    // === Defaults for Parent Program Resolution ===
+    public static final boolean DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED = true;
+    public static final String DEFAULT_ABAP_SEARCH_DEPTH = "0";
+    public static final String DEFAULT_MAX_CONTEXT_CHARS = "8000";
+
+    // === Defaults for Workspace Code Reference ===
+    public static final boolean DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED = false;
+    public static final String DEFAULT_MAX_WORKSPACE_CODE_CHARS = "50000";
+    public static final String DEFAULT_WORKSPACE_CODE_FILE_LIMIT = "20";
+
+    // === Defaults for Interface Logging ===
+    public static final boolean DEFAULT_INTERFACE_LOGGING_ENABLED = false;
 }

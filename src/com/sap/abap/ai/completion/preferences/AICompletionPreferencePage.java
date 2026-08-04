@@ -11,6 +11,7 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
+import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
@@ -41,6 +42,13 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private ColorSelector colorSelector;
     private Label lblTestResult;
     private Label lblKeybinding;
+    private Button chkParentResolution;
+    private Text txtSearchDepth;
+    private Text txtMaxContextChars;
+    private Button chkWorkspaceCodeRef;
+    private Text txtMaxWorkspaceChars;
+    private Text txtWorkspaceFileLimit;
+    private Button chkInterfaceLogging;
 
     private IPreferenceStore store;
 
@@ -65,6 +73,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         createConnectionGroup(main);
         createFeatureGroup(main);
         createAutoCompletionGroup(main);
+        createContextGroup(main);
         createSkillGroup(main);
         createPromptGroup(main);
         createStyleGroup(main);
@@ -151,16 +160,66 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private void createSkillGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
         g.setText("Skill Directory");
-        g.setLayout(new GridLayout(2, false));
+        g.setLayout(new GridLayout(3, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         createLabel(g, "Skill directory:");
         txtSkillDir = createText(g, 1);
-        createLabel(g, "", 2); // spacer
+
+        Button browseBtn = new Button(g, SWT.PUSH);
+        browseBtn.setText("Browse...");
+        browseBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> browseSkillDir()));
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("Place .abap, .txt or .skill files in this directory.\n"
-                + "AI will use them as reference for code completion patterns.");
+        note.setText("This directory contains skill subdirectories.\n"
+                + "Each subdirectory is a skill with SKILL.md and reference files (.abap, .txt, .md, etc).\n"
+                + "Leave empty to use default: <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills");
+        GridData nd = new GridData(GridData.FILL_HORIZONTAL);
+        nd.horizontalSpan = 3;
+        note.setLayoutData(nd);
+    }
+
+    private void createContextGroup(Composite parent) {
+        Group g = new Group(parent, SWT.NONE);
+        g.setText("ABAP Context Resolution");
+        g.setLayout(new GridLayout(2, false));
+        g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        chkParentResolution = new Button(g, SWT.CHECK);
+        chkParentResolution.setText("Enable parent program reverse lookup");
+        GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
+        ckGd.horizontalSpan = 2;
+        chkParentResolution.setLayoutData(ckGd);
+
+        createLabel(g, "ABAP search depth (levels):");
+        txtSearchDepth = createText(g, 1);
+
+        createLabel(g, "Max context chars per parent:");
+        txtMaxContextChars = createText(g, 1);
+
+        chkWorkspaceCodeRef = new Button(g, SWT.CHECK);
+        chkWorkspaceCodeRef.setText("Use workspace ABAP code as AI reference");
+        GridData wsGd = new GridData(GridData.FILL_HORIZONTAL);
+        wsGd.horizontalSpan = 2;
+        chkWorkspaceCodeRef.setLayoutData(wsGd);
+
+        createLabel(g, "Max workspace chars:");
+        txtMaxWorkspaceChars = createText(g, 1);
+
+        createLabel(g, "Max workspace files:");
+        txtWorkspaceFileLimit = createText(g, 1);
+
+        chkInterfaceLogging = new Button(g, SWT.CHECK);
+        chkInterfaceLogging.setText("Enable interface logging (system/user prompt + completion)");
+        GridData lgGd = new GridData(GridData.FILL_HORIZONTAL);
+        lgGd.horizontalSpan = 2;
+        chkInterfaceLogging.setLayoutData(lgGd);
+
+        Label note = new Label(g, SWT.WRAP);
+        note.setText("Parent lookup searches ABAP files containing INCLUDE <current file>.\n"
+                + "Search depth 0 = disable parent lookup, only current file code is sent.\n"
+                + "Workspace code reference sends other ABAP files from your workspace as AI context.\n"
+                + "Logs are written to the plugin state area, not the Eclipse error log.");
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
@@ -197,13 +256,26 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtApiKey.setText(store.getString(PreferenceConstants.API_KEY));
         txtMaxTokens.setText(store.getString(PreferenceConstants.MAX_TOKENS));
         txtTemperature.setText(store.getString(PreferenceConstants.TEMPERATURE));
-        txtSkillDir.setText(store.getString(PreferenceConstants.SKILL_DIR));
+        txtSkillDir.setText(getDisplaySkillDir());
         txtSystemPrompt.setText(store.getString(PreferenceConstants.SYSTEM_PROMPT));
 
         chkPluginEnabled.setSelection(store.getBoolean(PreferenceConstants.PLUGIN_ENABLED));
         chkAutoComplete.setSelection(store.getBoolean(PreferenceConstants.AUTO_COMPLETION_ENABLED));
 
         txtAutoDelay.setText(store.getString(PreferenceConstants.AUTO_COMPLETE_DELAY));
+
+        chkParentResolution.setSelection(
+                store.getBoolean(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED));
+        txtSearchDepth.setText(store.getString(PreferenceConstants.ABAP_SEARCH_DEPTH));
+        txtMaxContextChars.setText(store.getString(PreferenceConstants.MAX_CONTEXT_CHARS));
+
+        chkWorkspaceCodeRef.setSelection(
+                store.getBoolean(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED));
+        txtMaxWorkspaceChars.setText(store.getString(PreferenceConstants.MAX_WORKSPACE_CODE_CHARS));
+        txtWorkspaceFileLimit.setText(store.getString(PreferenceConstants.WORKSPACE_CODE_FILE_LIMIT));
+
+        chkInterfaceLogging.setSelection(
+                store.getBoolean(PreferenceConstants.INTERFACE_LOGGING_ENABLED));
 
         // Color
         String colorStr = store.getString(PreferenceConstants.COMPLETION_COLOR);
@@ -218,13 +290,32 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         store.setValue(PreferenceConstants.API_KEY, txtApiKey.getText());
         store.setValue(PreferenceConstants.MAX_TOKENS, txtMaxTokens.getText());
         store.setValue(PreferenceConstants.TEMPERATURE, txtTemperature.getText());
-        store.setValue(PreferenceConstants.SKILL_DIR, txtSkillDir.getText());
+        String skillDirValue = txtSkillDir.getText().trim();
+        String defaultSkillDir = AIConfiguration.getDefaultSkillDirectory();
+        if (skillDirValue.isEmpty() || skillDirValue.equals(defaultSkillDir)) {
+            store.setValue(PreferenceConstants.SKILL_DIR, "");
+        } else {
+            store.setValue(PreferenceConstants.SKILL_DIR, skillDirValue);
+        }
         store.setValue(PreferenceConstants.SYSTEM_PROMPT, txtSystemPrompt.getText());
 
         store.setValue(PreferenceConstants.PLUGIN_ENABLED, chkPluginEnabled.getSelection());
         store.setValue(PreferenceConstants.AUTO_COMPLETION_ENABLED, chkAutoComplete.getSelection());
 
         store.setValue(PreferenceConstants.AUTO_COMPLETE_DELAY, txtAutoDelay.getText());
+
+        store.setValue(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED,
+                chkParentResolution.getSelection());
+        store.setValue(PreferenceConstants.ABAP_SEARCH_DEPTH, txtSearchDepth.getText());
+        store.setValue(PreferenceConstants.MAX_CONTEXT_CHARS, txtMaxContextChars.getText());
+
+        store.setValue(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED,
+                chkWorkspaceCodeRef.getSelection());
+        store.setValue(PreferenceConstants.MAX_WORKSPACE_CODE_CHARS, txtMaxWorkspaceChars.getText());
+        store.setValue(PreferenceConstants.WORKSPACE_CODE_FILE_LIMIT, txtWorkspaceFileLimit.getText());
+
+        store.setValue(PreferenceConstants.INTERFACE_LOGGING_ENABLED,
+                chkInterfaceLogging.getSelection());
 
         RGB rgb = colorSelector.getColorValue();
         store.setValue(PreferenceConstants.COMPLETION_COLOR,
@@ -244,13 +335,26 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtApiKey.setText("");
         txtMaxTokens.setText(PreferenceConstants.DEFAULT_MAX_TOKENS);
         txtTemperature.setText(PreferenceConstants.DEFAULT_TEMPERATURE);
-        txtSkillDir.setText(PreferenceConstants.DEFAULT_SKILL_DIR);
+        txtSkillDir.setText(AIConfiguration.getDefaultSkillDirectory());
         txtSystemPrompt.setText(PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
 
         chkPluginEnabled.setSelection(PreferenceConstants.DEFAULT_PLUGIN_ENABLED);
         chkAutoComplete.setSelection(PreferenceConstants.DEFAULT_AUTO_COMPLETION_ENABLED);
 
         txtAutoDelay.setText(PreferenceConstants.DEFAULT_AUTO_COMPLETE_DELAY);
+
+        chkParentResolution.setSelection(
+                PreferenceConstants.DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED);
+        txtSearchDepth.setText(PreferenceConstants.DEFAULT_ABAP_SEARCH_DEPTH);
+        txtMaxContextChars.setText(PreferenceConstants.DEFAULT_MAX_CONTEXT_CHARS);
+
+        chkWorkspaceCodeRef.setSelection(
+                PreferenceConstants.DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED);
+        txtMaxWorkspaceChars.setText(PreferenceConstants.DEFAULT_MAX_WORKSPACE_CODE_CHARS);
+        txtWorkspaceFileLimit.setText(PreferenceConstants.DEFAULT_WORKSPACE_CODE_FILE_LIMIT);
+
+        chkInterfaceLogging.setSelection(
+                PreferenceConstants.DEFAULT_INTERFACE_LOGGING_ENABLED);
 
         colorSelector.setColorValue(new RGB(0, 128, 0));
     }
@@ -326,5 +430,36 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         gd.horizontalSpan = hSpan;
         txt.setLayoutData(gd);
         return txt;
+    }
+
+    /**
+     * 获取用于显示的 Skill 目录路径。
+     * 如果用户未配置(空字符串),则返回计算出的默认路径用于显示。
+     */
+    private String getDisplaySkillDir() {
+        String configured = store.getString(PreferenceConstants.SKILL_DIR);
+        if (configured != null && !configured.trim().isEmpty()) {
+            return configured;
+        }
+        return AIConfiguration.getDefaultSkillDirectory();
+    }
+
+    /**
+     * 打开目录选择对话框,让用户选择本机目录作为 Skill 目录。
+     */
+    private void browseSkillDir() {
+        DirectoryDialog dialog = new DirectoryDialog(getShell(), SWT.OPEN);
+        dialog.setText("Select Skill Directory");
+        dialog.setMessage("Select a directory containing .abap, .txt or .skill files:");
+
+        String currentPath = txtSkillDir.getText().trim();
+        if (currentPath != null && !currentPath.isEmpty()) {
+            dialog.setFilterPath(currentPath);
+        }
+
+        String selected = dialog.open();
+        if (selected != null && !selected.isEmpty()) {
+            txtSkillDir.setText(selected);
+        }
     }
 }

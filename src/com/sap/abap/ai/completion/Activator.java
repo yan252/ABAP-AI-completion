@@ -6,6 +6,8 @@ import org.eclipse.ui.IStartup;
 import org.eclipse.ui.plugin.AbstractUIPlugin;
 import org.osgi.framework.BundleContext;
 
+import com.sap.abap.ai.completion.preferences.AIConfiguration;
+
 public class Activator extends AbstractUIPlugin implements IStartup {
 
     public static final String PLUGIN_ID = "com.sap.abap.ai.completion";
@@ -16,6 +18,9 @@ public class Activator extends AbstractUIPlugin implements IStartup {
     public void start(BundleContext context) throws Exception {
         super.start(context);
         plugin = this;
+
+        // 确保 Skill 目录存在(默认: <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills)
+        AIConfiguration.ensureSkillDirectoryExists();
     }
 
     @Override

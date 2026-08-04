@@ -22,6 +22,7 @@ import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.IDocumentProvider;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import com.sap.abap.ai.completion.parser.AbapLanguageDetector;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
 
 /**
@@ -77,7 +78,35 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
 
     public void attachToEditorPart(IEditorPart editorPart) {
         if (editorPart instanceof ITextEditor) {
-            attachToEditor((ITextEditor) editorPart);
+            ITextEditor te = (ITextEditor) editorPart;
+            // ABAP 门控: 非 ABAP 编辑器不附加监听
+            if (!isAbapEditor(te)) {
+                return;
+            }
+            attachToEditor(te);
+        }
+    }
+
+    /**
+     * 判断文本编辑器是否为 ABAP 上下文。
+     * 通过编辑器 ID、文件扩展名、文档分区类型组合判断;
+     * 内容启发式作为最后兜底。
+     */
+    private boolean isAbapEditor(ITextEditor te) {
+        try {
+            IEditorInput input = te.getEditorInput();
+            org.eclipse.core.resources.IFile file = null;
+            if (input instanceof FileEditorInput) {
+                file = ((FileEditorInput) input).getFile();
+            }
+            IDocument doc = null;
+            IDocumentProvider dp = te.getDocumentProvider();
+            if (dp != null && input != null) {
+                doc = dp.getDocument(input);
+            }
+            return AbapLanguageDetector.isAbapContext(te, file, doc);
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -345,7 +374,12 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     @Override
     public void partActivated(IWorkbenchPart part) {
         if (part instanceof ITextEditor && part != editor) {
-            attachToEditor((ITextEditor) part);
+            ITextEditor te = (ITextEditor) part;
+            // ABAP 门控: 切换到非 ABAP 编辑器时不附加监听
+            if (!isAbapEditor(te)) {
+                return;
+            }
+            attachToEditor(te);
         }
     }
 
@@ -382,9 +416,15 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
 
         cancelCurrentRequest();
 
+        // 在 UI 线程捕获 IWorkbenchPage
+        IWorkbenchPage workbenchPage = null;
+        if (editor != null && editor.getSite() != null) {
+            workbenchPage = editor.getSite().getPage();
+        }
+
         currentRequest = AICompletionService.requestCompletion(
                 file, textBefore, textAfter,
-                fullDocument, project,
+                fullDocument, project, workbenchPage,
                 completion -> {
                     Display.getDefault().asyncExec(() -> {
                         if (this.editor != null && this.document != null) {

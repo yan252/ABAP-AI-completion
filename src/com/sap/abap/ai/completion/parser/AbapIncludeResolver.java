@@ -122,12 +122,8 @@ public class AbapIncludeResolver {
                 if (resource instanceof IFile) {
                     IFile file = (IFile) resource;
                     String fileName = file.getName().toUpperCase();
-                    // Match files containing the include name (with common ABAP extensions)
-                    if (fileName.contains(includeName)
-                            && (fileName.endsWith(".ABAP")
-                                    || fileName.endsWith(".TXT")
-                                    || fileName.equals(includeName + ".ABAP")
-                                    || fileName.equals(includeName + ".TXT"))) {
+                    // Match files containing the include name (with common ABAP extensions or no extension)
+                    if (fileName.contains(includeName) && isAbapSourceFile(fileName)) {
                         results.add(file);
                     }
                 }
@@ -136,6 +132,31 @@ public class AbapIncludeResolver {
         } catch (CoreException e) {
             // ignore inaccessible containers
         }
+    }
+
+    /**
+     * 判断文件名是否为 ABAP 源文件。
+     * 支持: .ABAP, .ABAPINC, .TXT, 以及无扩展名(SAP ADT 环境)。
+     */
+    private static boolean isAbapSourceFile(String upperName) {
+        if (upperName == null || upperName.isEmpty()) return false;
+        if (upperName.endsWith(".ABAP")) return true;
+        if (upperName.endsWith(".ABAPINC")) return true;
+        if (upperName.endsWith(".TXT")) return true;
+        // SAP ADT 环境中, ABAP 文件可能没有扩展名
+        int dot = upperName.lastIndexOf('.');
+        if (dot < 0) return true;  // 无扩展名,视为 ABAP
+        // 排除明显不是 ABAP 的扩展名
+        String ext = upperName.substring(dot);
+        if (ext.equals(".JAVA") || ext.equals(".XML") || ext.equals(".JSON")
+                || ext.equals(".PROPERTIES") || ext.equals(".HTML")
+                || ext.equals(".CSS") || ext.equals(".JS")) {
+            return false;
+        }
+        // ABAP 程序命名模式: Y/Z 开头
+        String base = upperName.substring(0, dot);
+        return base.startsWith("Y") || base.startsWith("Z")
+                || base.startsWith("SAP") || base.startsWith("R");
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.sap.abap.ai.completion.editor;
 
+import java.lang.reflect.Method;
+
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
@@ -14,6 +16,7 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.handlers.HandlerUtil;
@@ -21,6 +24,7 @@ import org.eclipse.ui.part.FileEditorInput;
 import org.eclipse.ui.texteditor.IDocumentProvider;
 import org.eclipse.ui.texteditor.ITextEditor;
 
+import com.sap.abap.ai.completion.parser.AbapLanguageDetector;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
 
 /**
@@ -59,11 +63,26 @@ public class AICompletionHandler extends AbstractHandler {
         if (doc == null) return null;
 
         IFile file = getFile(input);
+        IProject project = null;
         if (file == null) {
-            showStatus(event, "Cannot determine file.");
-            return null;
+            // SAP ADT 远程文件(如 $tmp)可能没有本地 IFile
+            // 仍然尝试通过编辑器和文档判断是否为 ABAP
+            if (!AbapLanguageDetector.isAbapContext(editor, null, doc)) {
+                showStatus(event, "Not an ABAP source.");
+                showMessage("ABAP AI Completion only runs in ABAP source files.");
+                return null;
+            }
+            // file 为 null 时继续执行(后续流程不严格依赖 file/project)
+        } else {
+            project = file.getProject();
+
+            // ABAP 门控: 非 ABAP 源码不触发补全
+            if (!AbapLanguageDetector.isAbapContext(editor, file, doc)) {
+                showStatus(event, "Not an ABAP source.");
+                showMessage("ABAP AI Completion only runs in ABAP source files.");
+                return null;
+            }
         }
-        IProject project = file.getProject();
 
         ISelection sel = editor.getSelectionProvider().getSelection();
         int cursorOffset = (sel instanceof ITextSelection)
@@ -82,10 +101,13 @@ public class AICompletionHandler extends AbstractHandler {
 
         ITextViewer viewer = editor.getAdapter(ITextViewer.class);
 
+        // 在 UI 线程捕获 IWorkbenchPage,传递给后台线程使用
+        IWorkbenchPage workbenchPage = editor.getSite().getPage();
+
         showStatus(event, "AI completion in progress...");
 
         AICompletionService.requestCompletion(
-            file, textBefore, textAfter, fullDoc, project,
+            file, textBefore, textAfter, fullDoc, project, workbenchPage,
             result -> Display.getDefault().asyncExec(() -> {
                 if (result == null || result.trim().isEmpty()) {
                     clearStatus(event);
@@ -150,7 +172,26 @@ public class AICompletionHandler extends AbstractHandler {
     }
 
     private IFile getFile(IEditorInput input) {
+        if (input == null) return null;
         if (input instanceof FileEditorInput) return ((FileEditorInput) input).getFile();
-        return input.getAdapter(IFile.class);
+        IFile file = input.getAdapter(IFile.class);
+        if (file != null) return file;
+        // 尝试通过反射获取 SAP ADT 文件对象
+        try {
+            Method getFileMethod = input.getClass().getMethod("getFile");
+            Object result = getFileMethod.invoke(input);
+            if (result instanceof IFile) return (IFile) result;
+        } catch (Exception ignored) {
+            // ignore
+        }
+        // 尝试通过反射获取 getIFile 方法
+        try {
+            Method getIFileMethod = input.getClass().getMethod("getIFile");
+            Object result = getIFileMethod.invoke(input);
+            if (result instanceof IFile) return (IFile) result;
+        } catch (Exception ignored) {
+            // ignore
+        }
+        return null;
     }
 }

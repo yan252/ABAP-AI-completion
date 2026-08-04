@@ -1,9 +1,10 @@
-$src = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\src"
-$bin = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\bin"
-$dist = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\dist"
+$proj = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
+$src = "$proj\src"
+$bin = "$proj\bin"
+$dist = "$proj\dist"
 $jarPath = "$dist\com.sap.abap.ai.completion_1.0.0.jar"
 
-$ecj = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\lib\ecj-4.34.jar"
+$ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "C:\Users\96000217\.p2\pool\plugins"
 
 $deps = @(
@@ -30,6 +31,9 @@ $deps = @(
 
 Write-Host "=== Cleaning old bin ==="
 Remove-Item -Recurse -Force "$bin\com" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$bin\META-INF" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$bin\icons" -ErrorAction SilentlyContinue
+Remove-Item -Force "$bin\plugin.xml" -ErrorAction SilentlyContinue
 
 Write-Host "=== Compiling ==="
 $depPaths = ($deps | ForEach-Object { (Resolve-Path $_).Path }) -join ";"
@@ -47,13 +51,29 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
-Write-Host "=== Creating temporary JAR ==="
+Write-Host "=== Assembling plugin resources ==="
+# Copy META-INF/MANIFEST.MF
+New-Item -ItemType Directory -Force -Path "$bin\META-INF" | Out-Null
+Copy-Item "$proj\META-INF\MANIFEST.MF" "$bin\META-INF\" -Force
+
+# Copy plugin.xml
+Copy-Item "$proj\plugin.xml" "$bin\" -Force
+
+# Copy icons if exists
+if (Test-Path "$proj\icons") {
+    Copy-Item -Recurse "$proj\icons" "$bin\" -Force
+}
+
+Write-Host "=== Creating JAR with full plugin structure ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
-cd "$bin"
-& "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe" cf "$jarPath.bak" com/
-cd "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
-& "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe" uf "$jarPath.bak" plugin.xml
-Move-Item "$jarPath.bak" "$jarPath" -Force
+$jarExe = "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe"
+Push-Location $bin
+if (Test-Path "$bin\icons") {
+    & $jarExe cfm "$jarPath" "META-INF\MANIFEST.MF" plugin.xml com\ icons\
+} else {
+    & $jarExe cfm "$jarPath" "META-INF\MANIFEST.MF" plugin.xml com\
+}
+Pop-Location
 
 $size = (Get-Item "$jarPath").Length / 1KB
 Write-Host "`n============================================"
@@ -62,4 +82,6 @@ Write-Host "============================================"
 Write-Host "  Location: $jarPath"
 Write-Host "  Size: $size KB"
 Write-Host "============================================"
-Write-Host "`nEither use this JAR or run rebuild.ps1 for final packaging"
+Write-Host "`nJAR contents:"
+& $jarExe tf "$jarPath"
+Write-Host "`nDeploy to Eclipse dropins directory to install."
