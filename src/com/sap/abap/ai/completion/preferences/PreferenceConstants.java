@@ -29,6 +29,7 @@ public final class PreferenceConstants {
     public static final String MANUAL_COMPLETION_MODE = "manualCompletionMode";
 
     // === Skill & Prompt ===
+    public static final String SKILL_ENABLED = "skillEnabled";
     public static final String SKILL_DIR = "skillDirectory";
     public static final String SYSTEM_PROMPT = "systemPrompt";
 
@@ -55,6 +56,7 @@ public final class PreferenceConstants {
     public static final String DEFAULT_AUTO_COMPLETE_DELAY = "2000";
     public static final String DEFAULT_COMPLETION_COLOR = "0,128,0";
     public static final String DEFAULT_MANUAL_COMPLETION_MODE = "direct";
+    public static final boolean DEFAULT_SKILL_ENABLED = false;
     public static final String DEFAULT_SKILL_DIR = ""; // 默认使用 <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills
     public static final String DEFAULT_SYSTEM_PROMPT =
             "You are an expert SAP ABAP developer assistant. Analyze the provided ABAP code context "

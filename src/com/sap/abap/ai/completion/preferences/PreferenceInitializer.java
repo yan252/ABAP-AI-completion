@@ -24,6 +24,8 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         store.setDefault(PreferenceConstants.COMPLETION_COLOR, PreferenceConstants.DEFAULT_COMPLETION_COLOR);
         store.setDefault(PreferenceConstants.MANUAL_COMPLETION_MODE, PreferenceConstants.DEFAULT_MANUAL_COMPLETION_MODE);
 
+        store.setDefault(PreferenceConstants.SKILL_ENABLED,
+                PreferenceConstants.DEFAULT_SKILL_ENABLED);
         store.setDefault(PreferenceConstants.SKILL_DIR, PreferenceConstants.DEFAULT_SKILL_DIR);
         store.setDefault(PreferenceConstants.SYSTEM_PROMPT, PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
 

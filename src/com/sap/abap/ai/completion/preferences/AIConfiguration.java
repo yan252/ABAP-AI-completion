@@ -86,6 +86,13 @@ public final class AIConfiguration {
     // === Skill & Prompt ===
 
     /**
+     * 是否启用 Skill 参考功能。
+     */
+    public static boolean isSkillEnabled() {
+        return getStore().getBoolean(PreferenceConstants.SKILL_ENABLED);
+    }
+
+    /**
      * 获取 Skill 目录路径。
      * 如果用户未配置(空字符串),则返回默认路径:
      * <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills
@@ -155,10 +162,20 @@ public final class AIConfiguration {
     /**
      * 加载 Skill 内容,按代码类型筛选。
      *
+     * 规则:
+     * 1. 若只有一个子目录 → 直接使用该目录(不筛选类型)
+     * 2. 若有多个子目录 → 按代码类型筛选匹配的目录
+     * 3. 若无子目录(只有文件) → 读取当前目录下的 SKILL.md 作为 Skill
+     *
      * @param codeType 代码类型,如 "ABAP"、"CDS"、"AI" 等;
      *                 为 null 时不筛选,加载所有 skill
      */
     public static String loadSkillContents(String codeType) {
+        // 若未启用 Skill 功能,直接返回空
+        if (!isSkillEnabled()) {
+            return "";
+        }
+
         String dirPath = getSkillDirectory();
         if (dirPath == null || dirPath.trim().isEmpty()) {
             return "";
@@ -173,21 +190,74 @@ public final class AIConfiguration {
 
         // 查找所有子目录(每个子目录为一个 skill)
         File[] subDirs = skillDir.listFiles(File::isDirectory);
-        if (subDirs != null && subDirs.length > 0) {
-            // 有子目录: 按 skill 子目录结构组织
+
+        if (subDirs != null && subDirs.length == 1) {
+            // 只有一个子目录 → 直接使用,无需筛选
+            loadSkillFromDirectory(subDirs[0], sb);
+        } else if (subDirs != null && subDirs.length > 1) {
+            // 多个子目录 → 按代码类型筛选匹配的目录
             for (File subDir : subDirs) {
-                // 按代码类型筛选 skill 目录
                 if (!matchesCodeType(subDir.getName(), codeType)) {
                     continue;
                 }
                 loadSkillFromDirectory(subDir, sb);
             }
         } else {
-            // 无子目录: 回退到扁平文件模式(兼容旧结构)
-            loadSkillsFromFlatFiles(skillDir, sb);
+            // 无子目录(只有文件) → 读取当前目录下的 SKILL.md 作为 Skill
+            loadSkillFromRootDirectory(skillDir, sb);
         }
 
         return sb.toString();
+    }
+
+    /**
+     * 从根目录加载 Skill(无子目录时使用)。
+     * 优先读取 SKILL.md,然后读取其他参考文件。
+     */
+    private static void loadSkillFromRootDirectory(File skillDir, StringBuilder sb) {
+        // 1. 优先读取 SKILL.md
+        File skillMd = new File(skillDir, "SKILL.md");
+        if (skillMd.exists() && skillMd.isFile()) {
+            try {
+                String content = new String(
+                        java.nio.file.Files.readAllBytes(skillMd.toPath()),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                sb.append("=== Skill: ").append(skillDir.getName()).append(" ===\n");
+                sb.append("--- SKILL.md ---\n");
+                sb.append(content).append("\n");
+
+                // 2. 同目录下的其他参考文件
+                File[] refFiles = skillDir.listFiles((d, name) -> {
+                    if (name.equalsIgnoreCase("SKILL.md")) return false;
+                    String lower = name.toLowerCase();
+                    return lower.endsWith(".abap")
+                            || lower.endsWith(".txt")
+                            || lower.endsWith(".skill")
+                            || lower.endsWith(".md")
+                            || lower.endsWith(".xml")
+                            || lower.endsWith(".json")
+                            || lower.endsWith(".sql");
+                });
+                if (refFiles != null) {
+                    for (File f : refFiles) {
+                        try {
+                            String c = new String(
+                                    java.nio.file.Files.readAllBytes(f.toPath()),
+                                    java.nio.charset.StandardCharsets.UTF_8);
+                            sb.append("--- ").append(f.getName()).append(" ---\n");
+                            sb.append(c).append("\n");
+                        } catch (Exception e) {
+                            // skip
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // skip
+            }
+        } else {
+            // 无 SKILL.md → 回退到扁平文件模式
+            loadSkillsFromFlatFiles(skillDir, sb);
+        }
     }
 
     /**

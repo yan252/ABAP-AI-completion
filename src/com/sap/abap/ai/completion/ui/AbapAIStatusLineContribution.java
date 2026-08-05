@@ -313,6 +313,18 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
                     }
                 });
 
+                final MenuItem autoCompleteItem = new MenuItem(popup, SWT.CHECK);
+                autoCompleteItem.setText("Auto-complete while typing");
+                autoCompleteItem.setSelection(isAutoCompletionEnabled());
+                autoCompleteItem.addSelectionListener(new SelectionAdapter() {
+                    @Override
+                    public void widgetSelected(SelectionEvent e) {
+                        setAutoCompletionEnabled(autoCompleteItem.getSelection());
+                    }
+                });
+
+                new MenuItem(popup, SWT.SEPARATOR);
+
                 final MenuItem workspaceCodeItem = new MenuItem(popup, SWT.CHECK);
                 workspaceCodeItem.setText("AI Reference Workspace Code");
                 workspaceCodeItem.setSelection(isWorkspaceCodeReferenceEnabled());
@@ -320,6 +332,16 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
                     @Override
                     public void widgetSelected(SelectionEvent e) {
                         setWorkspaceCodeReferenceEnabled(workspaceCodeItem.getSelection());
+                    }
+                });
+
+                final MenuItem skillItem = new MenuItem(popup, SWT.CHECK);
+                skillItem.setText("Enable Skill Reference");
+                skillItem.setSelection(isSkillEnabled());
+                skillItem.addSelectionListener(new SelectionAdapter() {
+                    @Override
+                    public void widgetSelected(SelectionEvent e) {
+                        setSkillEnabled(skillItem.getSelection());
                     }
                 });
 
@@ -416,6 +438,29 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
         }
     }
 
+    private boolean isAutoCompletionEnabled() {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return PreferenceConstants.DEFAULT_AUTO_COMPLETION_ENABLED;
+            return store.getBoolean(PreferenceConstants.AUTO_COMPLETION_ENABLED);
+        } catch (Exception e) {
+            return PreferenceConstants.DEFAULT_AUTO_COMPLETION_ENABLED;
+        }
+    }
+
+    private void setAutoCompletionEnabled(boolean enabled) {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return;
+            store.setValue(PreferenceConstants.AUTO_COMPLETION_ENABLED, enabled);
+            try {
+                Activator.getDefault().savePluginPreferences();
+            } catch (Exception ignored) {
+            }
+        } catch (Exception e) {
+        }
+    }
+
     private boolean isWorkspaceCodeReferenceEnabled() {
         try {
             IPreferenceStore store = Activator.staticGetPreferenceStore();
@@ -431,6 +476,29 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
             IPreferenceStore store = Activator.staticGetPreferenceStore();
             if (store == null) return;
             store.setValue(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED, enabled);
+            try {
+                Activator.getDefault().savePluginPreferences();
+            } catch (Exception ignored) {
+            }
+        } catch (Exception e) {
+        }
+    }
+
+    private boolean isSkillEnabled() {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return PreferenceConstants.DEFAULT_SKILL_ENABLED;
+            return store.getBoolean(PreferenceConstants.SKILL_ENABLED);
+        } catch (Exception e) {
+            return PreferenceConstants.DEFAULT_SKILL_ENABLED;
+        }
+    }
+
+    private void setSkillEnabled(boolean enabled) {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return;
+            store.setValue(PreferenceConstants.SKILL_ENABLED, enabled);
             try {
                 Activator.getDefault().savePluginPreferences();
             } catch (Exception ignored) {

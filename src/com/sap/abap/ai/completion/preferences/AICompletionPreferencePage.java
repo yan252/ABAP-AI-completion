@@ -49,6 +49,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Text txtMaxWorkspaceChars;
     private Text txtWorkspaceFileLimit;
     private Button chkInterfaceLogging;
+    private Button chkSkillEnabled;
 
     private IPreferenceStore store;
 
@@ -125,19 +126,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         chkPluginEnabled = new Button(g, SWT.CHECK);
         chkPluginEnabled.setText("Enable ABAP AI Completion plugin");
-
-        chkAutoComplete = new Button(g, SWT.CHECK);
-        chkAutoComplete.setText("Auto-complete while typing");
-
-        // Keybinding info
-        lblKeybinding = new Label(g, SWT.WRAP);
-        lblKeybinding.setText(
-            "Manual trigger key: Ctrl+Shift+.\n"
-            + "To change this keybinding: Window > Preferences > General > Keys\n"
-            + "Search for 'ABAP AI completion'");
-        GridData kd = new GridData(GridData.FILL_HORIZONTAL);
-        kd.horizontalIndent = 10;
-        lblKeybinding.setLayoutData(kd);
     }
 
     private void createAutoCompletionGroup(Composite parent) {
@@ -145,6 +133,12 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         g.setText("Auto-Completion Settings");
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        chkAutoComplete = new Button(g, SWT.CHECK);
+        chkAutoComplete.setText("Auto-complete while typing");
+        GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
+        ckGd.horizontalSpan = 2;
+        chkAutoComplete.setLayoutData(ckGd);
 
         createLabel(g, "Delay after typing (ms):");
         txtAutoDelay = createText(g, 1);
@@ -155,6 +149,17 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
+
+        // Keybinding info
+        lblKeybinding = new Label(g, SWT.WRAP);
+        lblKeybinding.setText(
+            "Manual trigger key: Ctrl+Shift+.\n"
+            + "To change this keybinding: Window > Preferences > General > Keys\n"
+            + "Search for 'ABAP AI completion'");
+        GridData kd = new GridData(GridData.FILL_HORIZONTAL);
+        kd.horizontalSpan = 2;
+        kd.horizontalIndent = 10;
+        lblKeybinding.setLayoutData(kd);
     }
 
     private void createSkillGroup(Composite parent) {
@@ -162,6 +167,13 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         g.setText("Skill Directory");
         g.setLayout(new GridLayout(3, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        // 启用 SKILL 复选框 (放在 Skill Directory 输入框前面)
+        chkSkillEnabled = new Button(g, SWT.CHECK);
+        chkSkillEnabled.setText("Enable Skill reference for AI completion");
+        GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
+        ckGd.horizontalSpan = 3;
+        chkSkillEnabled.setLayoutData(ckGd);
 
         createLabel(g, "Skill directory:");
         txtSkillDir = createText(g, 1);
@@ -173,6 +185,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         Label note = new Label(g, SWT.WRAP);
         note.setText("This directory contains skill subdirectories.\n"
                 + "Each subdirectory is a skill with SKILL.md and reference files (.abap, .txt, .md, etc).\n"
+                + "Skill files are filtered by code type (ABAP/CDS).\n"
                 + "Leave empty to use default: <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills");
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 3;
@@ -257,6 +270,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtMaxTokens.setText(store.getString(PreferenceConstants.MAX_TOKENS));
         txtTemperature.setText(store.getString(PreferenceConstants.TEMPERATURE));
         txtSkillDir.setText(getDisplaySkillDir());
+        chkSkillEnabled.setSelection(store.getBoolean(PreferenceConstants.SKILL_ENABLED));
         txtSystemPrompt.setText(store.getString(PreferenceConstants.SYSTEM_PROMPT));
 
         chkPluginEnabled.setSelection(store.getBoolean(PreferenceConstants.PLUGIN_ENABLED));
@@ -297,6 +311,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         } else {
             store.setValue(PreferenceConstants.SKILL_DIR, skillDirValue);
         }
+        store.setValue(PreferenceConstants.SKILL_ENABLED, chkSkillEnabled.getSelection());
         store.setValue(PreferenceConstants.SYSTEM_PROMPT, txtSystemPrompt.getText());
 
         store.setValue(PreferenceConstants.PLUGIN_ENABLED, chkPluginEnabled.getSelection());
@@ -336,6 +351,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtMaxTokens.setText(PreferenceConstants.DEFAULT_MAX_TOKENS);
         txtTemperature.setText(PreferenceConstants.DEFAULT_TEMPERATURE);
         txtSkillDir.setText(AIConfiguration.getDefaultSkillDirectory());
+        chkSkillEnabled.setSelection(PreferenceConstants.DEFAULT_SKILL_ENABLED);
         txtSystemPrompt.setText(PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
 
         chkPluginEnabled.setSelection(PreferenceConstants.DEFAULT_PLUGIN_ENABLED);
