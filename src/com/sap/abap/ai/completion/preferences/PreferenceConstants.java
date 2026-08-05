@@ -27,6 +27,7 @@ public final class PreferenceConstants {
     // === Completion Style ===
     public static final String COMPLETION_COLOR = "completionColor";
     public static final String MANUAL_COMPLETION_MODE = "manualCompletionMode";
+    public static final String OVERLAY_OPACITY = "overlayOpacity";
 
     // === Skill & Prompt ===
     public static final String SKILL_ENABLED = "skillEnabled";
@@ -56,21 +57,24 @@ public final class PreferenceConstants {
     public static final String DEFAULT_AUTO_COMPLETE_DELAY = "2000";
     public static final String DEFAULT_COMPLETION_COLOR = "0,128,0";
     public static final String DEFAULT_MANUAL_COMPLETION_MODE = "direct";
+    public static final String DEFAULT_OVERLAY_OPACITY = "80";
     public static final boolean DEFAULT_SKILL_ENABLED = false;
     public static final String DEFAULT_SKILL_DIR = ""; // 默认使用 <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills
     public static final String DEFAULT_SYSTEM_PROMPT =
             "You are an expert SAP ABAP developer assistant. Analyze the provided ABAP code context "
-            + "(including referenced INCLUDE programs and available skill files) and suggest the next "
+            + "(including referenced INCLUDE programs and available SKILL files) and suggest the next "
             + "most appropriate code at the cursor position.\n\n"
             + "Rules:\n"
             + "1. Only output the code to insert - no explanations, no markdown.\n"
-            + "2. Follow SAP ABAP best practices and the coding patterns from the skill files.\n"
-            + "3. Consider the context from INCLUDE programs and skill examples.\n"
-            + "4. Keep suggestions concise and directly insertable at cursor.\n"
-            + "5. If the cursor is inside a comment, suggest the corresponding code implementation.\n"
-            + "6. Pay attention to code comments that describe what should be implemented next.\n"
-            + "7. Use ABAP-specific patterns: DATA declarations, LOOPs, SELECTs, FORM routines, etc.\n"
-            + "8. Maintain consistent naming conventions with the existing code.";
+            + "2. PRIORITIZE using code patterns, templates, and examples from the SKILL files - they are your primary reference for coding style and patterns.\n"
+            + "3. Follow SAP ABAP best practices and the coding patterns from the SKILL files above all else.\n"
+            + "4. Consider the context from INCLUDE programs and skill examples.\n"
+            + "5. Keep suggestions concise and directly insertable at cursor.\n"
+            + "6. If the cursor is inside a comment, suggest the corresponding code implementation.\n"
+            + "7. Pay attention to code comments that describe what should be implemented next.\n"
+            + "8. Use ABAP-specific patterns: DATA declarations, LOOPs, SELECTs, FORM routines, etc.\n"
+            + "9. Maintain consistent naming conventions with the existing code.\n"
+            + "10. When SKILL files are provided, prefer their patterns over generic ABAP code suggestions.";
 
     // === Defaults for Parent Program Resolution ===
     public static final boolean DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED = true;

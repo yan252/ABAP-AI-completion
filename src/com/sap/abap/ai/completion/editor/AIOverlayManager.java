@@ -5,8 +5,11 @@ import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
+import org.eclipse.swt.events.FocusAdapter;
+import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.events.KeyAdapter;
 import org.eclipse.swt.events.KeyEvent;
+import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
@@ -60,7 +63,8 @@ public class AIOverlayManager {
                 parentShell,
                 completionText,
                 cursorOffset,
-                AIConfiguration.getCompletionColor());
+                AIConfiguration.getCompletionColor(),
+                AIConfiguration.getOverlayOpacity());
 
         if (currentOverlay.getShell() == null || currentOverlay.getShell().isDisposed()) {
             currentOverlay = null;
@@ -73,6 +77,48 @@ public class AIOverlayManager {
 
         // Register keyboard interceptor
         registerKeyInterceptor(viewer);
+
+        // Register focus redirection: when user finishes interacting with overlay
+        // (mouseUp on StyledText or scrollbar), redirect focus back to editor
+        // so Tab/Enter/Esc keys are handled by our interceptor
+        StyledText overlayStyledText = currentOverlay.getStyledText();
+        if (overlayStyledText != null && !overlayStyledText.isDisposed()) {
+            overlayStyledText.addMouseListener(new org.eclipse.swt.events.MouseAdapter() {
+                @Override
+                public void mouseUp(org.eclipse.swt.events.MouseEvent e) {
+                    // After mouse release, redirect focus back to editor
+                    if (currentViewer != null) {
+                        StyledText editorWidget = currentViewer.getTextWidget();
+                        if (editorWidget != null && !editorWidget.isDisposed()) {
+                            Display.getDefault().asyncExec(() -> {
+                                if (!editorWidget.isDisposed()) {
+                                    editorWidget.setFocus();
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+
+            // Also redirect when overlay loses focus (e.g., user clicks scrollbar area)
+            overlayStyledText.addFocusListener(new FocusAdapter() {
+                @Override
+                public void focusGained(FocusEvent e) {
+                    // If focus is gained non-drag (simple click), redirect immediately
+                    // The mouseUp handler will also handle the drag case
+                    if (currentViewer != null) {
+                        StyledText editorWidget = currentViewer.getTextWidget();
+                        if (editorWidget != null && !editorWidget.isDisposed()) {
+                            Display.getDefault().timerExec(200, () -> {
+                                if (!editorWidget.isDisposed() && !overlayStyledText.isDisposed()) {
+                                    editorWidget.setFocus();
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        }
 
         // Register global mouse filter - click inside overlay -> accept, click outside -> dismiss
         registerGlobalMouseFilter();
@@ -114,6 +160,12 @@ public class AIOverlayManager {
             if (overlayShell == null || overlayShell.isDisposed()) return;
             if (event.widget == null || event.widget.isDisposed()) return;
 
+            // Check if click is on the overlay's StyledText scrollbar
+            // (scrollbar clicks should scroll, not accept/dismiss)
+            if (isScrollbarClick(event.widget, event.x)) {
+                return;
+            }
+
             // Walk up widget hierarchy to find the widget's shell
             org.eclipse.swt.widgets.Widget w = event.widget;
             Shell widgetShell = null;
@@ -129,7 +181,7 @@ public class AIOverlayManager {
                 }
             }
 
-            // If the click is on the overlay shell itself → accept suggestion and insert code
+            // If the click is on the overlay shell itself (but not on scrollbar) → accept suggestion
             if (widgetShell == overlayShell) {
                 acceptSuggestion();
                 return;
@@ -141,6 +193,34 @@ public class AIOverlayManager {
 
         Display.getDefault().addFilter(SWT.MouseDown, globalMouseFilter);
         globalFilterInstalled = true;
+    }
+
+    /**
+     * Check if the clicked widget is a scrollbar of the overlay's StyledText.
+     * Scrollbar clicks should be allowed to pass through for scrolling.
+     */
+    private boolean isScrollbarClick(org.eclipse.swt.widgets.Widget widget, int clickX) {
+        StyledText st = currentOverlay.getStyledText();
+        if (st == null || st.isDisposed()) return false;
+
+        // Check if the widget is the StyledText's vertical or horizontal scrollbar
+        if (widget instanceof org.eclipse.swt.widgets.ScrollBar) {
+            org.eclipse.swt.widgets.ScrollBar sb = (org.eclipse.swt.widgets.ScrollBar) widget;
+            org.eclipse.swt.widgets.Control parent = sb.getParent();
+            if (parent == st) {
+                return true;
+            }
+        }
+
+        // Check if the click is in the StyledText's scrollbar area (right edge for V_SCROLL)
+        if (widget == st) {
+            Rectangle bounds = st.getBounds();
+            if (clickX >= bounds.width - 20) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void unregisterGlobalMouseFilter() {

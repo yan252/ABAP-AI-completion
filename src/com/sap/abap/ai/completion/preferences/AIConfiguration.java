@@ -83,6 +83,31 @@ public final class AIConfiguration {
         return rgb.red + "," + rgb.green + "," + rgb.blue;
     }
 
+    /**
+     * 获取覆盖层透明度(0-100,百分比)。
+     * 默认 80,转换为 SWT alpha 值 (0-255)。
+     */
+    public static int getOverlayOpacity() {
+        try {
+            int pct = Integer.parseInt(getStore().getString(PreferenceConstants.OVERLAY_OPACITY));
+            pct = Math.max(10, Math.min(100, pct));
+            return (int) Math.round(pct * 255.0 / 100.0);
+        } catch (NumberFormatException e) {
+            return (int) Math.round(Integer.parseInt(PreferenceConstants.DEFAULT_OVERLAY_OPACITY) * 255.0 / 100.0);
+        }
+    }
+
+    /**
+     * 获取覆盖层透明度百分比(0-100)。
+     */
+    public static int getOverlayOpacityPercent() {
+        try {
+            return Integer.parseInt(getStore().getString(PreferenceConstants.OVERLAY_OPACITY));
+        } catch (NumberFormatException e) {
+            return Integer.parseInt(PreferenceConstants.DEFAULT_OVERLAY_OPACITY);
+        }
+    }
+
     // === Skill & Prompt ===
 
     /**

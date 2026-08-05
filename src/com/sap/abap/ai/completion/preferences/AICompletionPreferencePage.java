@@ -15,6 +15,7 @@ import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
+import org.eclipse.swt.widgets.Spinner;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
@@ -50,6 +51,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Text txtWorkspaceFileLimit;
     private Button chkInterfaceLogging;
     private Button chkSkillEnabled;
+    private Spinner spinnerOpacity;
 
     private IPreferenceStore store;
 
@@ -259,6 +261,20 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         createLabel(g, "Completion text color:");
         colorSelector = new ColorSelector(g);
+
+        createLabel(g, "Overlay opacity (%):");
+        spinnerOpacity = new Spinner(g, SWT.BORDER);
+        spinnerOpacity.setMinimum(10);
+        spinnerOpacity.setMaximum(100);
+        spinnerOpacity.setIncrement(5);
+        spinnerOpacity.setPageIncrement(20);
+
+        Label opacityNote = new Label(g, SWT.WRAP);
+        opacityNote.setText("Opacity of the AI completion overlay window.\n"
+                + "Lower values = more transparent. Range: 10-100%.");
+        GridData ond = new GridData(GridData.FILL_HORIZONTAL);
+        ond.horizontalSpan = 2;
+        opacityNote.setLayoutData(ond);
     }
 
     // ==================== Data Loading/Saving ====================
@@ -296,6 +312,9 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         if (colorStr != null && !colorStr.isEmpty()) {
             colorSelector.setColorValue(AIConfiguration.getCompletionColor());
         }
+
+        // Opacity
+        spinnerOpacity.setSelection(AIConfiguration.getOverlayOpacityPercent());
     }
 
     private void saveValues() {
@@ -335,6 +354,9 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         RGB rgb = colorSelector.getColorValue();
         store.setValue(PreferenceConstants.COMPLETION_COLOR,
                 AIConfiguration.rgbToString(rgb));
+
+        store.setValue(PreferenceConstants.OVERLAY_OPACITY,
+                String.valueOf(spinnerOpacity.getSelection()));
     }
 
     @Override
@@ -373,6 +395,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
                 PreferenceConstants.DEFAULT_INTERFACE_LOGGING_ENABLED);
 
         colorSelector.setColorValue(new RGB(0, 128, 0));
+        spinnerOpacity.setSelection(Integer.parseInt(PreferenceConstants.DEFAULT_OVERLAY_OPACITY));
     }
 
     // ==================== Test Connection ====================

@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature url="features/com.sap.abap.ai.completion.feature_1.0.0.jar"
+            id="com.sap.abap.ai.completion.feature"
+            version="1.0.0">
+      <category name="ABAP AI Completion"/>
+   </feature>
+   <category-def name="ABAP AI Completion" label="ABAP AI Completion">
+      <description>
+         AI-powered code completion for ABAP development in Eclipse.
+      </description>
+   </category-def>
+</site>

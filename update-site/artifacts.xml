@@ -1,0 +1,34 @@
+﻿<?xml version='1.0' encoding='UTF-8'?>
+<?artifactRepository version='1.1.0'?>
+<repository name='ABAP AI Completion Update Site'
+            type='org.eclipse.equinox.p2.artifact.repository.simpleRepository'
+            version='1'>
+  <properties size='2'>
+    <property name='p2.timestamp' value='1785743269938'/>
+    <property name='p2.compressed' value='true'/>
+  </properties>
+  <mappings size='2'>
+    <rule filter='(&amp; (classifier=osgi.bundle))'
+          output='$' + '{repoUrl}/plugins/_.jar'/>
+    <rule filter='(&amp; (classifier=org.eclipse.update.feature))'
+          output='$' + '{repoUrl}/features/_.jar'/>
+  </mappings>
+  <artifacts size='2'>
+    <artifact classifier='osgi.bundle'
+              id='com.sap.abap.ai.completion'
+              version='1.0.0'>
+      <properties size='2'>
+        <property name='artifact.size' value='57262'/>
+        <property name='download.size' value='57262'/>
+      </properties>
+    </artifact>
+    <artifact classifier='org.eclipse.update.feature'
+              id='com.sap.abap.ai.completion.feature'
+              version='1.0.0'>
+      <properties size='2'>
+        <property name='artifact.size' value='1343'/>
+        <property name='download.size' value='1343'/>
+      </properties>
+    </artifact>
+  </artifacts>
+</repository>
