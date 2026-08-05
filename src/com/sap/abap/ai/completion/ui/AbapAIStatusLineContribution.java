@@ -314,7 +314,7 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
                 });
 
                 final MenuItem autoCompleteItem = new MenuItem(popup, SWT.CHECK);
-                autoCompleteItem.setText("Auto-complete while typing");
+                autoCompleteItem.setText("Auto-complete while typing (临时)");
                 autoCompleteItem.setSelection(isAutoCompletionEnabled());
                 autoCompleteItem.addSelectionListener(new SelectionAdapter() {
                     @Override

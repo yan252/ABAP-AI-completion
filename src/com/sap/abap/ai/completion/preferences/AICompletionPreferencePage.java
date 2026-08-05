@@ -135,7 +135,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         chkAutoComplete = new Button(g, SWT.CHECK);
-        chkAutoComplete.setText("Auto-complete while typing");
+        chkAutoComplete.setText("Auto-complete while typing (临时)");
         GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
         ckGd.horizontalSpan = 2;
         chkAutoComplete.setLayoutData(ckGd);
