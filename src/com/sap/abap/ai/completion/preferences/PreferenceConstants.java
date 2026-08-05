@@ -84,7 +84,7 @@ public final class PreferenceConstants {
     // === Defaults for Workspace Code Reference ===
     public static final boolean DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED = false;
     public static final String DEFAULT_MAX_WORKSPACE_CODE_CHARS = "50000";
-    public static final String DEFAULT_WORKSPACE_CODE_FILE_LIMIT = "20";
+    public static final String DEFAULT_WORKSPACE_CODE_FILE_LIMIT = "5";
 
     // === Defaults for Interface Logging ===
     public static final boolean DEFAULT_INTERFACE_LOGGING_ENABLED = false;
