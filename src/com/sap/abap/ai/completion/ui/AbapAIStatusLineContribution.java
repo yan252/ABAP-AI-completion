@@ -345,6 +345,16 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
                     }
                 });
 
+                final MenuItem parentLookupItem = new MenuItem(popup, SWT.CHECK);
+                parentLookupItem.setText("Enable Parent Program Lookup");
+                parentLookupItem.setSelection(isParentProgramResolutionEnabled());
+                parentLookupItem.addSelectionListener(new SelectionAdapter() {
+                    @Override
+                    public void widgetSelected(SelectionEvent e) {
+                        setParentProgramResolutionEnabled(parentLookupItem.getSelection());
+                    }
+                });
+
                 new MenuItem(popup, SWT.SEPARATOR);
 
                 MenuItem completeItem = new MenuItem(popup, SWT.PUSH);
@@ -499,6 +509,29 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
             IPreferenceStore store = Activator.staticGetPreferenceStore();
             if (store == null) return;
             store.setValue(PreferenceConstants.SKILL_ENABLED, enabled);
+            try {
+                Activator.getDefault().savePluginPreferences();
+            } catch (Exception ignored) {
+            }
+        } catch (Exception e) {
+        }
+    }
+
+    private boolean isParentProgramResolutionEnabled() {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return PreferenceConstants.DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED;
+            return store.getBoolean(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED);
+        } catch (Exception e) {
+            return PreferenceConstants.DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED;
+        }
+    }
+
+    private void setParentProgramResolutionEnabled(boolean enabled) {
+        try {
+            IPreferenceStore store = Activator.staticGetPreferenceStore();
+            if (store == null) return;
+            store.setValue(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED, enabled);
             try {
                 Activator.getDefault().savePluginPreferences();
             } catch (Exception ignored) {

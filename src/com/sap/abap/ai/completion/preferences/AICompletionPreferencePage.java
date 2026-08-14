@@ -76,10 +76,12 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         createConnectionGroup(main);
         createFeatureGroup(main);
         createAutoCompletionGroup(main);
+        createParentProgramGroup(main);
         createContextGroup(main);
         createSkillGroup(main);
         createPromptGroup(main);
         createStyleGroup(main);
+        createLoggingGroup(main);
 
         loadValues();
 
@@ -194,9 +196,9 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         note.setLayoutData(nd);
     }
 
-    private void createContextGroup(Composite parent) {
+    private void createParentProgramGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("ABAP Context Resolution");
+        g.setText("Parent Program Resolution");
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
@@ -212,6 +214,20 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         createLabel(g, "Max context chars per parent:");
         txtMaxContextChars = createText(g, 1);
 
+        Label note = new Label(g, SWT.WRAP);
+        note.setText("Parent lookup searches ABAP files containing INCLUDE <current file>.\n"
+                + "Search depth 0 = disable parent lookup, only current file code is sent.");
+        GridData nd = new GridData(GridData.FILL_HORIZONTAL);
+        nd.horizontalSpan = 2;
+        note.setLayoutData(nd);
+    }
+
+    private void createContextGroup(Composite parent) {
+        Group g = new Group(parent, SWT.NONE);
+        g.setText("Workspace Code Reference Set");
+        g.setLayout(new GridLayout(2, false));
+        g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
         chkWorkspaceCodeRef = new Button(g, SWT.CHECK);
         chkWorkspaceCodeRef.setText("Use workspace ABAP code as AI reference");
         GridData wsGd = new GridData(GridData.FILL_HORIZONTAL);
@@ -224,20 +240,41 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         createLabel(g, "Max workspace files:");
         txtWorkspaceFileLimit = createText(g, 1);
 
-        chkInterfaceLogging = new Button(g, SWT.CHECK);
-        chkInterfaceLogging.setText("Enable interface logging (system/user prompt + completion)");
-        GridData lgGd = new GridData(GridData.FILL_HORIZONTAL);
-        lgGd.horizontalSpan = 2;
-        chkInterfaceLogging.setLayoutData(lgGd);
-
         Label note = new Label(g, SWT.WRAP);
-        note.setText("Parent lookup searches ABAP files containing INCLUDE <current file>.\n"
-                + "Search depth 0 = disable parent lookup, only current file code is sent.\n"
-                + "Workspace code reference sends other ABAP files from your workspace as AI context.\n"
-                + "Logs are written to the plugin state area, not the Eclipse error log.");
+        note.setText("Workspace code reference sends other ABAP files from your workspace as AI context.");
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
+    }
+
+    private void createLoggingGroup(Composite parent) {
+        Group g = new Group(parent, SWT.NONE);
+        g.setText("Interface Logging");
+        g.setLayout(new GridLayout(1, false));
+        g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        chkInterfaceLogging = new Button(g, SWT.CHECK);
+        chkInterfaceLogging.setText("Enable interface logging (system/user prompt + completion)");
+
+        Label note = new Label(g, SWT.WRAP);
+        note.setText("Logs are written to the plugin state area, not the Eclipse error log.\n"
+                + "Log files are rotated hourly, named yyyyMMddHH_ai_abap.log (e.g. 2026080409_ai_abap.log).\n"
+                + "Logs older than 7 days are automatically deleted.");
+        GridData nd = new GridData(GridData.FILL_HORIZONTAL);
+        nd.horizontalSpan = 1;
+        note.setLayoutData(nd);
+
+        // 显示日志文件所在目录
+        createLabel(g, "Log directory:");
+        Text txtLogDir = new Text(g, SWT.BORDER | SWT.READ_ONLY);
+        txtLogDir.setText(com.sap.abap.ai.completion.logging.AILogger.getLogDirectoryPath());
+        txtLogDir.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        Label fileNote = new Label(g, SWT.WRAP);
+        fileNote.setText("Current log file: <log directory>/yyyyMMddHH_ai_abap.log");
+        GridData fnd = new GridData(GridData.FILL_HORIZONTAL);
+        fnd.horizontalSpan = 1;
+        fileNote.setLayoutData(fnd);
     }
 
     private void createPromptGroup(Composite parent) {

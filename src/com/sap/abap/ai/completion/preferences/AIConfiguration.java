@@ -433,6 +433,17 @@ public final class AIConfiguration {
         return getStore().getBoolean(PreferenceConstants.INTERFACE_LOGGING_ENABLED);
     }
 
+    // === Prompt Cache ===
+
+    /**
+     * 是否启用 Prompt Cache（节点2、3缓存）。
+     * 启用后，第一次调用完整传入节点2、3内容并建立缓存，
+     * 后续调用（内容未变）仅传简短占位符，大幅减少 TOKEN。
+     */
+    public static boolean isPromptCacheEnabled() {
+        return getStore().getBoolean(PreferenceConstants.PROMPT_CACHE_ENABLED);
+    }
+
     // === Helpers ===
 
     private static RGB parseRgb(String rgbStr) {

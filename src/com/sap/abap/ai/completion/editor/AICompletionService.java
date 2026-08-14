@@ -1,5 +1,7 @@
 package com.sap.abap.ai.completion.editor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -10,7 +12,9 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.ui.IWorkbenchPage;
 
 import com.sap.abap.ai.completion.client.AIClient;
+import com.sap.abap.ai.completion.client.AIClient.ChatMessage;
 import com.sap.abap.ai.completion.client.AIClientException;
+import com.sap.abap.ai.completion.client.PromptCacheManager;
 import com.sap.abap.ai.completion.logging.AILogger;
 import com.sap.abap.ai.completion.parser.AbapIncludeResolver;
 import com.sap.abap.ai.completion.parser.AbapIncludeResolver.IncludeContext;
@@ -64,6 +68,7 @@ public class AICompletionService {
 
                 // 工作区代码参考(当前打开的其他 ABAP 文件)
                 String workspaceCodeRef = "";
+                int workspaceMaxChars = 0;
                 boolean wsEnabled = AIConfiguration.isWorkspaceCodeReferenceEnabled();
                 if (wsEnabled) {
                     String fileName = file != null ? file.getName() : "";
@@ -74,28 +79,54 @@ public class AICompletionService {
                     }
                     int maxChars = AIConfiguration.getMaxWorkspaceCodeChars();
                     int fileLimit = AIConfiguration.getWorkspaceCodeFileLimit();
+                    // 每个工作区文件的截断上限与节点2（父程序上下文）保持一致（maxContextChars）
+                    int wsFileMaxChars = AIConfiguration.getMaxContextChars();
                     WorkspaceCodeCollector collector =
-                            new WorkspaceCodeCollector(fileName, fileExt, fileLimit, maxChars, workbenchPage);
+                            new WorkspaceCodeCollector(fileName, fileExt, fileLimit,
+                                    wsFileMaxChars, workbenchPage);
                     workspaceCodeRef = collector.collectWorkspaceCode();
+                    workspaceMaxChars = maxChars;
                 }
 
-                // Build prompts
+                // Build prompts - 拆分为多个独立消息节点
                 String codeType = detectCodeType(file);
                 String systemPrompt = getEffectiveSystemPrompt(codeType);
-                String userPrompt = buildUserPrompt(context.buildPromptContext(),
-                        parentCtx != null ? parentCtx.buildPromptContext() : "",
-                        workspaceCodeRef,
-                        codeBefore, codeAfter, codeType);
-
-                // 接口日志: 记录请求
                 final String fileName = file != null ? file.getName() : "<unknown>";
-                AILogger.logRequest(fileName, systemPrompt, userPrompt);
+
+                // === 三节点上下文（已取消预热功能，改为补全时直接压缩发送） ===
+                // 不再单独调用 AI 预热建立缓存，而是在构建消息时对每个节点内容直接
+                // 调用 compressContent 压缩，随补全请求一并发送给 AI。
+                String parentContent = parentCtx != null ? parentCtx.buildPromptContext() : "";
+                String workspaceContent = workspaceCodeRef;
+                String skillContent = AIConfiguration.loadSkillContents(codeType);
+
+                // 4. 构建6个独立的 user 消息节点（各节点内容在构建时直接压缩）
+                List<ChatMessage> userMessages = buildUserMessages(
+                        fileName, codeType,
+                        context.buildPromptContext(),
+                        parentContent, workspaceContent, skillContent,
+                        workspaceMaxChars,
+                        codeBefore, codeAfter);
+
+                // 注意：不再预热、不再使用 prompt_cache_keys，直接发送完整内容。
+                // 这里仅保留多缓存接口的调用形态，但传入 null（不使用缓存）。
                 final long startTs = System.currentTimeMillis();
 
-                // Call AI
-                String result = AIClient.complete(systemPrompt, userPrompt);
+                // 接口日志: 记录请求（含6个独立 user 消息节点内容）
+                AILogger.logRequestMessages(fileName, systemPrompt, userMessages,
+                        false, false, false, false,
+                        null, null, null);
 
-                // 接口日志: 记录响应
+                // 5. Call AI（直接压缩后发送，不使用缓存）
+                String result;
+                try {
+                    result = AIClient.completeWithMultiCache(systemPrompt, userMessages,
+                            null, null);
+                } catch (AIClientException aiEx) {
+                    throw aiEx;
+                }
+
+                // 6. 接口日志: 记录响应
                 AILogger.logResponse(fileName, result, System.currentTimeMillis() - startTs);
                 return result;
             } catch (AIClientException e) {
@@ -219,54 +250,135 @@ public class AICompletionService {
             + "8. Use modern ABAP syntax where appropriate.";
     }
 
-    private static String buildUserPrompt(String codeContext, String parentProgramContext,
-                                           String workspaceCodeRef,
-                                           String textBeforeCursor, String textAfterCursor,
-                                           String codeType) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== Current ABAP Program (with INCLUDES) ===\n");
-        sb.append(codeContext);
-        sb.append("\n");
+    /**
+     * 构建6个独立的 user 消息节点（已取消预热功能，各节点内容直接压缩后发送）:
+     * 1. SKILL 文件内容
+     * 2. 深度搜索到的相关程序(父程序调用上下文)
+     * 3. 当前工作区打开的相关程序
+     * 4. 当前光标所在程序(含 INCLUDE 展开)
+     * 5. 程序文本标题属性描述等信息
+     * 6. 当前光标位置信息及上下文(前后N行)
+     *
+     * 节点1-3 均通过 {@link PromptCacheManager#compressContent(String)} 直接压缩完整内容，
+     * 不再使用 AI 服务端缓存 / 占位符。
+     */
+    private static List<ChatMessage> buildUserMessages(
+            String fileName, String codeType,
+            String codeContext, String parentProgramContext,
+            String workspaceCodeRef, String skillContent,
+            int workspaceMaxChars,
+            String textBeforeCursor, String textAfterCursor) {
 
+        List<ChatMessage> messages = new ArrayList<>();
+        PromptCacheManager cacheManager = PromptCacheManager.getInstance();
+
+        // ===== 节点1: SKILL 文件内容 =====
+        if (skillContent != null && !skillContent.isEmpty()) {
+            StringBuilder skillSb = new StringBuilder();
+            skillSb.append("[SKILL FILES - 节点1/6] 代码风格参考与最佳实践示例 (");
+            skillSb.append(codeType != null ? codeType : "ALL");
+            skillSb.append(")\n\n");
+            // 节点1 不压缩，直接发送 SKILL 完整内容
+            skillSb.append(skillContent);
+            messages.add(new ChatMessage("user", skillSb.toString()));
+        } else {
+            messages.add(new ChatMessage("user",
+                    "[SKILL FILES - 节点1/6] 无已加载的 SKILL 文件，使用系统默认 ABAP 编码规范。"));
+        }
+
+        // ===== 节点2: 深度搜索到的相关程序(父程序调用上下文) =====
         if (parentProgramContext != null && !parentProgramContext.isEmpty()) {
-            sb.append("\n=== Parent Programs (calling context, truncated) ===\n");
-            sb.append(parentProgramContext);
+            StringBuilder parentSb = new StringBuilder();
+            parentSb.append("[PARENT PROGRAMS - 节点2/6] 深度搜索到的相关程序（调用当前 INCLUDE 的父级程序上下文，已截断）\n\n");
+            parentSb.append(cacheManager.compressContent(parentProgramContext));
+            messages.add(new ChatMessage("user", parentSb.toString()));
+        } else {
+            messages.add(new ChatMessage("user",
+                    "[PARENT PROGRAMS - 节点2/6] 未找到父级调用程序，当前文件为独立程序或父级查找功能未启用。"));
         }
 
+        // ===== 节点3: 当前工作区打开的相关程序 =====
         if (workspaceCodeRef != null && !workspaceCodeRef.isEmpty()) {
-            sb.append(workspaceCodeRef);
+            StringBuilder wsSb = new StringBuilder();
+            wsSb.append("[WORKSPACE OPEN FILES - 节点3/6] 当前 Eclipse 工作区中打开的其他 ABAP 程序（作为代码风格参考与上下文）\n\n");
+            // 与节点1、2 一致，通过公共压缩逻辑 compressContent 处理；
+            // 传入用户配置的最大工作区字符数作为压缩上限。
+            wsSb.append(cacheManager.compressContent(workspaceCodeRef, workspaceMaxChars));
+            messages.add(new ChatMessage("user", wsSb.toString()));
+        } else {
+            messages.add(new ChatMessage("user",
+                    "[WORKSPACE OPEN FILES - 节点3/6] 工作区中未找到其他已打开的 ABAP 程序，或该功能未启用。"));
         }
 
-        String skillContent = AIConfiguration.loadSkillContents(codeType);
-        if (!skillContent.isEmpty()) {
-            sb.append("\n=== Available Skill Files (").append(codeType != null ? codeType : "ALL").append(") ===\n");
-            sb.append(skillContent);
-        }
+        // ===== 节点4: 当前光标所在程序(含 INCLUDE 展开) =====
+        StringBuilder currentSb = new StringBuilder();
+        currentSb.append("[CURRENT PROGRAM - 节点4/6] 当前光标所在的 ABAP 程序（已展开 INCLUDE）\n\n");
+        currentSb.append("文件名: ").append(fileName).append("\n");
+        currentSb.append("代码类型: ").append(codeType != null ? codeType : "AUTO-DETECT").append("\n\n");
+        currentSb.append("--- 程序完整代码（含 INCLUDE 展开） ---\n");
+        currentSb.append(codeContext);
+        messages.add(new ChatMessage("user", currentSb.toString()));
 
-        sb.append("\n=== Cursor Context ===\n");
+        // ===== 节点5: 程序文本标题属性描述等信息 =====
+        StringBuilder metaSb = new StringBuilder();
+        metaSb.append("[PROGRAM METADATA - 节点5/6] 程序文本标题与属性描述信息\n\n");
+        metaSb.append("文件名: ").append(fileName).append("\n");
+        metaSb.append("代码类型: ").append(codeType != null ? codeType : "UNKNOWN").append("\n");
+        metaSb.append("检测到的 INCLUDE 数量: ").append(
+                (codeContext != null && codeContext.contains("INCLUDE"))
+                        ? "已展开（见节点4）" : "未检测到 INCLUDE 语句").append("\n");
+        metaSb.append("父级程序解析: ").append(
+                (parentProgramContext != null && !parentProgramContext.isEmpty())
+                        ? "已找到（见节点2）" : "未找到或未启用").append("\n");
+        metaSb.append("工作区参考文件: ").append(
+                (workspaceCodeRef != null && !workspaceCodeRef.isEmpty())
+                        ? "已加载（见节点3）" : "无其他打开文件").append("\n");
+        metaSb.append("SKILL 加载: ").append(
+                (skillContent != null && !skillContent.isEmpty())
+                        ? "已加载（见节点1）" : "无 SKILL 文件").append("\n");
+        metaSb.append("\n提示: 请综合以上所有上下文信息，在节点6的光标位置生成正确的 ABAP 代码。");
+        messages.add(new ChatMessage("user", metaSb.toString()));
+
+        // ===== 节点6: 当前光标位置信息及上下文(前后N行) =====
+        StringBuilder cursorSb = new StringBuilder();
+        cursorSb.append("[CURSOR CONTEXT - 节点6/6] 当前光标位置信息及上下文（前后N行）\n\n");
 
         String[] lines = textBeforeCursor.split("\n");
-        int contextLines = Math.min(15, lines.length);
-        if (contextLines > 0) {
-            sb.append("Before cursor:\n");
-            for (int i = lines.length - contextLines; i < lines.length; i++) {
-                sb.append(lines[i]).append("\n");
+        int totalLines = lines.length;
+        int cursorLineNum = totalLines;
+        int cursorCol = 0;
+        if (totalLines > 0) {
+            cursorCol = lines[totalLines - 1].length() + 1;
+        }
+
+        cursorSb.append("光标位置: 第 ").append(cursorLineNum).append(" 行, 第 ").append(cursorCol).append(" 列\n\n");
+
+        int beforeLines = Math.min(15, lines.length);
+        if (beforeLines > 0) {
+            cursorSb.append("--- 光标前 ").append(beforeLines).append(" 行 ---\n");
+            for (int i = lines.length - beforeLines; i < lines.length; i++) {
+                cursorSb.append(String.format("%5d: ", i + 1)).append(lines[i]).append("\n");
             }
         }
 
-        sb.append(">>> CURSOR <<<\n");
+        cursorSb.append(String.format("%5d: ", cursorLineNum))
+                .append(lines.length > 0 ? lines[lines.length - 1] : "")
+                .append("[[[CURSOR_HERE]]]").append("\n");
 
         String[] afterLines = textAfterCursor.split("\n");
-        contextLines = Math.min(5, afterLines.length);
-        if (contextLines > 0 && !textAfterCursor.trim().isEmpty()) {
-            sb.append("After cursor:\n");
-            for (int i = 0; i < contextLines; i++) {
-                sb.append(afterLines[i]).append("\n");
+        int afterCount = Math.min(5, afterLines.length);
+        if (afterCount > 0 && !textAfterCursor.trim().isEmpty()) {
+            cursorSb.append("--- 光标后 ").append(afterCount).append(" 行 ---\n");
+            for (int i = 0; i < afterCount; i++) {
+                cursorSb.append(String.format("%5d: ", cursorLineNum + i + 1))
+                        .append(afterLines[i]).append("\n");
             }
         }
 
-        sb.append("\nGenerate only the ABAP code to insert at the cursor position.");
-        return sb.toString();
+        cursorSb.append("\n请在 [[[CURSOR_HERE]]] 位置生成插入的 ABAP 代码。输出 ONLY the code to insert - no explanations, no markdown.");
+        messages.add(new ChatMessage("user", cursorSb.toString()));
+
+        return messages;
     }
 
     private static String cleanupCompletion(String completion) {
@@ -279,4 +391,5 @@ public class AICompletionService {
         }
         return result;
     }
+
 }

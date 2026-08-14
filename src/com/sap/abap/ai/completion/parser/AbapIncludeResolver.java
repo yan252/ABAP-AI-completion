@@ -14,6 +14,18 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.ui.IEditorInput;
+import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IEditorReference;
+import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.part.FileEditorInput;
+import org.eclipse.ui.texteditor.IDocumentProvider;
+import org.eclipse.ui.texteditor.ITextEditor;
+
+import com.sap.abap.ai.completion.logging.AILogger;
 
 /**
  * Parses ABAP source code to resolve INCLUDE statements and reads
@@ -66,18 +78,189 @@ public class AbapIncludeResolver {
      * Searches the workspace (current project) for the include file content.
      * ABAP includes are typically stored with extension .abap or can be found
      * as files matching the include name in the project structure.
+     *
+     * SAP ADT 注意: SAP ADT 在工作区中存储的 INCLUDE 文件可能是 XML 元数据
+     * (而非 ABAP 源代码)。本方法检测到 XML 元数据后,会尝试从已打开的编辑器中
+     * 获取真实的 ABAP 源代码。
      */
     public String resolveIncludeCode(String includeName) {
-        // Try to find the include file in the current project
-        // Common ABAP naming: Y*_INCL or Z*_INCL, or any file containing the include name
+        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: searching for INCLUDE '"
+                + includeName + "' in project=" + (project != null ? project.getName() : "null"));
+
         List<IFile> candidates = findIncludeFiles(includeName);
+
+        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: found "
+                + candidates.size() + " candidate file(s) for '" + includeName + "'");
 
         for (IFile file : candidates) {
             try {
-                return readFileContent(file);
+                String content = readFileContent(file);
+                if (content == null || content.isEmpty()) {
+                    continue;
+                }
+
+                // 检测 SAP ADT XML 元数据 (不是 ABAP 源代码)
+                if (isAdtMetadataXml(content)) {
+                    AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: file '"
+                            + file.getName() + "' is SAP ADT XML metadata, not ABAP source. "
+                            + "Trying to read from open editor...");
+
+                    // 尝试从已打开的编辑器中获取真实的 ABAP 源代码
+                    String editorContent = readSourceFromOpenEditor(includeName);
+                    if (editorContent != null && !editorContent.isEmpty()) {
+                        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: got ABAP source from open editor for '"
+                                + includeName + "' (length=" + editorContent.length() + ")");
+                        return editorContent;
+                    }
+
+                    AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: INCLUDE '"
+                            + includeName + "' not open in any editor, cannot get ABAP source. "
+                            + "Open the file in Eclipse to enable source resolution.");
+                    continue;  // 跳过 XML 元数据,尝试下一个候选文件
+                }
+
+                AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: read ABAP source from '"
+                        + file.getName() + "' (length=" + content.length() + ")");
+                return content;
             } catch (Exception e) {
-                // continue searching
+                AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: failed to read '"
+                        + file.getName() + "': " + e.getMessage());
             }
+        }
+
+        // 工作区中没找到文件,也尝试从已打开的编辑器获取
+        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: no workspace file found for '"
+                + includeName + "', trying open editors...");
+        String editorContent = readSourceFromOpenEditor(includeName);
+        if (editorContent != null && !editorContent.isEmpty()) {
+            AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: got ABAP source from open editor for '"
+                    + includeName + "' (length=" + editorContent.length() + ")");
+            return editorContent;
+        }
+
+        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: NO source found for INCLUDE '"
+                + includeName + "' (not in workspace and not open in editor)");
+        return null;
+    }
+
+    /**
+     * 检测内容是否为 SAP ADT XML 元数据 (而非 ABAP 源代码)。
+     *
+     * SAP ADT 在工作区中存储的文件可能包含 XML 元数据,如:
+     *   <?xml version="1.0" encoding="utf-8"?>
+     *   <include:abapInclude ...> 或 <adtcore:...> 等
+     */
+    private static boolean isAdtMetadataXml(String content) {
+        if (content == null || content.isEmpty()) return false;
+        String trimmed = content.trim();
+        // XML 声明开头
+        if (trimmed.startsWith("<?xml")) return true;
+        // SAP ADT XML 根元素
+        if (trimmed.contains("<include:abapInclude")) return true;
+        if (trimmed.contains("<adtcore:")) return true;
+        if (trimmed.contains("<abapsource:")) return true;
+        if (trimmed.contains("<program:abapProgram")) return true;
+        return false;
+    }
+
+    /**
+     * 尝试从已打开的 Eclipse 编辑器中获取指定 INCLUDE 名称的 ABAP 源代码。
+     *
+     * SAP ADT 编辑器在内存中持有真实的 ABAP 源代码 (IDocument),
+     * 即使工作区文件存储的是 XML 元数据。
+     *
+     * 匹配策略: 编辑器标题包含 include 名称 (大小写不敏感)
+     */
+    private static String readSourceFromOpenEditor(String includeName) {
+        try {
+            IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
+            if (window == null) {
+                IWorkbenchWindow[] windows = PlatformUI.getWorkbench().getWorkbenchWindows();
+                if (windows.length > 0) window = windows[0];
+            }
+            if (window == null) return null;
+
+            IWorkbenchPage page = window.getActivePage();
+            if (page == null) return null;
+
+            IEditorReference[] refs = page.getEditorReferences();
+            String upperInclude = includeName.toUpperCase();
+
+            for (IEditorReference ref : refs) {
+                String title = ref.getTitle();
+                if (title == null) continue;
+                String upperTitle = title.toUpperCase();
+
+                // 编辑器标题包含 include 名称 (如 "ztre08152_top.asinc" 包含 "ZTRE08152_TOP")
+                if (!upperTitle.contains(upperInclude)) continue;
+
+                // 尝试获取编辑器内容
+                IEditorPart editor = ref.getEditor(false);
+                if (editor == null) {
+                    // 非活动编辑器,尝试从 IEditorInput 获取
+                    editor = ref.getEditor(true);
+                }
+                if (editor == null) continue;
+
+                String content = getEditorDocumentContent(editor);
+                if (content != null && !content.isEmpty() && !isAdtMetadataXml(content)) {
+                    return content;
+                }
+            }
+        } catch (Exception e) {
+            AILogger.logError("AbapIncludeResolver", "[DEBUG] readSourceFromOpenEditor error: "
+                    + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 从编辑器获取 IDocument 内容。
+     * 支持标准 ITextEditor 和 SAP ADT 编辑器 (通过适配器)。
+     */
+    private static String getEditorDocumentContent(IEditorPart editor) {
+        try {
+            // 策略1: 标准 ITextEditor
+            if (editor instanceof ITextEditor) {
+                ITextEditor te = (ITextEditor) editor;
+                IDocumentProvider dp = te.getDocumentProvider();
+                if (dp != null) {
+                    IDocument doc = dp.getDocument(te.getEditorInput());
+                    if (doc != null) return doc.get();
+                }
+            }
+
+            // 策略2: 通过适配器获取 ITextEditor
+            ITextEditor adapted = editor.getAdapter(ITextEditor.class);
+            if (adapted != null) {
+                IDocumentProvider dp = adapted.getDocumentProvider();
+                if (dp != null) {
+                    IDocument doc = dp.getDocument(adapted.getEditorInput());
+                    if (doc != null) return doc.get();
+                }
+            }
+
+            // 策略3: 反射调用 getDocument() (SAP ADT 自定义编辑器)
+            try {
+                java.lang.reflect.Method getDoc = editor.getClass().getMethod("getDocument");
+                Object result = getDoc.invoke(editor);
+                if (result instanceof IDocument) {
+                    return ((IDocument) result).get();
+                }
+            } catch (NoSuchMethodException ignored) {
+            }
+
+            // 策略4: 反射调用 getAdapter(IDocument.class)
+            try {
+                Object docObj = editor.getAdapter(IDocument.class);
+                if (docObj instanceof IDocument) {
+                    return ((IDocument) docObj).get();
+                }
+            } catch (Exception ignored) {
+            }
+        } catch (Exception e) {
+            AILogger.logError("AbapIncludeResolver", "[DEBUG] getEditorDocumentContent error: "
+                    + e.getMessage());
         }
         return null;
     }
@@ -89,12 +272,19 @@ public class AbapIncludeResolver {
         IncludeContext context = new IncludeContext(sourceCode);
         List<String> includes = findIncludes(sourceCode);
 
+        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveAllIncludes: extracted "
+                + includes.size() + " INCLUDE statement(s): " + includes);
+
+        int resolved = 0;
         for (String includeName : includes) {
             String code = resolveIncludeCode(includeName);
             if (code != null) {
                 context.addInclude(includeName, code);
+                resolved++;
             }
         }
+        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveAllIncludes: resolved "
+                + resolved + "/" + includes.size() + " INCLUDE(s)");
         return context;
     }
 
@@ -102,13 +292,15 @@ public class AbapIncludeResolver {
         List<IFile> results = new ArrayList<>();
 
         if (project != null) {
+            // 只在当前项目中搜索 (SAP ADT 场景: 当前系统的项目)
             searchInContainer(project, includeName, results);
+            return results;
         }
 
-        // Also search workspace root
+        // project 为 null 时,回退到搜索整个工作区
         IProject[] projects = ResourcesPlugin.getWorkspace().getRoot().getProjects();
         for (IProject p : projects) {
-            if (!p.equals(project) && p.isAccessible()) {
+            if (p.isAccessible()) {
                 searchInContainer(p, includeName, results);
             }
         }
@@ -117,14 +309,18 @@ public class AbapIncludeResolver {
     }
 
     private void searchInContainer(IProject container, String includeName, List<IFile> results) {
+        final int[] scannedCount = {0};
+        final int[] matchedCount = {0};
         try {
             container.accept(resource -> {
                 if (resource instanceof IFile) {
                     IFile file = (IFile) resource;
                     String fileName = file.getName().toUpperCase();
+                    scannedCount[0]++;
                     // Match files containing the include name (with common ABAP extensions or no extension)
                     if (fileName.contains(includeName) && isAbapSourceFile(fileName)) {
                         results.add(file);
+                        matchedCount[0]++;
                     }
                 }
                 return true;
@@ -132,6 +328,9 @@ public class AbapIncludeResolver {
         } catch (CoreException e) {
             // ignore inaccessible containers
         }
+        AILogger.logError("AbapIncludeResolver", "[DEBUG] searchInContainer: scanned=" + scannedCount[0]
+                + " files, matched=" + matchedCount[0]
+                + " for INCLUDE '" + includeName + "' in project '" + container.getName() + "'");
     }
 
     /**
@@ -202,6 +401,30 @@ public class AbapIncludeResolver {
             }
 
             return sb.toString();
+        }
+
+        /**
+         * 仅构建已解析的 INCLUDE 代码上下文(不含主源码)。
+         * 用于上级程序场景: 上级程序自身代码已单独传入,
+         * 这里只需附加其 INCLUDE 的代码。
+         */
+        public String buildIncludesOnlyContext() {
+            if (includes.isEmpty()) return "";
+            StringBuilder sb = new StringBuilder();
+            sb.append("=== Resolved INCLUDES of parent program ===\n");
+            for (IncludeInfo inc : includes) {
+                sb.append("--- INCLUDE ").append(inc.name).append(" ---\n");
+                sb.append(inc.code);
+                sb.append("\n");
+            }
+            return sb.toString();
+        }
+
+        /**
+         * 返回已解析的 INCLUDE 数量。
+         */
+        public int getResolvedCount() {
+            return includes.size();
         }
 
         public static class IncludeInfo {

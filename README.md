@@ -4,7 +4,7 @@
 
 ## 比Copilot的优势
 - **🤖 AI补全时除传入当前编辑器的ABAP代码外，还可选择传入当前工作平台上所有已打开的ABAP代码，Copilot仅支持传入当前编辑器的代码，不支持此功能。
-- **⌨️ 深度搜索相关代码参考用于代码补全，把当前程序相关的程序一起作为代码参考发给AI，但此功能尝试搜索2层太慢影响效率，不建议不使用。
+- **⌨️ 深度搜索相关代码参考用于代码补全，把当前程序相关的程序一起作为代码参考发给AI，此功能尝试搜索多层会影响效率，建议最多一层搜索。
 - **🎯 可使用本地SKILL作为代码参考传入，以便生成更合理的AI补全，Copilot 本也有可配置SKILL，但他的配置的SKILL并不能用于AI参考代码补全，而是只能用于对话。
 
 ## 功能特性
@@ -164,27 +164,50 @@ com.sap.abap.ai.completion/
 │   └── com/sap/abap/ai/completion/
 │       ├── client/              # AI API客户端
 │       │   ├── AIClient.java
-│       │   └── AIClientException.java
+│       │   ├── AIClientException.java
+│       │   └── PromptCacheManager.java    # Prompt压缩与多节点缓存管理
 │       ├── editor/              # 编辑器集成
 │       │   ├── AICompletionHandler.java
-│       │   ├── AICompletionService.java
+│       │   ├── AICompletionListener.java
 │       │   ├── AICompletionOverlay.java
 │       │   ├── AICompletionProposalPopup.java
-│       │   ├── AIOverlayManager.java
-│       │   └── AICompletionListener.java
+│       │   ├── AICompletionService.java
+│       │   └── AIOverlayManager.java
+│       ├── logging/             # 日志输出
+│       │   └── AILogger.java
 │       ├── parser/              # ABAP解析器
-│       │   └── AbapIncludeResolver.java
-│       ├── preferences/        # 配置管理
+│       │   ├── AbapCodeTruncator.java
+│       │   ├── AbapIncludeResolver.java
+│       │   ├── AbapLanguageDetector.java
+│       │   ├── ParentProgramContext.java
+│       │   ├── ParentProgramResolver.java
+│       │   └── WorkspaceCodeCollector.java
+│       ├── preferences/         # 配置管理
 │       │   ├── AICompletionPreferencePage.java
 │       │   ├── AIConfiguration.java
 │       │   ├── PreferenceConstants.java
 │       │   └── PreferenceInitializer.java
+│       ├── ui/                  # 状态栏等UI集成
+│       │   └── AbapAIStatusLineContribution.java
 │       └── Activator.java       # Bundle激活器
+├── icons/
+│   └── SAPLogo.ico              # 插件图标
+├── dist/                        # 发布的JAR
+│   └── com.sap.abap.ai.completion_1.0.1.jar
+├── update-site/                 # 更新站点
+│   ├── features/
+│   ├── plugins/
+│   ├── artifacts.jar / artifacts.xml
+│   ├── content.jar / content.xml
+│   └── site.xml
+├── tools/
+│   └── CacheVerifyTool.java     # 缓存校验工具
 ├── plugin.xml                   # 插件扩展点声明
 ├── build.properties             # 构建属性
+├── build.ps1                    # Windows构建脚本
 ├── build_plugin.xml             # 构建脚本（ANT）
-└── dist/
-    └── com.sap.abap.ai.completion_1.0.0.jar  # 发布的JAR
+├── generate-update-site.ps1     # 生成更新站点脚本
+└── rebuild.ps1                  # 重建脚本
 ```
 
 ### 关键扩展点
@@ -206,6 +229,24 @@ com.sap.abap.ai.completion/
 3. **AbapIncludeResolver**: 解析ABAP INCLUDE程序，为AI提供完整的上下文
 4. **AIOverlayManager**: 管理浮动覆盖层的显示和交互
 5. **AIConfiguration**: 统一的配置管理，支持偏好存储
+
+### 发送给AI的MESSAGE节点说明
+
+手动触发补全（`Ctrl+Shift+.`）时，插件会构造 **1个 `system` 节点 + 6个 `user` 节点** 的消息列表发送给 AI（对应 [AICompletionService.java] 中的 `buildUserMessages` 方法）。各节点含义如下：
+
+| 节点 | 角色 | 内容说明 |
+|------|------|----------|
+| **System** | `system` | 系统提示词。定义AI的角色（SAP ABAP资深开发专家）、补全规则与输出约束。可使用 `自定义系统提示 (Custom System Prompt)` 覆盖默认值 |
+| **节点1/6** | `user` | **SKILL 文件内容**：技能目录中加载的 `.abap`/`.txt`/`.skill` 文件，作为代码风格与最佳实践参考。无SKILL时标明"使用系统默认ABAP编码规范" |
+| **节点2/6** | `user` | **父程序调用上下文**：当当前文件是 INCLUDE 时，深度搜索到的调用它的父级程序代码（按配置的搜索深度递归查找）。该节点内容通过 `PromptCacheManager.compressAbapContext` 压缩 |
+| **节点3/6** | `user` | **工作区打开的程序**：当前 Eclipse 工作区中已打开的其它 ABAP 文件，作为风格参考与补充上下文（由 `WorkspaceCodeCollector` 收集，同样会压缩） |
+| **节点4/6** | `user` | **当前程序**：当前光标所在程序的完整代码（已通过 `AbapIncludeResolver` 展开所有 INCLUDE），并标注文件名与代码类型 |
+| **节点5/6** | `user` | **程序元数据**：文件名、代码类型、INCLUDE 数量、父级程序/工作区/SKILL 加载情况的汇总说明，帮助AI综合理解整体上下文 |
+| **节点6/6** | `user` | **光标位置上下文**：光标所在行列号，以及光标前15行、光标后5行的代码，并用 `[[[CURSOR_HERE]]]` 标记插入位置，这是AI真正生成补全内容的位置 |
+
+> **说明**：节点2、3在发送前会依据 `Max Context Chars (getMaxContextChars)` 阈值统一压缩，避免上下文窗口溢出；其余节点按各自规则直接发送。若某一节点无对应内容，仍会发送一条占位说明消息（标明该节点当前状态），保证AI始终收到完整的1+6节点结构。
+
+> **对比**：自动补全（`requestQuickCompletion`）不加载SKILL与上述上下文，使用的是简化后的独立 prompt，仅发送 1个 `system` 节点 + 1个 `user` 节点（当前行上下文）。
 
 ### 构建插件
 

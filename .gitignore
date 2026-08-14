@@ -15,3 +15,9 @@ Desktop.ini
 *.tmp
 *.bak
 *.log
+
+# Dev scratch / backup
+bin_backup_*/
+compile_args.txt
+tools/
+VerifyTruncator.java

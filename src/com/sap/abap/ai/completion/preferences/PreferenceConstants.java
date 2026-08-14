@@ -47,6 +47,9 @@ public final class PreferenceConstants {
     // === Interface Logging ===
     public static final String INTERFACE_LOGGING_ENABLED = "interfaceLoggingEnabled";
 
+    // === Prompt Cache ===
+    public static final String PROMPT_CACHE_ENABLED = "promptCacheEnabled";
+
     // === Default Values ===
     public static final String DEFAULT_API_BASE_URL = "https://api.openai.com/v1";
     public static final String DEFAULT_API_MODEL = "gpt-4";
@@ -77,8 +80,8 @@ public final class PreferenceConstants {
             + "10. When SKILL files are provided, prefer their patterns over generic ABAP code suggestions.";
 
     // === Defaults for Parent Program Resolution ===
-    public static final boolean DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED = true;
-    public static final String DEFAULT_ABAP_SEARCH_DEPTH = "0";
+    public static final boolean DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED = false;
+    public static final String DEFAULT_ABAP_SEARCH_DEPTH = "1";
     public static final String DEFAULT_MAX_CONTEXT_CHARS = "8000";
 
     // === Defaults for Workspace Code Reference ===
@@ -88,4 +91,7 @@ public final class PreferenceConstants {
 
     // === Defaults for Interface Logging ===
     public static final boolean DEFAULT_INTERFACE_LOGGING_ENABLED = false;
+
+    // === Defaults for Prompt Cache ===
+    public static final boolean DEFAULT_PROMPT_CACHE_ENABLED = true;
 }

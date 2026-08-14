@@ -9,6 +9,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -16,6 +17,7 @@ import java.util.regex.Pattern;
 import org.eclipse.core.runtime.Platform;
 
 import com.sap.abap.ai.completion.Activator;
+import com.sap.abap.ai.completion.client.AIClient.ChatMessage;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
 
 /**
@@ -81,6 +83,77 @@ public final class AILogger {
     }
 
     /**
+     * 记录 AI 请求(system + 多消息 user prompt + 3节点缓存状态)。
+     * 用于拆分后的多消息节点结构,每个节点单独分段显示,并记录各节点独立缓存状态。
+     *
+     * @param fileName          文件名
+     * @param systemPrompt      系统提示
+     * @param userMessages      user 消息列表
+     * @param cacheEnabled      是否启用 Prompt Cache
+     * @param skillCacheHit     节点1(SKILL)缓存是否命中
+     * @param parentCacheHit    节点2(父级程序)缓存是否命中
+     * @param workspaceCacheHit 节点3(工作区程序)缓存是否命中
+     * @param skillCacheKey     节点1缓存键
+     * @param parentCacheKey    节点2缓存键
+     * @param workspaceCacheKey 节点3缓存键
+     */
+    public static void logRequestMessages(String fileName, String systemPrompt,
+                                           List<ChatMessage> userMessages,
+                                           boolean cacheEnabled,
+                                           boolean skillCacheHit, boolean parentCacheHit, boolean workspaceCacheHit,
+                                           String skillCacheKey, String parentCacheKey, String workspaceCacheKey) {
+        if (!isEnabled()) return;
+        StringBuilder sb = new StringBuilder(1024);
+        sb.append("\n").append("************************************************************\n");
+        sb.append(timestamp()).append(" [REQUEST] [").append(safe(fileName)).append("] ");
+        if (userMessages != null) {
+            sb.append("(共 ").append(userMessages.size()).append(" 个消息节点)");
+        } else {
+            sb.append("(无 user 消息)");
+        }
+        // 三节点缓存状态
+        if (cacheEnabled) {
+            sb.append("\n  CACHE STATUS:");
+            if (skillCacheKey != null) {
+                sb.append("  节点1(SKILL): ").append(skillCacheHit ? "HIT" : "MISS")
+                        .append(" key=").append(safe(skillCacheKey));
+            } else {
+                sb.append("  节点1(SKILL): SKIP(内容短于阈值或无内容)");
+            }
+            if (parentCacheKey != null) {
+                sb.append("  节点2(PARENT): ").append(parentCacheHit ? "HIT" : "MISS")
+                        .append(" key=").append(safe(parentCacheKey));
+            } else {
+                sb.append("  节点2(PARENT): SKIP(无父级程序)");
+            }
+            if (workspaceCacheKey != null) {
+                sb.append("  节点3(WORKSPACE): ").append(workspaceCacheHit ? "HIT" : "MISS")
+                        .append(" key=").append(safe(workspaceCacheKey));
+            } else {
+                sb.append("  节点3(WORKSPACE): SKIP(无工作区程序)");
+            }
+        } else {
+            sb.append("\n  CACHE: DISABLED");
+        }
+        sb.append("\n");
+        sb.append("--- SYSTEM PROMPT ---\n");
+        sb.append(safe(systemPrompt)).append("\n");
+        if (userMessages != null) {
+            for (int i = 0; i < userMessages.size(); i++) {
+                ChatMessage msg = userMessages.get(i);
+                sb.append("\n--- USER MESSAGE ").append(i + 1).append("/")
+                        .append(userMessages.size());
+                if (msg != null && msg.role != null) {
+                    sb.append(" [role=").append(msg.role).append("]");
+                }
+                sb.append(" ---\n");
+                sb.append(msg != null ? safe(msg.content) : "").append("\n");
+            }
+        }
+        append(sb.toString());
+    }
+
+    /**
      * 记录 AI 响应(completion + 耗时)。
      */
     public static void logResponse(String fileName, String completion, long durationMs) {
@@ -90,6 +163,34 @@ public final class AILogger {
           .append(safe(fileName)).append("] (").append(durationMs).append("ms)\n");
         sb.append(safe(completion)).append("\n");
         sb.append("************************************************************\n");
+        append(sb.toString());
+    }
+
+    /**
+     * 记录诊断/提示信息（非错误，不带 ERROR 前缀，仅出现在接口日志中）。
+     * 用于 max_tokens 自动截断、缓存警告等非异常场景。
+     */
+    public static void logDiagnostic(String source, String message) {
+        if (!isEnabled()) return;
+        StringBuilder sb = new StringBuilder(128);
+        sb.append(timestamp()).append(" [DIAG] [").append(safe(source)).append("] ");
+        sb.append(safe(message)).append("\n");
+        append(sb.toString());
+    }
+
+    /**
+     * 记录预热请求的 JSON 报文内容（含完整的 system prompt、user content、cache key）。
+     * 仅在接口日志启用时输出，帮助调试预热阶段发送的内容。
+     */
+    public static void logWarmupRequest(String fileName, String cacheKey, String requestBody) {
+        if (!isEnabled()) return;
+        StringBuilder sb = new StringBuilder(1024);
+        sb.append("\n------------------------------------------------------------\n");
+        sb.append(timestamp()).append(" [WARMUP_REQUEST] [").append(safe(fileName)).append("]\n");
+        sb.append("cacheKey: ").append(safe(cacheKey)).append("\n");
+        sb.append("--- JSON BODY ---\n");
+        sb.append(safe(requestBody)).append("\n");
+        sb.append("------------------------------------------------------------\n");
         append(sb.toString());
     }
 
@@ -156,6 +257,18 @@ public final class AILogger {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * 获取日志目录的绝对路径字符串,用于在配置页中显示。
+     * 路径形如: <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/
+     * 日志文件名格式: yyyyMMddHH_ai_abap.log
+     *
+     * @return 日志目录路径字符串;若无法获取则返回空字符串
+     */
+    public static String getLogDirectoryPath() {
+        Path dir = getLogDirectory();
+        return dir != null ? dir.toString() : "";
     }
 
     private static void append(String content) {

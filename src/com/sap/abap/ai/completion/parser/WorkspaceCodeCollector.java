@@ -39,22 +39,25 @@ public class WorkspaceCodeCollector {
     private final String currentFileName;
     private final String currentFileExtension;
     private final int maxFileLimit;
-    private final int maxCharsPerFile;
+    private final int maxContextChars;
     private final IWorkbenchPage workbenchPage;
 
     /**
-     * @param currentFileName  当前编辑的文件名(用于排除)
-     * @param currentFileExtension 当前文件扩展名(如 .asinc)
+     * 构造器。
+     *
+     * @param currentFileName     当前正在编辑的文件名(用于排除自身)
+     * @param currentFileExtension 当前文件的扩展名(用于过滤)
      * @param maxFileLimit     最多收集的文件数
-     * @param maxCharsPerFile  每个文件的最大字符数
+     * @param maxContextChars  每个工作区文件的最大字符数(超出则用 AbapCodeTruncator 截断)
      * @param workbenchPage    当前 workbench 页面(在 UI 线程捕获,传入后台线程)
      */
     public WorkspaceCodeCollector(String currentFileName, String currentFileExtension,
-                                   int maxFileLimit, int maxCharsPerFile, IWorkbenchPage workbenchPage) {
+                                   int maxFileLimit, int maxContextChars,
+                                   IWorkbenchPage workbenchPage) {
         this.currentFileName = currentFileName;
         this.currentFileExtension = currentFileExtension != null ? currentFileExtension.toLowerCase() : "";
         this.maxFileLimit = Math.max(1, maxFileLimit);
-        this.maxCharsPerFile = Math.max(100, maxCharsPerFile);
+        this.maxContextChars = maxContextChars;
         this.workbenchPage = workbenchPage;
     }
 
@@ -818,18 +821,13 @@ public class WorkspaceCodeCollector {
             pairs.sort((a, b) -> Integer.compare(a.content.length(), b.content.length()));
 
             int limit = Math.min(maxFileLimit, pairs.size());
-            int totalChars = 0;
             for (int i = 0; i < limit; i++) {
                 EditorContentPair pair = pairs.get(i);
-                String truncated = AbapCodeTruncator.truncate(pair.content, maxCharsPerFile);
-                totalChars += truncated.length();
+                // 与节点2（父程序上下文）保持一致：上游先通过 AbapCodeTruncator
+                // 按结构保留式策略截断到 maxContextChars，保证工作区文件同样被压缩。
+                String truncated = AbapCodeTruncator.truncate(pair.content, maxContextChars);
                 sb.append("--- File: ").append(pair.displayName).append(" ---\n");
                 sb.append(truncated).append("\n");
-
-                if (totalChars > maxCharsPerFile * maxFileLimit * 2) {
-                    sb.append("... [truncated: reached total workspace context limit]\n");
-                    break;
-                }
             }
         }
 

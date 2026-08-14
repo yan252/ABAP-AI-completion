@@ -111,18 +111,25 @@ public class ParentProgramResolver {
                 AILogger.logError("ParentProgramResolver", "[DEBUG] processing parent "
                         + parent.getName() + ", content length=" + parentCode.length());
 
-                // 复用 AbapIncludeResolver 解析上级的 INCLUDE
+                // 复用 AbapIncludeResolver 解析上级的 INCLUDE (如 ZTRE08152_TOP, ZTRE08152_SCR 等)
                 AbapIncludeResolver resolver = new AbapIncludeResolver(parent.getProject());
                 AbapIncludeResolver.IncludeContext parentIncludes =
                         resolver.resolveAllIncludes(parentCode);
 
+                AILogger.logError("ParentProgramResolver", "[DEBUG] parent " + parent.getName()
+                        + " resolved " + parentIncludes.getResolvedCount() + " INCLUDE(s)");
+
+                // 上级程序自身代码 (截断)
                 String truncatedCode = AbapCodeTruncator.truncate(parentCode, maxContextChars);
+                // 上级程序的 INCLUDE 代码 (仅包含已解析的 INCLUDE,不含上级自身代码,避免重复)
                 String truncatedIncludes = AbapCodeTruncator.truncate(
-                        parentIncludes.buildPromptContext(), maxContextChars);
+                        parentIncludes.buildIncludesOnlyContext(), maxContextChars);
 
                 result.addParent(parent.getName(), truncatedCode, truncatedIncludes, depth + 1);
                 AILogger.logError("ParentProgramResolver", "[DEBUG] added parent "
-                        + parent.getName() + " at depth " + (depth + 1));
+                        + parent.getName() + " at depth " + (depth + 1)
+                        + " (codeLen=" + truncatedCode.length()
+                        + ", includesLen=" + truncatedIncludes.length() + ")");
 
                 // 递归向上
                 collectParentsRecursively(parent, depth + 1, visited, result);
@@ -137,22 +144,22 @@ public class ParentProgramResolver {
     // ==================== 文件搜索 ====================
 
     /**
-     * 当前项目优先,空则工作区兜底。
+     * 只在当前项目中搜索父程序。
+     * 只有当 preferred 为 null 时才回退到搜索整个工作区。
      */
     private List<IFile> findParentFilesWithFallback(String includeName, IProject preferred) {
         List<IFile> results = new ArrayList<>();
 
-        // 1. 当前项目优先
         if (preferred != null && preferred.isAccessible()) {
+            // 只在当前项目中搜索 (SAP ADT 场景: 当前系统的项目)
             searchIncludeCallers(preferred, includeName, results);
+            return results;
         }
-        if (!results.isEmpty()) return results;
 
-        // 2. 工作区兜底
+        // preferred 为 null 时,回退到搜索整个工作区
         IWorkspaceRoot root = ResourcesPlugin.getWorkspace().getRoot();
         IProject[] all = root.getProjects();
         for (IProject p : all) {
-            if (p.equals(preferred)) continue;
             if (!p.isAccessible()) continue;
             searchIncludeCallers(p, includeName, results);
         }
