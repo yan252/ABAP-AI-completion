@@ -52,6 +52,15 @@ public class ParentProgramResolver {
         String fileName = includeFile.getName();
         AILogger.logError("ParentProgramResolver", "[DEBUG] resolveParents: start file=" + fileName);
 
+        // 仅当当前程序名(Z/Y 开头)属于自定义程序时才查找父级调用上下文。
+        // 非 Z/Y 开头的程序(标准程序/系统程序)不进行反向查找,避免无关上下文混入。
+        String currentProgram = stripExtension(fileName);
+        if (!isCustomerProgram(currentProgram)) {
+            AILogger.logError("ParentProgramResolver", "[DEBUG] skip parent search: current program "
+                    + currentProgram + " is not Z/Y prefixed");
+            return context;
+        }
+
         Set<String> visited = new HashSet<>();
         // 起点: 当前文件自身加入 visited,防止自引用
         String startPath = toCanonical(includeFile);
@@ -250,6 +259,16 @@ public class ParentProgramResolver {
         if (base.startsWith("SAP") || base.startsWith("R")) return true;
         // 如果文件名较长,可能是 ABAP 程序
         return base.length() >= 8;
+    }
+
+    /**
+     * 判断给定的程序名是否为自定义程序(以 Z 或 Y 开头)。
+     * 名称已按大写处理(如通过 {@link #stripExtension})。
+     */
+    private static boolean isCustomerProgram(String upperName) {
+        if (upperName == null || upperName.isEmpty()) return false;
+        String base = upperName.toUpperCase();
+        return base.startsWith("Z") || base.startsWith("Y");
     }
 
     /**
