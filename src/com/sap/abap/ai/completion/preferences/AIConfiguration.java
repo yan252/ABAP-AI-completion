@@ -429,8 +429,37 @@ public final class AIConfiguration {
 
     // === Interface Logging ===
 
-    public static boolean isInterfaceLoggingEnabled() {
-        return getStore().getBoolean(PreferenceConstants.INTERFACE_LOGGING_ENABLED);
+    /**
+     * 获取接口日志记录等级。
+     * <ul>
+     *   <li>0 = 不记录日志</li>
+     *   <li>1 = 普通记录（当前接口相关的请求/响应日志）</li>
+     *   <li>2 = DEBUG 调试日志</li>
+     * </ul>
+     */
+    public static int getInterfaceLogLevel() {
+        int level;
+        try {
+            level = Integer.parseInt(getStore().getString(PreferenceConstants.INTERFACE_LOG_LEVEL));
+        } catch (NumberFormatException e) {
+            level = Integer.parseInt(PreferenceConstants.DEFAULT_INTERFACE_LOG_LEVEL);
+        }
+        return Math.max(PreferenceConstants.LOG_LEVEL_NONE,
+                Math.min(PreferenceConstants.LOG_LEVEL_DEBUG, level));
+    }
+
+    /**
+     * 是否启用普通级别（含）以上的接口日志记录（等级 &gt;= 1）。
+     */
+    public static boolean isInterfaceLogNormalEnabled() {
+        return getInterfaceLogLevel() >= PreferenceConstants.LOG_LEVEL_NORMAL;
+    }
+
+    /**
+     * 是否启用 DEBUG 调试级别接口日志记录（等级 &gt;= 2）。
+     */
+    public static boolean isInterfaceLogDebugEnabled() {
+        return getInterfaceLogLevel() >= PreferenceConstants.LOG_LEVEL_DEBUG;
     }
 
     // === Prompt Cache ===

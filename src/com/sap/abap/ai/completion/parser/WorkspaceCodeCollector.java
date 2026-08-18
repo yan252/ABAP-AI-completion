@@ -73,7 +73,7 @@ public class WorkspaceCodeCollector {
         try {
             if (workbenchPage == null) {
                 debugSb.append("[DEBUG] workbenchPage is null (thread issue?)");
-                AILogger.logError("WorkspaceCodeCollector", debugSb.toString());
+                AILogger.logDebug("WorkspaceCodeCollector", debugSb.toString());
                 return buildResult(pairs, 0);
             }
 
@@ -166,8 +166,8 @@ public class WorkspaceCodeCollector {
             debugSb.append("[DEBUG] CRITICAL ERROR: ").append(e.getMessage()).append("\n");
         }
 
-        AILogger.logError("WorkspaceCodeCollector", debugSb.toString());
-        AILogger.logError("WorkspaceCodeCollector", "[DEBUG] SUMMARY: scanned=" + totalScanned
+        AILogger.logDebug("WorkspaceCodeCollector", debugSb.toString());
+        AILogger.logDebug("WorkspaceCodeCollector", "[DEBUG] SUMMARY: scanned=" + totalScanned
                 + " editors, collected=" + pairs.size()
                 + " abap files for reference (current=" + currentFileName + ")");
 

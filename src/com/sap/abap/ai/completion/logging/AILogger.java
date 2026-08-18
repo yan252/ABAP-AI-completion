@@ -24,13 +24,19 @@ import com.sap.abap.ai.completion.preferences.AIConfiguration;
  * AI 接口日志记录器。
  *
  * 特性:
- *   - 默认关闭,通过 {@link AIConfiguration#isInterfaceLoggingEnabled()} 实时控制
+ *   - 默认关闭,通过 {@link AIConfiguration#getInterfaceLogLevel()} 实时控制
+ *     (0=不记录, 1=普通记录, 2=DEBUG调试记录)
  *   - 输出到插件 state area: <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/
  *   - 按小时滚动文件: 文件名格式 yyyyMMddHH_ai_abap.log (如 2026080409_ai_abap.log)
  *   - 自动删除一周(7 天)以前的日志文件
  *   - 串行写入(synchronized),避免异步线程竞争
  *   - 不记录 API Key/URL/模型名(敏感信息),仅记录 prompt 和 completion
  *   - 清理检查节流: 每小时最多执行一次清理扫描
+ *
+ * 日志等级:
+ *   - {@link #logRequest} / {@link #logRequestMessages} / {@link #logResponse} /
+ *     {@link #logWarmupRequest} / {@link #logDiagnostic} / {@link #logError}: 普通记录(等级 1)
+ *   - {@link #logDebug}: 调试记录(等级 2),仅在 DEBUG 等级下输出
  *
  * 日志格式:
  *   [2026-08-04 10:23:15.123] [REQUEST] [ZMY_PROG.abap]
@@ -205,11 +211,41 @@ public final class AILogger {
         append(sb.toString());
     }
 
+    /**
+     * 记录 DEBUG 调试信息。仅在日志等级为 DEBUG(2) 时输出,
+     * 用于解析器、上下文收集器等内部调试。
+     *
+     * @param source  来源标识(如类名)
+     * @param message 调试信息
+     */
+    public static void logDebug(String source, String message) {
+        if (!isDebugEnabled()) return;
+        StringBuilder sb = new StringBuilder(128);
+        sb.append(timestamp()).append(" [DEBUG] [").append(safe(source)).append("] ");
+        sb.append(safe(message)).append("\n");
+        append(sb.toString());
+    }
+
     // ==================== 内部方法 ====================
 
+    /**
+     * 是否启用普通级别(等级 1)及其以上的日志记录。
+     */
     private static boolean isEnabled() {
         try {
-            return AIConfiguration.isInterfaceLoggingEnabled();
+            return AIConfiguration.isInterfaceLogNormalEnabled();
+        } catch (Exception e) {
+            // 偏好未就绪时默认不记录
+            return false;
+        }
+    }
+
+    /**
+     * 是否启用 DEBUG 级别(等级 2)日志记录。
+     */
+    private static boolean isDebugEnabled() {
+        try {
+            return AIConfiguration.isInterfaceLogDebugEnabled();
         } catch (Exception e) {
             // 偏好未就绪时默认不记录
             return false;

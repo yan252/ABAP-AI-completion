@@ -1,17 +1,11 @@
 package com.sap.abap.ai.completion.ui;
 
-import java.net.URL;
-
-import org.eclipse.core.commands.Command;
-import org.eclipse.core.commands.ExecutionEvent;
-import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.MenuDetectEvent;
 import org.eclipse.swt.events.MenuDetectListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.graphics.GC;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.graphics.ImageData;
 import org.eclipse.swt.graphics.Point;
@@ -20,14 +14,10 @@ import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Menu;
-import org.eclipse.swt.widgets.MenuItem;
 import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.commands.ICommandService;
-import org.eclipse.ui.handlers.IHandlerService;
 import org.eclipse.ui.menus.WorkbenchWindowControlContribution;
 
 import com.sap.abap.ai.completion.Activator;
-import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
 /**
  * Status bar icon contribution for ABAP AI Completion.
@@ -49,8 +39,6 @@ import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribution {
 
     private static final String ICON_PATH = "icons/SAPLogo.ico";
-    private static final String HELP_URL = "https://github.com/yan252/ABAP-AI-completion";
-    private static final String COMMAND_ID = "com.sap.abap.ai.completion.completeCommand";
 
     /** Target height = full status bar height. 22 is a safe default. */
     private static final int TARGET_HEIGHT = 22;
@@ -292,286 +280,12 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
 
             Menu popup = new Menu(button);
             try {
-                MenuItem prefsItem = new MenuItem(popup, SWT.PUSH);
-                prefsItem.setText("Preferences...");
-                prefsItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        openPreferences();
-                    }
-                });
-
-                new MenuItem(popup, SWT.SEPARATOR);
-
-                final MenuItem enableItem = new MenuItem(popup, SWT.CHECK);
-                enableItem.setText("Enable");
-                enableItem.setSelection(isPluginEnabled());
-                enableItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        setPluginEnabled(enableItem.getSelection());
-                    }
-                });
-
-                final MenuItem autoCompleteItem = new MenuItem(popup, SWT.CHECK);
-                autoCompleteItem.setText("Auto-complete while typing (临时)");
-                autoCompleteItem.setSelection(isAutoCompletionEnabled());
-                autoCompleteItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        setAutoCompletionEnabled(autoCompleteItem.getSelection());
-                    }
-                });
-
-                new MenuItem(popup, SWT.SEPARATOR);
-
-                final MenuItem workspaceCodeItem = new MenuItem(popup, SWT.CHECK);
-                workspaceCodeItem.setText("AI Reference Workspace Code");
-                workspaceCodeItem.setSelection(isWorkspaceCodeReferenceEnabled());
-                workspaceCodeItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        setWorkspaceCodeReferenceEnabled(workspaceCodeItem.getSelection());
-                    }
-                });
-
-                final MenuItem skillItem = new MenuItem(popup, SWT.CHECK);
-                skillItem.setText("Enable Skill Reference");
-                skillItem.setSelection(isSkillEnabled());
-                skillItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        setSkillEnabled(skillItem.getSelection());
-                    }
-                });
-
-                final MenuItem parentLookupItem = new MenuItem(popup, SWT.CHECK);
-                parentLookupItem.setText("Enable Parent Program Lookup");
-                parentLookupItem.setSelection(isParentProgramResolutionEnabled());
-                parentLookupItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        setParentProgramResolutionEnabled(parentLookupItem.getSelection());
-                    }
-                });
-
-                new MenuItem(popup, SWT.SEPARATOR);
-
-                MenuItem completeItem = new MenuItem(popup, SWT.PUSH);
-                completeItem.setText("Code Completion\tCtrl+Shift+.");
-                completeItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        triggerCompletion();
-                    }
-                });
-
-                new MenuItem(popup, SWT.SEPARATOR);
-
-                MenuItem helpItem = new MenuItem(popup, SWT.PUSH);
-                helpItem.setText("Help");
-                helpItem.addSelectionListener(new SelectionAdapter() {
-                    @Override
-                    public void widgetSelected(SelectionEvent e) {
-                        openHelpUrl();
-                    }
-                });
-
+                AICompletionMenuBuilder.populateMenu(popup);
                 popup.setVisible(true);
             } catch (Exception ex) {
                 try { popup.dispose(); } catch (Exception ignored) {}
             }
         } catch (Exception ignored) {
-        }
-    }
-
-    private void openPreferences() {
-        try {
-            org.eclipse.ui.IWorkbenchWindow window = findWorkbenchWindow();
-            if (window == null) return;
-            final org.eclipse.swt.widgets.Shell shell = window.getShell();
-            final String pageId = "com.sap.abap.ai.completion.preferencePage";
-
-            PlatformUI.getWorkbench().getDisplay().asyncExec(() -> {
-                try {
-                    Class<?> dialogCls = Class.forName("org.eclipse.ui.dialogs.PreferencesUtil");
-                    java.lang.reflect.Method createDialog = dialogCls.getMethod(
-                            "createPreferenceDialogOn",
-                            org.eclipse.swt.widgets.Shell.class,
-                            String.class,
-                            String[].class,
-                            Object.class);
-                    Object dialog = createDialog.invoke(null, shell, pageId, null, null);
-                    if (dialog instanceof org.eclipse.jface.dialogs.Dialog) {
-                        ((org.eclipse.jface.dialogs.Dialog) dialog).open();
-                    }
-                } catch (Exception fallback) {
-                    try {
-                        java.lang.reflect.Method m = PlatformUI.getWorkbench().getClass()
-                                .getMethod("getPreferenceManager");
-                        Object pm = m.invoke(PlatformUI.getWorkbench());
-                        Object dlg = Class.forName("org.eclipse.ui.dialogs.WorkbenchPreferenceDialog")
-                                .getConstructor(org.eclipse.swt.widgets.Shell.class,
-                                        Class.forName("org.eclipse.jface.preference.IPreferenceManager"))
-                                .newInstance(shell, pm);
-                        if (dlg instanceof org.eclipse.jface.dialogs.Dialog) {
-                            ((org.eclipse.jface.dialogs.Dialog) dlg).open();
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-            });
-        } catch (Exception e) {
-        }
-    }
-
-    private boolean isPluginEnabled() {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return PreferenceConstants.DEFAULT_PLUGIN_ENABLED;
-            return store.getBoolean(PreferenceConstants.PLUGIN_ENABLED);
-        } catch (Exception e) {
-            return PreferenceConstants.DEFAULT_PLUGIN_ENABLED;
-        }
-    }
-
-    private void setPluginEnabled(boolean enabled) {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return;
-            store.setValue(PreferenceConstants.PLUGIN_ENABLED, enabled);
-            try {
-                Activator.getDefault().savePluginPreferences();
-            } catch (Exception ignored) {
-            }
-        } catch (Exception e) {
-        }
-    }
-
-    private boolean isAutoCompletionEnabled() {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return PreferenceConstants.DEFAULT_AUTO_COMPLETION_ENABLED;
-            return store.getBoolean(PreferenceConstants.AUTO_COMPLETION_ENABLED);
-        } catch (Exception e) {
-            return PreferenceConstants.DEFAULT_AUTO_COMPLETION_ENABLED;
-        }
-    }
-
-    private void setAutoCompletionEnabled(boolean enabled) {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return;
-            store.setValue(PreferenceConstants.AUTO_COMPLETION_ENABLED, enabled);
-            try {
-                Activator.getDefault().savePluginPreferences();
-            } catch (Exception ignored) {
-            }
-        } catch (Exception e) {
-        }
-    }
-
-    private boolean isWorkspaceCodeReferenceEnabled() {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return PreferenceConstants.DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED;
-            return store.getBoolean(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED);
-        } catch (Exception e) {
-            return PreferenceConstants.DEFAULT_WORKSPACE_CODE_REFERENCE_ENABLED;
-        }
-    }
-
-    private void setWorkspaceCodeReferenceEnabled(boolean enabled) {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return;
-            store.setValue(PreferenceConstants.WORKSPACE_CODE_REFERENCE_ENABLED, enabled);
-            try {
-                Activator.getDefault().savePluginPreferences();
-            } catch (Exception ignored) {
-            }
-        } catch (Exception e) {
-        }
-    }
-
-    private boolean isSkillEnabled() {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return PreferenceConstants.DEFAULT_SKILL_ENABLED;
-            return store.getBoolean(PreferenceConstants.SKILL_ENABLED);
-        } catch (Exception e) {
-            return PreferenceConstants.DEFAULT_SKILL_ENABLED;
-        }
-    }
-
-    private void setSkillEnabled(boolean enabled) {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return;
-            store.setValue(PreferenceConstants.SKILL_ENABLED, enabled);
-            try {
-                Activator.getDefault().savePluginPreferences();
-            } catch (Exception ignored) {
-            }
-        } catch (Exception e) {
-        }
-    }
-
-    private boolean isParentProgramResolutionEnabled() {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return PreferenceConstants.DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED;
-            return store.getBoolean(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED);
-        } catch (Exception e) {
-            return PreferenceConstants.DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED;
-        }
-    }
-
-    private void setParentProgramResolutionEnabled(boolean enabled) {
-        try {
-            IPreferenceStore store = Activator.staticGetPreferenceStore();
-            if (store == null) return;
-            store.setValue(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED, enabled);
-            try {
-                Activator.getDefault().savePluginPreferences();
-            } catch (Exception ignored) {
-            }
-        } catch (Exception e) {
-        }
-    }
-
-    private void triggerCompletion() {
-        try {
-            IHandlerService hs = PlatformUI.getWorkbench().getService(IHandlerService.class);
-            ICommandService cs = PlatformUI.getWorkbench().getService(ICommandService.class);
-            if (hs == null || cs == null) return;
-            Command command = cs.getCommand(COMMAND_ID);
-            if (command == null || !command.isDefined()) return;
-            ExecutionEvent event = hs.createExecutionEvent(command, null);
-            command.executeWithChecks(event);
-        } catch (Exception ex) {
-            try {
-                IHandlerService hs = PlatformUI.getWorkbench().getService(IHandlerService.class);
-                if (hs != null) {
-                    hs.executeCommand(COMMAND_ID, null);
-                }
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    private void openHelpUrl() {
-        try {
-            PlatformUI.getWorkbench().getBrowserSupport()
-                    .getExternalBrowser()
-                    .openURL(new URL(HELP_URL));
-        } catch (Exception e) {
-            try {
-                if (java.awt.Desktop.isDesktopSupported()) {
-                    java.awt.Desktop.getDesktop().browse(new java.net.URI(HELP_URL));
-                }
-            } catch (Exception ignored) {
-            }
         }
     }
 

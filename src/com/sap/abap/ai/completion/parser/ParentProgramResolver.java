@@ -50,13 +50,13 @@ public class ParentProgramResolver {
         if (includeFile == null) return context;
 
         String fileName = includeFile.getName();
-        AILogger.logError("ParentProgramResolver", "[DEBUG] resolveParents: start file=" + fileName);
+        AILogger.logDebug("ParentProgramResolver", "[DEBUG] resolveParents: start file=" + fileName);
 
         // 仅当当前程序名(Z/Y 开头)属于自定义程序时才查找父级调用上下文。
         // 非 Z/Y 开头的程序(标准程序/系统程序)不进行反向查找,避免无关上下文混入。
         String currentProgram = stripExtension(fileName);
         if (!isCustomerProgram(currentProgram)) {
-            AILogger.logError("ParentProgramResolver", "[DEBUG] skip parent search: current program "
+            AILogger.logDebug("ParentProgramResolver", "[DEBUG] skip parent search: current program "
                     + currentProgram + " is not Z/Y prefixed");
             return context;
         }
@@ -68,12 +68,12 @@ public class ParentProgramResolver {
 
         // 提取 includeName 用于搜索
         String includeName = stripExtension(fileName);
-        AILogger.logError("ParentProgramResolver", "[DEBUG] searching for INCLUDE " + includeName
+        AILogger.logDebug("ParentProgramResolver", "[DEBUG] searching for INCLUDE " + includeName
                 + " in project=" + (project != null ? project.getName() : "null"));
 
         collectParentsRecursively(includeFile, 0, visited, context);
 
-        AILogger.logError("ParentProgramResolver", "[DEBUG] found " + context.getParents().size()
+        AILogger.logDebug("ParentProgramResolver", "[DEBUG] found " + context.getParents().size()
                 + " parent programs for " + fileName);
         return context;
     }
@@ -84,7 +84,7 @@ public class ParentProgramResolver {
                                             Set<String> visited,
                                             ParentProgramContext result) {
         if (depth >= maxDepth) {
-            AILogger.logError("ParentProgramResolver", "[DEBUG] maxDepth " + maxDepth
+            AILogger.logDebug("ParentProgramResolver", "[DEBUG] maxDepth " + maxDepth
                     + " reached for " + file.getName());
             return;   // 深度门控
         }
@@ -92,18 +92,18 @@ public class ParentProgramResolver {
         String includeName = stripExtension(file.getName());
         if (includeName == null || includeName.isEmpty()) return;
 
-        AILogger.logError("ParentProgramResolver", "[DEBUG] depth=" + depth
+        AILogger.logDebug("ParentProgramResolver", "[DEBUG] depth=" + depth
                 + ", looking for parents of " + includeName);
 
         List<IFile> parents = findParentFilesWithFallback(includeName, file.getProject());
-        AILogger.logError("ParentProgramResolver", "[DEBUG] found " + parents.size()
+        AILogger.logDebug("ParentProgramResolver", "[DEBUG] found " + parents.size()
                 + " potential parents for " + includeName);
 
         for (IFile parent : parents) {
             String path = toCanonical(parent);
             if (path == null) continue;
             if (visited.contains(path)) {
-                AILogger.logError("ParentProgramResolver", "[DEBUG] skip visited parent "
+                AILogger.logDebug("ParentProgramResolver", "[DEBUG] skip visited parent "
                         + parent.getName());
                 continue;   // 环检测
             }
@@ -112,12 +112,12 @@ public class ParentProgramResolver {
             try {
                 String parentCode = AbapIncludeResolver.readFileContent(parent);
                 if (parentCode == null || parentCode.isEmpty()) {
-                    AILogger.logError("ParentProgramResolver", "[DEBUG] empty content for "
+                    AILogger.logDebug("ParentProgramResolver", "[DEBUG] empty content for "
                             + parent.getName());
                     continue;
                 }
 
-                AILogger.logError("ParentProgramResolver", "[DEBUG] processing parent "
+                AILogger.logDebug("ParentProgramResolver", "[DEBUG] processing parent "
                         + parent.getName() + ", content length=" + parentCode.length());
 
                 // 复用 AbapIncludeResolver 解析上级的 INCLUDE (如 ZTRE08152_TOP, ZTRE08152_SCR 等)
@@ -125,7 +125,7 @@ public class ParentProgramResolver {
                 AbapIncludeResolver.IncludeContext parentIncludes =
                         resolver.resolveAllIncludes(parentCode);
 
-                AILogger.logError("ParentProgramResolver", "[DEBUG] parent " + parent.getName()
+                AILogger.logDebug("ParentProgramResolver", "[DEBUG] parent " + parent.getName()
                         + " resolved " + parentIncludes.getResolvedCount() + " INCLUDE(s)");
 
                 // 上级程序自身代码 (截断)
@@ -135,7 +135,7 @@ public class ParentProgramResolver {
                         parentIncludes.buildIncludesOnlyContext(), maxContextChars);
 
                 result.addParent(parent.getName(), truncatedCode, truncatedIncludes, depth + 1);
-                AILogger.logError("ParentProgramResolver", "[DEBUG] added parent "
+                AILogger.logDebug("ParentProgramResolver", "[DEBUG] added parent "
                         + parent.getName() + " at depth " + (depth + 1)
                         + " (codeLen=" + truncatedCode.length()
                         + ", includesLen=" + truncatedIncludes.length() + ")");
@@ -143,7 +143,7 @@ public class ParentProgramResolver {
                 // 递归向上
                 collectParentsRecursively(parent, depth + 1, visited, result);
             } catch (Exception e) {
-                AILogger.logError("ParentProgramResolver", "[DEBUG] error processing "
+                AILogger.logDebug("ParentProgramResolver", "[DEBUG] error processing "
                         + parent.getName() + ": " + e.getMessage());
                 // 读取失败,跳过此 parent
             }
@@ -215,7 +215,7 @@ public class ParentProgramResolver {
             // 容器不可访问,忽略
         }
 
-        AILogger.logError("ParentProgramResolver", "[DEBUG] searchIncludeCallers: scanned=" + scannedCount[0]
+        AILogger.logDebug("ParentProgramResolver", "[DEBUG] searchIncludeCallers: scanned=" + scannedCount[0]
                 + " abap files, matched=" + matchedCount[0]
                 + " for INCLUDE " + includeName + " in " + container.getName());
     }

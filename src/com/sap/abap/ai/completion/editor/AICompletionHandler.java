@@ -99,6 +99,12 @@ public class AICompletionHandler extends AbstractHandler {
             return null;
         }
 
+        // 门控: 光标所在行前后（同一行内）都有字符时，不触发 AI 代码补全
+        if (isCursorInMiddleOfLine(textBefore, textAfter)) {
+            showStatus(event, "Cursor is inside existing code; AI completion skipped.");
+            return null;
+        }
+
         ITextViewer viewer = editor.getAdapter(ITextViewer.class);
 
         // 在 UI 线程捕获 IWorkbenchPage,传递给后台线程使用
@@ -127,6 +133,26 @@ public class AICompletionHandler extends AbstractHandler {
         );
 
         return null;
+    }
+
+    /**
+     * 判断光标是否位于一行的中间，即光标前后在同一行内都有非空白字符。
+     * 若返回 true，说明光标在已有代码中间，此时不应触发 AI 代码补全。
+     *
+     * @param textBefore 光标前的全文
+     * @param textAfter  光标后的全文
+     * @return 光标前后同侧都有字符时为 true
+     */
+    private boolean isCursorInMiddleOfLine(String textBefore, String textAfter) {
+        int lastNewlineBefore = textBefore.lastIndexOf('\n');
+        String beforeOnLine = textBefore.substring(lastNewlineBefore + 1);
+
+        int firstNewlineAfter = textAfter.indexOf('\n');
+        String afterOnLine = firstNewlineAfter >= 0
+                ? textAfter.substring(0, firstNewlineAfter)
+                : textAfter;
+
+        return !beforeOnLine.trim().isEmpty() && !afterOnLine.trim().isEmpty();
     }
 
     private void showStatus(ExecutionEvent event, String msg) {

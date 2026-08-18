@@ -56,4 +56,31 @@
       </menuContribution>
    </extension>
 
+   <!-- "ABAP AI Completion" submenu added to the ABAP editor context menu.
+        The dynamic contribution shows the submenu only in ABAP editors.
+
+        HOW TO TARGET THE ABAP EDITOR'S POPUP MENU:
+        The SAP ADT ABAP source editor does NOT reliably register the standard
+        popup ids "org.eclipse.ui.textEditorScope" or "#TextEditorContext".
+        Different ADT releases may use a custom popup id, so a "popup:<specific-id>"
+        contribution is fragile.
+
+        ROBUST SOLUTION:
+        Use "popup:org.eclipse.ui.popup.any?after=additions" WITH allPopups="true".
+        This makes the contribution eligible for EVERY popup menu in the workbench.
+        The dynamic ContributionItem's fill() is then invoked for each popup, and
+        our code (findActiveAbapEditor -> AbapLanguageDetector) adds the submenu
+        ONLY when the active editor is an ABAP editor. For every other popup it
+        simply adds nothing, so other context menus are unaffected. -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="popup:org.eclipse.ui.popup.any?after=additions"
+            allPopups="true">
+         <dynamic
+               id="com.sap.abap.ai.completion.editorContextMenu"
+               class="com.sap.abap.ai.completion.ui.AICompletionEditorMenuContribution">
+         </dynamic>
+      </menuContribution>
+   </extension>
+
 </plugin>

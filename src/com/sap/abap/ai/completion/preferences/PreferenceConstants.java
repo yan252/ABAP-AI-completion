@@ -45,7 +45,13 @@ public final class PreferenceConstants {
     public static final String WORKSPACE_CODE_FILE_LIMIT = "workspaceCodeFileLimit";
 
     // === Interface Logging ===
-    public static final String INTERFACE_LOGGING_ENABLED = "interfaceLoggingEnabled";
+    /** 接口日志记录等级: 0-不记录, 1-普通记录, 2-DEBUG调试记录 */
+    public static final String INTERFACE_LOG_LEVEL = "interfaceLogLevel";
+
+    // === Interface Log Level Values ===
+    public static final int LOG_LEVEL_NONE = 0;
+    public static final int LOG_LEVEL_NORMAL = 1;
+    public static final int LOG_LEVEL_DEBUG = 2;
 
     // === Prompt Cache ===
     public static final String PROMPT_CACHE_ENABLED = "promptCacheEnabled";
@@ -90,7 +96,7 @@ public final class PreferenceConstants {
     public static final String DEFAULT_WORKSPACE_CODE_FILE_LIMIT = "5";
 
     // === Defaults for Interface Logging ===
-    public static final boolean DEFAULT_INTERFACE_LOGGING_ENABLED = false;
+    public static final String DEFAULT_INTERFACE_LOG_LEVEL = "0";
 
     // === Defaults for Prompt Cache ===
     public static final boolean DEFAULT_PROMPT_CACHE_ENABLED = true;

@@ -9,6 +9,7 @@ import org.eclipse.swt.graphics.RGB;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.DirectoryDialog;
@@ -36,6 +37,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Text txtMaxTokens;
     private Text txtTemperature;
     private Text txtSkillDir;
+    private Button chkSkillEnabled;
     private Text txtSystemPrompt;
     private Text txtAutoDelay;
     private Button chkPluginEnabled;
@@ -49,8 +51,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Button chkWorkspaceCodeRef;
     private Text txtMaxWorkspaceChars;
     private Text txtWorkspaceFileLimit;
-    private Button chkInterfaceLogging;
-    private Button chkSkillEnabled;
+    private Combo cmbLogLevel;
     private Spinner spinnerOpacity;
 
     private IPreferenceStore store;
@@ -250,31 +251,27 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private void createLoggingGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
         g.setText("Interface Logging");
-        g.setLayout(new GridLayout(1, false));
+        g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-        chkInterfaceLogging = new Button(g, SWT.CHECK);
-        chkInterfaceLogging.setText("Enable interface logging (system/user prompt + completion)");
-
-        Label note = new Label(g, SWT.WRAP);
-        note.setText("Logs are written to the plugin state area, not the Eclipse error log.\n"
-                + "Log files are rotated hourly, named yyyyMMddHH_ai_abap.log (e.g. 2026080409_ai_abap.log).\n"
-                + "Logs older than 7 days are automatically deleted.");
-        GridData nd = new GridData(GridData.FILL_HORIZONTAL);
-        nd.horizontalSpan = 1;
-        note.setLayoutData(nd);
+        createLabel(g, "Log level:");
+        cmbLogLevel = new Combo(g, SWT.DROP_DOWN | SWT.READ_ONLY);
+        cmbLogLevel.add("0 - No logging");
+        cmbLogLevel.add("1 - Normal logging (interface request/response)");
+        cmbLogLevel.add("2 - DEBUG logging");
+        cmbLogLevel.select(PreferenceConstants.LOG_LEVEL_NONE);
+        GridData cgGd = new GridData(GridData.FILL_HORIZONTAL);
+        cmbLogLevel.setLayoutData(cgGd);
 
         // 显示日志文件所在目录
-        createLabel(g, "Log directory:");
-        Text txtLogDir = new Text(g, SWT.BORDER | SWT.READ_ONLY);
-        txtLogDir.setText(com.sap.abap.ai.completion.logging.AILogger.getLogDirectoryPath());
-        txtLogDir.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-        Label fileNote = new Label(g, SWT.WRAP);
-        fileNote.setText("Current log file: <log directory>/yyyyMMddHH_ai_abap.log");
-        GridData fnd = new GridData(GridData.FILL_HORIZONTAL);
-        fnd.horizontalSpan = 1;
-        fileNote.setLayoutData(fnd);
+        Label note = new Label(g, SWT.WRAP);
+        note.setText("0 = No logging; 1 = Record interface request/response logs; "
+                + "2 = Additionally record DEBUG logs (parser, context collection, etc.).\n"
+                + "Logs are written to the plugin state area, not the Eclipse error log.\n"
+                + "See AILogger for the exact path under <workspace>/.metadata/.plugins/.");
+        GridData nd = new GridData(GridData.FILL_HORIZONTAL);
+        nd.horizontalSpan = 2;
+        note.setLayoutData(nd);
     }
 
     private void createPromptGroup(Composite parent) {
@@ -341,8 +338,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtMaxWorkspaceChars.setText(store.getString(PreferenceConstants.MAX_WORKSPACE_CODE_CHARS));
         txtWorkspaceFileLimit.setText(store.getString(PreferenceConstants.WORKSPACE_CODE_FILE_LIMIT));
 
-        chkInterfaceLogging.setSelection(
-                store.getBoolean(PreferenceConstants.INTERFACE_LOGGING_ENABLED));
+        cmbLogLevel.select(clampLogLevelIndex(
+                Integer.parseInt(store.getString(PreferenceConstants.INTERFACE_LOG_LEVEL))));
 
         // Color
         String colorStr = store.getString(PreferenceConstants.COMPLETION_COLOR);
@@ -357,7 +354,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private void saveValues() {
         store.setValue(PreferenceConstants.API_BASE_URL, txtBaseUrl.getText());
         store.setValue(PreferenceConstants.API_MODEL, txtModel.getText());
-        store.setValue(PreferenceConstants.API_KEY, txtApiKey.getText());
         store.setValue(PreferenceConstants.MAX_TOKENS, txtMaxTokens.getText());
         store.setValue(PreferenceConstants.TEMPERATURE, txtTemperature.getText());
         String skillDirValue = txtSkillDir.getText().trim();
@@ -385,8 +381,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         store.setValue(PreferenceConstants.MAX_WORKSPACE_CODE_CHARS, txtMaxWorkspaceChars.getText());
         store.setValue(PreferenceConstants.WORKSPACE_CODE_FILE_LIMIT, txtWorkspaceFileLimit.getText());
 
-        store.setValue(PreferenceConstants.INTERFACE_LOGGING_ENABLED,
-                chkInterfaceLogging.getSelection());
+        store.setValue(PreferenceConstants.INTERFACE_LOG_LEVEL,
+                String.valueOf(cmbLogLevel.getSelectionIndex()));
 
         RGB rgb = colorSelector.getColorValue();
         store.setValue(PreferenceConstants.COMPLETION_COLOR,
@@ -428,8 +424,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtMaxWorkspaceChars.setText(PreferenceConstants.DEFAULT_MAX_WORKSPACE_CODE_CHARS);
         txtWorkspaceFileLimit.setText(PreferenceConstants.DEFAULT_WORKSPACE_CODE_FILE_LIMIT);
 
-        chkInterfaceLogging.setSelection(
-                PreferenceConstants.DEFAULT_INTERFACE_LOGGING_ENABLED);
+        cmbLogLevel.select(clampLogLevelIndex(
+                Integer.parseInt(PreferenceConstants.DEFAULT_INTERFACE_LOG_LEVEL)));
 
         colorSelector.setColorValue(new RGB(0, 128, 0));
         spinnerOpacity.setSelection(Integer.parseInt(PreferenceConstants.DEFAULT_OVERLAY_OPACITY));
@@ -443,7 +439,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         String apiKey = txtApiKey.getText().trim();
         String maxTokensStr = txtMaxTokens.getText().trim();
         String tempStr = txtTemperature.getText().trim();
-
         if (baseUrl.isEmpty()) {
             setTestResult("Please enter API Base URL", SWT.COLOR_RED);
             return;
@@ -486,6 +481,14 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     }
 
     // ==================== Helpers ====================
+
+    /**
+     * 将日志等级值限制在合法的下拉索引范围 (0-2) 内。
+     */
+    private static int clampLogLevelIndex(int value) {
+        return Math.max(PreferenceConstants.LOG_LEVEL_NONE,
+                Math.min(PreferenceConstants.LOG_LEVEL_DEBUG, value));
+    }
 
     private Label createLabel(Composite parent, String text) {
         return createLabel(parent, text, 1);

@@ -84,12 +84,12 @@ public class AbapIncludeResolver {
      * 获取真实的 ABAP 源代码。
      */
     public String resolveIncludeCode(String includeName) {
-        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: searching for INCLUDE '"
+        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: searching for INCLUDE '"
                 + includeName + "' in project=" + (project != null ? project.getName() : "null"));
 
         List<IFile> candidates = findIncludeFiles(includeName);
 
-        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: found "
+        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: found "
                 + candidates.size() + " candidate file(s) for '" + includeName + "'");
 
         for (IFile file : candidates) {
@@ -101,44 +101,44 @@ public class AbapIncludeResolver {
 
                 // 检测 SAP ADT XML 元数据 (不是 ABAP 源代码)
                 if (isAdtMetadataXml(content)) {
-                    AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: file '"
+                    AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: file '"
                             + file.getName() + "' is SAP ADT XML metadata, not ABAP source. "
                             + "Trying to read from open editor...");
 
                     // 尝试从已打开的编辑器中获取真实的 ABAP 源代码
                     String editorContent = readSourceFromOpenEditor(includeName);
                     if (editorContent != null && !editorContent.isEmpty()) {
-                        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: got ABAP source from open editor for '"
+                        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: got ABAP source from open editor for '"
                                 + includeName + "' (length=" + editorContent.length() + ")");
                         return editorContent;
                     }
 
-                    AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: INCLUDE '"
+                    AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: INCLUDE '"
                             + includeName + "' not open in any editor, cannot get ABAP source. "
                             + "Open the file in Eclipse to enable source resolution.");
                     continue;  // 跳过 XML 元数据,尝试下一个候选文件
                 }
 
-                AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: read ABAP source from '"
+                AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: read ABAP source from '"
                         + file.getName() + "' (length=" + content.length() + ")");
                 return content;
             } catch (Exception e) {
-                AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: failed to read '"
+                AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: failed to read '"
                         + file.getName() + "': " + e.getMessage());
             }
         }
 
         // 工作区中没找到文件,也尝试从已打开的编辑器获取
-        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: no workspace file found for '"
+        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: no workspace file found for '"
                 + includeName + "', trying open editors...");
         String editorContent = readSourceFromOpenEditor(includeName);
         if (editorContent != null && !editorContent.isEmpty()) {
-            AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: got ABAP source from open editor for '"
+            AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: got ABAP source from open editor for '"
                     + includeName + "' (length=" + editorContent.length() + ")");
             return editorContent;
         }
 
-        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: NO source found for INCLUDE '"
+        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveIncludeCode: NO source found for INCLUDE '"
                 + includeName + "' (not in workspace and not open in editor)");
         return null;
     }
@@ -208,7 +208,7 @@ public class AbapIncludeResolver {
                 }
             }
         } catch (Exception e) {
-            AILogger.logError("AbapIncludeResolver", "[DEBUG] readSourceFromOpenEditor error: "
+            AILogger.logDebug("AbapIncludeResolver", "[DEBUG] readSourceFromOpenEditor error: "
                     + e.getMessage());
         }
         return null;
@@ -259,7 +259,7 @@ public class AbapIncludeResolver {
             } catch (Exception ignored) {
             }
         } catch (Exception e) {
-            AILogger.logError("AbapIncludeResolver", "[DEBUG] getEditorDocumentContent error: "
+            AILogger.logDebug("AbapIncludeResolver", "[DEBUG] getEditorDocumentContent error: "
                     + e.getMessage());
         }
         return null;
@@ -272,7 +272,7 @@ public class AbapIncludeResolver {
         IncludeContext context = new IncludeContext(sourceCode);
         List<String> includes = findIncludes(sourceCode);
 
-        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveAllIncludes: extracted "
+        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveAllIncludes: extracted "
                 + includes.size() + " INCLUDE statement(s): " + includes);
 
         int resolved = 0;
@@ -283,7 +283,7 @@ public class AbapIncludeResolver {
                 resolved++;
             }
         }
-        AILogger.logError("AbapIncludeResolver", "[DEBUG] resolveAllIncludes: resolved "
+        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] resolveAllIncludes: resolved "
                 + resolved + "/" + includes.size() + " INCLUDE(s)");
         return context;
     }
@@ -328,7 +328,7 @@ public class AbapIncludeResolver {
         } catch (CoreException e) {
             // ignore inaccessible containers
         }
-        AILogger.logError("AbapIncludeResolver", "[DEBUG] searchInContainer: scanned=" + scannedCount[0]
+        AILogger.logDebug("AbapIncludeResolver", "[DEBUG] searchInContainer: scanned=" + scannedCount[0]
                 + " files, matched=" + matchedCount[0]
                 + " for INCLUDE '" + includeName + "' in project '" + container.getName() + "'");
     }

@@ -82,28 +82,44 @@ public final class AbapLanguageDetector {
      */
     public static boolean isAbapContext(IEditorPart editor, IFile file, IDocument doc) {
         // 策略 1: 编辑器 ID 包含 "abap"
-        if (matchEditorId(editor)) return true;
+        if (matchEditorId(editor)) {
+            return true;
+        }
 
         // 策略 2: 文件扩展名或文件名特征
-        if (matchFileExtension(file)) return true;
-        if (matchFileNamePattern(file)) return true;
-        if (matchFileExtensionFromEditor(editor)) return true;
+        if (matchFileExtension(file)) {
+            return true;
+        }
+        if (matchFileNamePattern(file)) {
+            return true;
+        }
+        if (matchFileExtensionFromEditor(editor)) {
+            return true;
+        }
 
         // 策略 3: 文档分区类型
-        if (matchPartitionType(doc)) return true;
+        if (matchPartitionType(doc)) {
+            return true;
+        }
 
         // 策略 4+5: 内容启发式
         if (doc != null) {
             try {
                 String content = doc.get();
-                if (matchFlagStatements(content)) return true;
-                if (matchContentHeuristic(content)) return true;
+                if (matchFlagStatements(content)) {
+                    return true;
+                }
+                if (matchContentHeuristic(content)) {
+                    return true;
+                }
             } catch (Exception e) {
-                // 读文档失败,忽略
+                // 读取文档内容失败则忽略
             }
         }
+
         return false;
     }
+
 
     /**
      * 仅基于内容判断(供无 editor 场景使用)。

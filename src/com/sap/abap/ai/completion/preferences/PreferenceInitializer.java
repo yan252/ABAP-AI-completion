@@ -44,8 +44,8 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         store.setDefault(PreferenceConstants.WORKSPACE_CODE_FILE_LIMIT,
                 PreferenceConstants.DEFAULT_WORKSPACE_CODE_FILE_LIMIT);
 
-        store.setDefault(PreferenceConstants.INTERFACE_LOGGING_ENABLED,
-                PreferenceConstants.DEFAULT_INTERFACE_LOGGING_ENABLED);
+        store.setDefault(PreferenceConstants.INTERFACE_LOG_LEVEL,
+                PreferenceConstants.DEFAULT_INTERFACE_LOG_LEVEL);
 
         store.setDefault(PreferenceConstants.PROMPT_CACHE_ENABLED,
                 PreferenceConstants.DEFAULT_PROMPT_CACHE_ENABLED);
