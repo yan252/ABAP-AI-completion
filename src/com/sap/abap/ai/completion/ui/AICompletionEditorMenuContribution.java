@@ -2,10 +2,14 @@ package com.sap.abap.ai.completion.ui;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.jface.action.ContributionItem;
+import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.widgets.Menu;
 import org.eclipse.swt.widgets.MenuItem;
+
+import com.sap.abap.ai.completion.Activator;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
@@ -47,12 +51,35 @@ public class AICompletionEditorMenuContribution extends ContributionItem {
             MenuItem subMenuItem = new MenuItem(menu, SWT.CASCADE, index);
             subMenuItem.setText("ABAP AI Completion");
 
+            // 在菜单项前显示 SAP Logo 图标(与状态栏一致的插件图标)
+            Image icon = createIcon();
+            if (icon != null) {
+                subMenuItem.setImage(icon);
+                subMenuItem.addListener(SWT.Dispose,
+                        e -> { if (!icon.isDisposed()) icon.dispose(); });
+            }
+
             Menu subMenu = new Menu(subMenuItem);
             AICompletionMenuBuilder.populateMenu(subMenu);
             subMenuItem.setMenu(subMenu);
         } catch (Exception e) {
             // 构建子菜单失败不影响其它菜单项
         }
+    }
+
+    /**
+     * Loads the plugin {@code icons/SAPLogo.ico} as an {@link Image}, or
+     * returns {@code null} if it cannot be loaded.
+     */
+    private Image createIcon() {
+        if (Activator.getDefault() == null) {
+            return null;
+        }
+        ImageDescriptor desc = Activator.getImageDescriptor("icons/SAPLogo.ico");
+        if (desc == null) {
+            return null;
+        }
+        return desc.createImage();
     }
 
     /**
