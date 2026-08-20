@@ -1,339 +1,344 @@
 # ABAP AI Completion - Eclipse Plugin
 
-一个为SAP ABAP开发者打造的Eclipse AI代码补全插件。基于大语言模型（LLM），可使用本地LLM,在编写ABAP代码时提供智能的代码建议和自动补全功能。
-
-## 比Copilot的优势
-- **🤖 AI补全时除传入当前编辑器的ABAP代码外，还可选择传入当前工作平台上所有已打开的ABAP代码，Copilot仅支持传入当前编辑器的代码，不支持此功能。
-- **⌨️ 深度搜索相关代码参考用于代码补全，把当前程序相关的程序一起作为代码参考发给AI，此功能尝试搜索多层会影响效率，建议最多一层搜索。
-- **🎯 可使用本地SKILL作为代码参考传入，这样就能在SKILL中定义一些自定上函数或者模板参考，以便生成更合理的AI补全，Copilot 本也有可配置SKILL，但他的配置的SKILL并不能用于AI参考代码补全，而是只能用于对话。
-
-## 功能特性
-- **🤖 AI智能补全**: 基于AI模型，在光标位置提供上下文相关的ABAP代码建议
-- **⌨️ 手动触发**: 按 `Ctrl+Shift+.` 手动调用AI代码补全
-- **⚡ 自动补全**: 可选的自动补全模式，停止输入后自动触发AI建议
-- **📋 INCLUDE解析**: 自动解析ABAP INCLUDE程序，提供更准确的上下文补全
-- **🎯 技能目录**: 支持 `.abap`、`.txt`、`.skill` 文件作为AI参考模式
-- **🌊 浮动覆盖层**: 代码建议以浮动覆盖层形式显示（类似Copilot风格）
-- **🎨 自定义样式**: 可自定义补全代码的显示颜色
-- **🔌 灵活配置**: 支持任何兼容OpenAI Chat Completions API的服务端点
-- ** 手动补全（Ctrl+Shift+.）会使用SKILL ：自动补全（ requestQuickCompletion ）用的是简化的独立 prompt，不会加载 SKILL 目录下的内容。
-- ** 补全模式配置 ：在偏好设置中可以选择手动补全是弹出覆盖层 ( overlay ) 还是直接插入 ( direct )，两者都会使用SKILL内容。
+> 🌐 **Language / 语言**: [English](README.md) | [中文](README_CN.md)
 
 ---
 
-## 安装说明（普通用户）
+## English
 
-### 系统要求
+An AI-powered code completion plugin for SAP ABAP developers, built for Eclipse. Based on Large Language Models (LLM), it supports local LLMs and provides intelligent code suggestions and auto-completion while writing ABAP code.
 
-- **Eclipse**: 4.7+ (Neon) 或更高版本
-- **Java**: JDK 17 或更高版本
-- **网络**: 需要能够访问配置的AI API服务
+### Advantages over Copilot
+- **🤖 Full workspace context**: Besides the current editor's ABAP code, you can optionally pass in all ABAP code currently open in the workspace. Copilot only supports the current editor's code and does not offer this feature.
+- **⌨️ Deep search for related code references**: Searches related programs and sends them to the AI as code references for completion. Note that deeper search levels affect performance; a maximum of one level is recommended.
+- **🎯 Local SKILL as code reference**: Define custom functions or templates in SKILL files and pass them as reference for more reasonable AI completions. Copilot also has configurable SKILLs, but they are only used for chat, not for AI reference code completion.
 
-### 安装步骤
+### Features
+- **🤖 AI smart completion**: Provides context-aware ABAP code suggestions based on the AI model at the cursor position
+- **⌨️ Manual trigger**: Press `Ctrl+Shift+.` to manually invoke AI code completion
+- **⚡ Auto-completion**: Optional auto-completion mode that triggers AI suggestions after you stop typing
+- **📋 INCLUDE resolution**: Automatically resolves ABAP INCLUDE programs for more accurate contextual completion
+- **🎯 Skill directory**: Supports `.abap`, `.txt`, `.skill` files as AI reference patterns
+- **🌊 Floating overlay**: Code suggestions display in a floating overlay (Copilot-style)
+- **🎨 Custom styling**: Customize the display colors of completion code
+- **🔌 Flexible configuration**: Supports any service endpoint compatible with the OpenAI Chat Completions API
+- ** Manual completion (`Ctrl+Shift+.`) uses SKILL**: Auto-completion (`requestQuickCompletion`) uses a simplified standalone prompt and does not load SKILL directory content.
+- ** Completion mode configuration**: In preferences you can choose whether manual completion shows as an overlay or inserts directly; both use SKILL content.
 
-1. **下载插件JAR包**
+---
 
-   从仓库的 `dist` 目录下载最新版本的JAR文件：
+### Installation (End Users)
+
+#### System Requirements
+
+- **Eclipse**: 4.7+ (Neon) or later
+- **Java**: JDK 17 or later
+- **Network**: Access to the configured AI API service
+
+#### Installation Steps
+
+1. **Download the plugin JAR**
+
+   Download the latest JAR file from the `dist` directory of the repository:
    ```
    dist/com.sap.abap.ai.completion_1.0.0.jar
    ```
 
-2. **安装到Eclipse**
+2. **Install into Eclipse**
 
-   将JAR文件复制到Eclipse的 `dropins` 目录，如不存在此目录请先创建目录：
+   Copy the JAR file to Eclipse's `dropins` directory (create it if it does not exist):
    ```
-   <你的Eclipse安装路径>/dropins/
+   <Your-Eclipse-Install-Path>/dropins/
    ```
-   
-   例如：
+
+   For example:
    ```
    C:\Users\YourName\eclipse\dropins\com.sap.abap.ai.completion_1.0.0.jar
    ```
 
-3. **重启Eclipse**
+3. **Restart Eclipse**
 
-   完成复制后，**重启Eclipse**即可加载插件。
-
----
-
-## 使用说明
-
-### 手动触发代码补全
-
-1. 打开任意ABAP源代码文件（`.abap`、`.prog`等）
-2. 将光标放在需要补全的位置
-3. 按快捷键 `Ctrl + Shift + .` 调用AI补全
-4. AI建议将以浮动覆盖层形式显示
-5. 按 `Tab` 键接受建议，按其他键取消
-
-### 自动补全模式
-
-在配置中启用 **"Auto-complete while typing"** 后，停止输入一段时间（默认2000ms）会自动触发AI建议。
-
-### 修改快捷键
-
-如需修改快捷键：
-1. 菜单栏：`Window` → `Preferences`
-2. 导航到：`General` → `Keys`
-3. 搜索：`ABAP AI completion`
-4. 点击 `Binding` 字段，按下新的快捷键组合
-5. 点击 `OK` 保存
+   After copying, **restart Eclipse** to load the plugin.
 
 ---
 
-## 配置说明
+### Usage
 
-### 打开配置页面
+#### Manual Code Completion
 
-1. 菜单栏：`Window` → `Preferences`
-2. 在左侧导航栏中找到 **`ABAP AI Completion`**
-3. 配置页面如下图所示：
+1. Open any ABAP source file (`.abap`, `.prog`, etc.)
+2. Place the cursor where you want completion
+3. Press `Ctrl + Shift + .` to invoke AI completion
+4. The AI suggestion displays as a floating overlay
+5. Press `Tab` to accept the suggestion, or any other key to cancel
 
-![配置页面](配置截图.png)
+#### Auto-Completion Mode
 
-### 配置项详解
+After enabling **"Auto-complete while typing"** in the configuration, AI suggestions automatically trigger after you stop typing for a period (default 2000ms).
 
-#### AI连接设置 (AI Connection Settings)
+#### Changing the Shortcut
 
-| 配置项 | 说明 | 示例 |
-|--------|------|------|
-| **API Base URL** | AI服务端点地址 | `https://api.openai.com/v1` |
-| **Model Name** | 使用的AI模型名称 | `gpt-4`, `deepseek-v4-flash` |
-| **API Key** | API认证密钥 | （将以星号显示） |
-| **Max Tokens** | 最大生成Token数 | `256` |
-| **Temperature** | 创造性温度 (0.0-2.0) | `0.3`（较低值表示更确定性的输出） |
-
-> 💡 **提示**: 点击 `Test Connection` 按钮测试API连接是否正常。
-
-#### 功能设置 (Feature Settings)
-
-| 配置项 | 说明 |
-|--------|------|
-| **Enable ABAP AI Completion plugin** | 启用/禁用整个插件 |
-| **Auto-complete while typing** | 启用后停止输入自动触发AI建议 |
-
-#### 自动补全设置 (Auto-Completion Settings)
-
-| 配置项 | 说明 |
-|--------|------|
-| **Delay after typing (ms)** | 停止输入后多少毫秒触发自动补全 |
-
-> 💡 **建议**: 推荐值为 1500-3000 ms。较低的值会增加API请求频率。
-
-#### 技能目录 (Skill Directory)
-
-将 `.abap`、`.txt` 或 `.skill` 文件放置在技能目录中，AI会参考这些文件中的代码模式进行补全。这对于特定项目的代码规范和命名约定非常有用。
-
-#### 自定义系统提示 (Custom System Prompt)
-
-可以自定义发送给AI的系统提示，用于引导AI遵循特定的代码风格和规范。
-
-#### 覆盖层样式 (Overlay Style)
-
-自定义AI补全代码在编辑器中的显示颜色。
+To change the shortcut:
+1. Menu: `Window` → `Preferences`
+2. Navigate to: `General` → `Keys`
+3. Search: `ABAP AI completion`
+4. Click the `Binding` field and press the new key combination
+5. Click `OK` to save
 
 ---
 
-## 开发者指南（二次开发）
+### Configuration
 
-### 环境要求
+#### Opening the Configuration Page
+
+1. Menu: `Window` → `Preferences`
+2. Find **`ABAP AI Completion`** in the left navigation tree
+3. The configuration page is shown below:
+
+![Configuration Page](配置截图.png)
+
+#### Configuration Items
+
+##### AI Connection Settings
+
+| Setting | Description | Example |
+|---------|-------------|---------|
+| **API Base URL** | AI service endpoint URL | `https://api.openai.com/v1` |
+| **Model Name** | AI model name to use | `gpt-4`, `deepseek-v4-flash` |
+| **API Key** | API authentication key | (displayed as stars) |
+| **Max Tokens** | Maximum number of generated tokens | `256` |
+| **Temperature** | Creativity temperature (0.0-2.0) | `0.3` (lower means more deterministic output) |
+
+> 💡 **Tip**: Click the `Test Connection` button to verify the API connection.
+
+##### Feature Settings
+
+| Setting | Description |
+|---------|-------------|
+| **Enable ABAP AI Completion plugin** | Enable/disable the entire plugin |
+| **Auto-complete while typing** | When enabled, auto-triggers AI suggestions after you stop typing |
+
+##### Auto-Completion Settings
+
+| Setting | Description |
+|---------|-------------|
+| **Delay after typing (ms)** | How many milliseconds after you stop typing before auto-completion triggers |
+
+> 💡 **Suggestion**: Recommended value is 1500-3000 ms. Lower values increase API request frequency.
+
+##### Skill Directory
+
+Place `.abap`, `.txt`, or `.skill` files in the skill directory and the AI references these file code patterns for completion. This is very useful for project-specific coding standards and naming conventions.
+
+##### Custom System Prompt
+
+Customize the system prompt sent to the AI to guide it to follow specific code styles and standards.
+
+##### Overlay Style
+
+Customize the display colors of AI completion code in the editor.
+
+---
+
+### Developer Guide (Custom Development)
+
+#### Environment Requirements
 
 - **JDK**: 17+
-- **Eclipse**: 带Plug-in Development Environment (PDE) 的 Eclipse
-- **构建工具**: Apache Maven（可选）
+- **Eclipse**: Eclipse with Plug-in Development Environment (PDE)
+- **Build Tool**: Apache Maven (optional)
 
-### 导入项目
+#### Importing the Project
 
-1. 克隆仓库到本地：
+1. Clone the repository locally:
    ```bash
    git clone https://github.com/yan252/ABAP-AI-completion.git
    ```
 
-2. 在Eclipse中导入项目：
+2. Import the project into Eclipse:
    - `File` → `Import` → `Existing Projects into Workspace`
-   - 选择克隆的项目目录
-   - 勾选项目并点击 `Finish`
+   - Select the cloned project directory
+   - Check the project and click `Finish`
 
-### 项目结构
+#### Project Structure
 
 ```
 com.sap.abap.ai.completion/
 ├── META-INF/
-│   └── MANIFEST.MF              # OSGi bundle清单
+│   └── MANIFEST.MF              # OSGi bundle manifest
 ├── src/
 │   └── com/sap/abap/ai/completion/
-│       ├── client/              # AI API客户端
+│       ├── client/              # AI API client
 │       │   ├── AIClient.java
 │       │   ├── AIClientException.java
-│       │   └── PromptCacheManager.java    # Prompt压缩与多节点缓存管理
-│       ├── editor/              # 编辑器集成
+│       │   └── PromptCacheManager.java    # Prompt compression & multi-node cache management
+│       ├── editor/              # Editor integration
 │       │   ├── AICompletionHandler.java
 │       │   ├── AICompletionListener.java
 │       │   ├── AICompletionOverlay.java
 │       │   ├── AICompletionProposalPopup.java
 │       │   ├── AICompletionService.java
 │       │   └── AIOverlayManager.java
-│       ├── logging/             # 日志输出
+│       ├── logging/             # Logging
 │       │   └── AILogger.java
-│       ├── parser/              # ABAP解析器
+│       ├── parser/              # ABAP parser
 │       │   ├── AbapCodeTruncator.java
 │       │   ├── AbapIncludeResolver.java
 │       │   ├── AbapLanguageDetector.java
 │       │   ├── ParentProgramContext.java
 │       │   ├── ParentProgramResolver.java
 │       │   └── WorkspaceCodeCollector.java
-│       ├── preferences/         # 配置管理
+│       ├── preferences/         # Configuration management
 │       │   ├── AICompletionPreferencePage.java
 │       │   ├── AIConfiguration.java
 │       │   ├── PreferenceConstants.java
 │       │   └── PreferenceInitializer.java
-│       ├── ui/                  # 状态栏等UI集成
+│       ├── ui/                  # UI integration such as status bar
 │       │   └── AbapAIStatusLineContribution.java
-│       └── Activator.java       # Bundle激活器
+│       └── Activator.java       # Bundle activator
 ├── icons/
-│   └── SAPLogo.ico              # 插件图标
-├── dist/                        # 发布的JAR
+│   └── SAPLogo.ico              # Plugin icon
+├── dist/                        # Published JAR
 │   └── com.sap.abap.ai.completion_1.0.1.jar
-├── update-site/                 # 更新站点
+├── update-site/                 # Update site
 │   ├── features/
 │   ├── plugins/
 │   ├── artifacts.jar / artifacts.xml
 │   ├── content.jar / content.xml
 │   └── site.xml
 ├── tools/
-│   └── CacheVerifyTool.java     # 缓存校验工具
-├── plugin.xml                   # 插件扩展点声明
-├── build.properties             # 构建属性
-├── build.ps1                    # Windows构建脚本
-├── build_plugin.xml             # 构建脚本（ANT）
-├── generate-update-site.ps1     # 生成更新站点脚本
-└── rebuild.ps1                  # 重建脚本
+│   └── CacheVerifyTool.java     # Cache verification tool
+├── plugin.xml                   # Plugin extension point declarations
+├── build.properties             # Build properties
+├── build.ps1                    # Windows build script
+├── build_plugin.xml             # Build script (ANT)
+├── generate-update-site.ps1     # Update site generation script
+└── rebuild.ps1                  # Rebuild script
 ```
 
-### 关键扩展点
+#### Key Extension Points
 
-本插件通过以下Eclipse扩展点集成：
+This plugin integrates through the following Eclipse extension points:
 
-| 扩展点 | 用途 |
-|--------|------|
-| `org.eclipse.ui.startup` | 插件自动启动 |
-| `org.eclipse.ui.preferencePages` | 配置页面注册 |
-| `org.eclipse.core.runtime.preferences` | 偏好设置初始化 |
-| `org.eclipse.ui.commands` | 补全命令定义 |
-| `org.eclipse.ui.bindings` | 快捷键绑定 |
+| Extension Point | Purpose |
+|-----------------|---------|
+| `org.eclipse.ui.startup` | Plugin auto-start |
+| `org.eclipse.ui.preferencePages` | Configuration page registration |
+| `org.eclipse.core.runtime.preferences` | Preference initialization |
+| `org.eclipse.ui.commands` | Completion command definition |
+| `org.eclipse.ui.bindings` | Shortcut key bindings |
 
-### 核心架构
+#### Core Architecture
 
-1. **AIClient**: 纯Java实现的HTTP客户端，调用AI Chat Completions API，无需外部JSON库
-2. **AICompletionService**: 异步补全服务，处理超时、取消和错误
-3. **AbapIncludeResolver**: 解析ABAP INCLUDE程序，为AI提供完整的上下文
-4. **AIOverlayManager**: 管理浮动覆盖层的显示和交互
-5. **AIConfiguration**: 统一的配置管理，支持偏好存储
+1. **AIClient**: Pure Java HTTP client that calls the AI Chat Completions API, no external JSON library required
+2. **AICompletionService**: Async completion service that handles timeouts, cancellation, and errors
+3. **AbapIncludeResolver**: Resolves ABAP INCLUDE programs to provide full context to the AI
+4. **AIOverlayManager**: Manages the display and interaction of the floating overlay
+5. **AIConfiguration**: Unified configuration management with preference storage
 
-### 发送给AI的MESSAGE节点说明
+#### MESSAGE Nodes Sent to AI
 
-手动触发补全（`Ctrl+Shift+.`）时，插件会构造 **1个 `system` 节点 + 6个 `user` 节点** 的消息列表发送给 AI（对应 [AICompletionService.java] 中的 `buildUserMessages` 方法）。各节点含义如下：
+When manual completion (`Ctrl+Shift+.`) is triggered, the plugin constructs a message list of **1 `system` node + 5 `user` nodes** to send to the AI (corresponding to the `buildUserMessages` method in [AICompletionService.java]). The meaning of each node is as follows:
 
-| 节点 | 角色 | 内容说明 |
-|------|------|----------|
-| **System** | `system` | 系统提示词。定义AI的角色（SAP ABAP资深开发专家）、补全规则与输出约束。可使用 `自定义系统提示 (Custom System Prompt)` 覆盖默认值 |
-| **节点1/6** | `user` | **SKILL 文件内容**：技能目录中加载的 `.abap`/`.txt`/`.skill` 文件，作为代码风格与最佳实践参考。无SKILL时标明"使用系统默认ABAP编码规范" |
-| **节点2/6** | `user` | **父程序调用上下文**：当当前文件是 INCLUDE 时，深度搜索到的调用它的父级程序代码（按配置的搜索深度递归查找）。该节点内容通过 `PromptCacheManager.compressAbapContext` 压缩 |
-| **节点3/6** | `user` | **工作区打开的程序**：当前 Eclipse 工作区中已打开的其它 ABAP 文件，作为风格参考与补充上下文（由 `WorkspaceCodeCollector` 收集，同样会压缩） |
-| **节点4/6** | `user` | **当前程序**：当前光标所在程序的完整代码（已通过 `AbapIncludeResolver` 展开所有 INCLUDE），并标注文件名与代码类型 |
-| **节点5/6** | `user` | **程序元数据**：文件名、代码类型、INCLUDE 数量、父级程序/工作区/SKILL 加载情况的汇总说明，帮助AI综合理解整体上下文 |
-| **节点6/6** | `user` | **光标位置上下文**：光标所在行列号，以及光标前15行、光标后5行的代码，并用 `[[[CURSOR_HERE]]]` 标记插入位置，这是AI真正生成补全内容的位置 |
+| Node | Role | Content |
+|------|------|---------|
+| **System** | `system` | System prompt. Defines the AI's role (senior SAP ABAP development expert), completion rules, and output constraints. Can be overridden using `Custom System Prompt` |
+| **Node 1/5** | `user` | **SKILL file content**: `.abap`/`.txt`/`.skill` files loaded from the skill directory as code style and best-practice references. If no SKILL, it states "use system default ABAP coding standards" |
+| **Node 2/5** | `user` | **Parent program call context**: When the current file is an INCLUDE, deep search finds the code of the parent programs that call it (recursively searched by configured search depth). Compressed via `PromptCacheManager.compressAbapContext` |
+| **Node 3/5** | `user` | **Programs open in workspace**: Other ABAP files open in the current Eclipse workspace as style reference and supplementary context (collected by `WorkspaceCodeCollector`, also compressed) |
+| **Node 4/5** | `user` | **Program metadata**: Summary of filename, code type, INCLUDE count, parent program/workspace/SKILL load status to help the AI understand the overall context |
+| **Node 5/5** | `user` | **Current program & cursor position**: Complete code of the current cursor program (with all INCLUDEs expanded via `AbapIncludeResolver`), with filename and code type labeled; the insertion position is marked with `[[[CURSOR_HERE]]]`, which is where the AI actually generates completion content |
 
-> **说明**：节点2、3在发送前会依据 `Max Context Chars (getMaxContextChars)` 阈值统一压缩，避免上下文窗口溢出；其余节点按各自规则直接发送。若某一节点无对应内容，仍会发送一条占位说明消息（标明该节点当前状态），保证AI始终收到完整的1+6节点结构。
+> **Note**: Nodes 2 and 3 are uniformly compressed before sending based on the `Max Context Chars (getMaxContextChars)` threshold to avoid context window overflow; the other nodes are sent as-is according to their own rules. If a node has no matching content, a placeholder message (stating that node's current status) is still sent to ensure the AI always receives the complete 1+5 node structure.
 
-> **对比**：自动补全（`requestQuickCompletion`）不加载SKILL与上述上下文，使用的是简化后的独立 prompt，仅发送 1个 `system` 节点 + 1个 `user` 节点（当前行上下文）。
+> **Comparison**: Auto-completion (`requestQuickCompletion`) does not load SKILL or the above context; it uses a simplified standalone prompt and only sends 1 `system` node + 1 `user` node (current line context).
 
-### 构建插件
+#### Building the Plugin
 
-#### 使用Eclipse导出
+##### Using Eclipse Export
 
-1. 右键点击项目 → `Export`
-2. 选择 `Deployable plug-ins and fragments`
-3. 选择输出目录为 `dist/`
-4. 点击 `Finish`
+1. Right-click the project → `Export`
+2. Select `Deployable plug-ins and fragments`
+3. Choose the output directory as `dist/`
+4. Click `Finish`
 
-#### 使用ANT脚本
+##### Using ANT Script
 
 ```bash
 # Windows PowerShell
 .\build.ps1
 ```
 
-或使用提供的 `build_plugin.xml`：
+Or use the provided `build_plugin.xml`:
 ```bash
 ant -f build_plugin.xml
 ```
 
-### 调试插件
+#### Debugging the Plugin
 
-在Eclipse中启动一个新的Eclipse实例进行调试：
+Launch a new Eclipse instance in Eclipse to debug:
 
 1. `Run` → `Run Configurations`
-2. 新建 `Eclipse Application` 配置
-3. 在 `Plug-ins` 选项卡中，确保 `com.sap.abap.ai.completion` 已包含
-4. 点击 `Run` 启动
+2. Create a new `Eclipse Application` configuration
+3. In the `Plug-ins` tab, ensure `com.sap.abap.ai.completion` is included
+4. Click `Run` to start
 
 ---
 
-## 常见问题 (FAQ)
+### FAQ
 
-### Q: 插件安装后没有出现配置选项？
+#### Q: The configuration option does not appear after installing the plugin?
 
-**A:** 请确认：
-1. JAR文件已正确放入 `dropins` 目录
-2. 已重启Eclipse
-3. 使用的Eclipse版本符合要求（4.7+）
-4. Java版本为17或更高
+**A:** Please verify:
+1. The JAR file is correctly placed in the `dropins` directory
+2. Eclipse has been restarted
+3. The Eclipse version meets the requirement (4.7+)
+4. The Java version is 17 or later
 
-### Q: 代码补全请求超时怎么办？
+#### Q: What if code completion requests time out?
 
-**A:** 
-- 检查网络连接是否正常
-- 确认API Base URL和API Key配置正确
-- 可以在配置中增加 `Max Tokens` 和 `Temperature` 的值
-- 尝试点击 `Test Connection` 按钮验证连接
+**A:**
+- Check the network connection
+- Verify the API Base URL and API Key are configured correctly
+- You can increase `Max Tokens` and `Temperature` values in the configuration
+- Try clicking the `Test Connection` button to verify the connection
 
-### Q: 支持哪些AI服务？
+#### Q: Which AI services are supported?
 
-**A:** 支持任何兼容OpenAI Chat Completions API的服务，包括但不限于：
-- OpenAI (GPT-4, GPT-3.5等)
+**A:** Any service compatible with the OpenAI Chat Completions API, including but not limited to:
+- OpenAI (GPT-4, GPT-3.5, etc.)
 - Azure OpenAI Service
-- 阿里云百炼 (DashScope)
-- 任何兼容的第三方API服务
+- Alibaba Cloud Bailian (DashScope)
+- Any compatible third-party API service
 
-### Q: 能否在离线环境使用？
+#### Q: Can it be used offline?
 
-**A:** 不能。本插件需要网络连接来调用AI API服务。但技能目录中的参考文件可以帮助AI生成更符合项目规范的代码。
+**A:** No. This plugin requires a network connection to call the AI API service. However, reference files in the skill directory can help the AI generate code that better conforms to project standards.
 
-### Q: API Key安全吗？
+#### Q: Is the API Key secure?
 
-**A:** API Key存储在Eclipse的偏好设置中，以星号显示。但请注意：
-- 不要将包含API Key的配置文件提交到版本控制系统
-- 使用环境变量或密钥管理服务存储密钥（如果可能）
-
----
-
-## 技术栈
-
-- **语言**: Java 17
-- **框架**: Eclipse Platform / JFace / SWT
-- **API协议**: OpenAI Chat Completions API
-- **JSON处理**: 纯Java实现（无第三方依赖）
-- **构建**: Eclipse PDE / ANT
+**A:** The API Key is stored in Eclipse preferences and displayed as stars. However, note that:
+- Do not commit configuration files containing API Keys to version control
+- Use environment variables or a key-management service to store keys (if possible)
 
 ---
 
-## 许可证
+### Technology Stack
 
-本项目仅供学习和个人使用。请遵守所使用AI服务的相关服务条款和许可证要求。
+- **Language**: Java 17
+- **Framework**: Eclipse Platform / JFace / SWT
+- **API Protocol**: OpenAI Chat Completions API
+- **JSON Handling**: Pure Java implementation (no third-party dependencies)
+- **Build**: Eclipse PDE / ANT
 
 ---
 
-## 致谢
+### License
 
-本插件灵感来源于VS Code Copilot等AI辅助编程工具，旨在为SAP ABAP开发者提供更好的编码体验。
+This project is for learning and personal use only. Please comply with the terms of service and licensing requirements of the AI services you use.
+
+---
+
+### Acknowledgments
+
+This plugin is inspired by AI-assisted programming tools such as VS Code Copilot, aiming to provide a better coding experience for SAP ABAP developers.

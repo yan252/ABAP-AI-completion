@@ -671,9 +671,9 @@ public class PromptCacheManager {
     public String buildSlimContent(String nodeTitle, String cacheKey) {
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(nodeTitle).append("]\n");
-        sb.append("[CACHED] 内容已在 AI 服务端缓存，此处省略完整代码以减少 TOKEN。\n");
+        sb.append("[CACHED] The content is already cached on the AI server; the full code is omitted here to reduce TOKEN usage.\n");
         sb.append("cacheKey: ").append(cacheKey).append("\n");
-        sb.append("请直接复用缓存中的程序上下文进行补全。");
+        sb.append("Please directly reuse the cached program context when completing.");
         return sb.toString();
     }
 

@@ -113,30 +113,30 @@ public final class AILogger {
         sb.append("\n").append("************************************************************\n");
         sb.append(timestamp()).append(" [REQUEST] [").append(safe(fileName)).append("] ");
         if (userMessages != null) {
-            sb.append("(共 ").append(userMessages.size()).append(" 个消息节点)");
+            sb.append("(total message nodes: ").append(userMessages.size()).append(")");
         } else {
-            sb.append("(无 user 消息)");
+            sb.append("(no user messages)");
         }
-        // 三节点缓存状态
+        // Three-node cache status
         if (cacheEnabled) {
             sb.append("\n  CACHE STATUS:");
             if (skillCacheKey != null) {
-                sb.append("  节点1(SKILL): ").append(skillCacheHit ? "HIT" : "MISS")
+                sb.append("  node1(SKILL): ").append(skillCacheHit ? "HIT" : "MISS")
                         .append(" key=").append(safe(skillCacheKey));
             } else {
-                sb.append("  节点1(SKILL): SKIP(内容短于阈值或无内容)");
+                sb.append("  node1(SKILL): SKIP(too short or no content)");
             }
             if (parentCacheKey != null) {
-                sb.append("  节点2(PARENT): ").append(parentCacheHit ? "HIT" : "MISS")
+                sb.append("  node2(PARENT): ").append(parentCacheHit ? "HIT" : "MISS")
                         .append(" key=").append(safe(parentCacheKey));
             } else {
-                sb.append("  节点2(PARENT): SKIP(无父级程序)");
+                sb.append("  node2(PARENT): SKIP(no parent program)");
             }
             if (workspaceCacheKey != null) {
-                sb.append("  节点3(WORKSPACE): ").append(workspaceCacheHit ? "HIT" : "MISS")
+                sb.append("  node3(WORKSPACE): ").append(workspaceCacheHit ? "HIT" : "MISS")
                         .append(" key=").append(safe(workspaceCacheKey));
             } else {
-                sb.append("  节点3(WORKSPACE): SKIP(无工作区程序)");
+                sb.append("  node3(WORKSPACE): SKIP(no workspace program)");
             }
         } else {
             sb.append("\n  CACHE: DISABLED");

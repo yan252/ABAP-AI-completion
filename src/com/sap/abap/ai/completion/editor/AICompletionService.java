@@ -276,74 +276,72 @@ public class AICompletionService {
         List<ChatMessage> messages = new ArrayList<>();
         PromptCacheManager cacheManager = PromptCacheManager.getInstance();
 
-        // ===== 节点1: SKILL 文件内容 =====
+        // ===== Node 1: SKILL file content =====
         if (skillContent != null && !skillContent.isEmpty()) {
             StringBuilder skillSb = new StringBuilder();
-            skillSb.append("[SKILL FILES - 节点1/6] 代码风格参考与最佳实践示例 (");
+            skillSb.append("[SKILL FILES - Node 1/5] Code style references and best-practice examples (");
             skillSb.append(codeType != null ? codeType : "ALL");
             skillSb.append(")\n\n");
-            // 节点1 不压缩，直接发送 SKILL 完整内容
+            // Node 1 is not compressed; SKILL full content is sent directly
             skillSb.append(skillContent);
             messages.add(new ChatMessage("user", skillSb.toString()));
         } else {
             messages.add(new ChatMessage("user",
-                    "[SKILL FILES - 节点1/6] 无已加载的 SKILL 文件，使用系统默认 ABAP 编码规范。"));
+                    "[SKILL FILES - Node 1/5] No SKILL file has been loaded. Using the system default ABAP coding standards."));
         }
 
-        // ===== 节点2: 深度搜索到的相关程序(父程序调用上下文) =====
+        // ===== Node 2: Deep-search related programs (parent program call context) =====
         if (parentProgramContext != null && !parentProgramContext.isEmpty()) {
             StringBuilder parentSb = new StringBuilder();
-            parentSb.append("[PARENT PROGRAMS - 节点2/6] 深度搜索到的相关程序（调用当前 INCLUDE 的父级程序上下文，已截断）\n\n");
+            parentSb.append("[PARENT PROGRAMS - Node 2/5] Deep-searched related programs (context of the parent programs that call the current INCLUDE, truncated)\n\n");
             parentSb.append(cacheManager.compressContent(parentProgramContext));
             messages.add(new ChatMessage("user", parentSb.toString()));
         } else {
             messages.add(new ChatMessage("user",
-                    "[PARENT PROGRAMS - 节点2/6] 未找到父级调用程序，当前文件为独立程序或父级查找功能未启用。"));
+                    "[PARENT PROGRAMS - Node 2/5] No parent calling program found. The current file is a standalone program or the parent lookup feature is disabled."));
         }
 
-        // ===== 节点3: 当前工作区打开的相关程序 =====
+        // ===== Node 3: Related programs open in the current workspace =====
         if (workspaceCodeRef != null && !workspaceCodeRef.isEmpty()) {
             StringBuilder wsSb = new StringBuilder();
-            wsSb.append("[WORKSPACE OPEN FILES - 节点3/6] 当前 Eclipse 工作区中打开的其他 ABAP 程序（作为代码风格参考与上下文）\n\n");
-            // 与节点1、2 一致，通过公共压缩逻辑 compressContent 处理；
-            // 传入用户配置的最大工作区字符数作为压缩上限。
+            wsSb.append("[WORKSPACE OPEN FILES - Node 3/5] Other ABAP programs open in the current Eclipse workspace (used as code style references and context)\n\n");
+            // Consistent with nodes 1 and 2, processed through the shared compression logic compressContent;
+            // the user-configured maximum workspace character count is passed as the compression limit.
             wsSb.append(cacheManager.compressContent(workspaceCodeRef, workspaceMaxChars));
             messages.add(new ChatMessage("user", wsSb.toString()));
         } else {
             messages.add(new ChatMessage("user",
-                    "[WORKSPACE OPEN FILES - 节点3/6] 工作区中未找到其他已打开的 ABAP 程序，或该功能未启用。"));
+                    "[WORKSPACE OPEN FILES - Node 3/5] No other ABAP programs were found open in the workspace, or this feature is disabled."));
         }
 
-        // ===== 节点4: 程序文本标题属性描述等信息 =====
+        // ===== Node 4: Program text title, attributes and description info =====
         StringBuilder metaSb = new StringBuilder();
-        metaSb.append("[PROGRAM METADATA - 节点4/6] 程序文本标题与属性描述信息\n\n");
-        metaSb.append("文件名: ").append(fileName).append("\n");
-        metaSb.append("代码类型: ").append(codeType != null ? codeType : "UNKNOWN").append("\n");
-        metaSb.append("检测到的 INCLUDE 数量: ").append(
+        metaSb.append("[PROGRAM METADATA - Node 4/5] Program text title and attribute description info\n\n");
+        metaSb.append("File name: ").append(fileName).append("\n");
+        metaSb.append("Code type: ").append(codeType != null ? codeType : "UNKNOWN").append("\n");
+        metaSb.append("Detected INCLUDE count: ").append(
                 (codeContext != null && codeContext.contains("INCLUDE"))
-                        ? "已展开（见节点5）" : "未检测到 INCLUDE 语句").append("\n");
-        metaSb.append("父级程序解析: ").append(
+                        ? "Expanded (see Node 5)" : "No INCLUDE statements detected").append("\n");
+        metaSb.append("Parent program resolution: ").append(
                 (parentProgramContext != null && !parentProgramContext.isEmpty())
-                        ? "已找到（见节点2）" : "未找到或未启用").append("\n");
-        metaSb.append("工作区参考文件: ").append(
+                        ? "Found (see Node 2)" : "Not found or disabled").append("\n");
+        metaSb.append("Workspace reference files: ").append(
                 (workspaceCodeRef != null && !workspaceCodeRef.isEmpty())
-                        ? "已加载（见节点3）" : "无其他打开文件").append("\n");
-        metaSb.append("SKILL 加载: ").append(
+                        ? "Loaded (see Node 3)" : "No other open files").append("\n");
+        metaSb.append("SKILL loading: ").append(
                 (skillContent != null && !skillContent.isEmpty())
-                        ? "已加载（见节点1）" : "无 SKILL 文件").append("\n");
-        metaSb.append("\n提示: 请综合以上所有上下文信息，在节点5的光标位置生成正确的 ABAP 代码。");
+                        ? "Loaded (see Node 1)" : "No SKILL file").append("\n");
+        metaSb.append("\nHint: Please combine all of the above context information and generate the correct ABAP code at the cursor position in Node 5.");
         messages.add(new ChatMessage("user", metaSb.toString()));
 
-        // ===== 节点5: 当前光标所在程序(含 INCLUDE 展开) + 光标位置（原节点4 + 节点6 合并） =====
+        // ===== Node 5: Current program at cursor (with INCLUDE expansion) + cursor position (merged from the original Node 4 + Node 6) =====
         StringBuilder currentSb = new StringBuilder();
-        currentSb.append("[CURRENT PROGRAM - 节点5/6] 当前光标所在的 ABAP 程序（已展开 INCLUDE，并在光标位置标记 [[[CURSOR_HERE]]]）\n\n");
-        currentSb.append("文件名: ").append(fileName).append("\n");
-        currentSb.append("代码类型: ").append(codeType != null ? codeType : "AUTO-DETECT").append("\n\n");
-        currentSb.append("--- 程序完整代码（含 INCLUDE 展开，[[[CURSOR_HERE]]] 为当前光标位置） ---\n");
+        currentSb.append("[CURRENT PROGRAM - Node 5/5] The current ABAP program at the cursor (INCLUDEs expanded, cursor position marked with [[[CURSOR_HERE]]])\n\n");
+        currentSb.append("File name: ").append(fileName).append("\n");
+        currentSb.append("Code type: ").append(codeType != null ? codeType : "AUTO-DETECT").append("\n\n");
+        currentSb.append("--- Full program code (with INCLUDE expansion; [[[CURSOR_HERE]]] is the current cursor position) ---\n");
         currentSb.append(insertCursorMarkerInCode(codeContext, textBeforeCursor));
-        currentSb.append("\n\n请在 [[[CURSOR_HERE]]] 位置生成需要插入的 ABAP 代码。注意：[[[CURSOR_HERE]]] 之后"
-                + "已展示的代码已存在于文档中，只输出光标位置需要新增插入的代码，不要重复输出这些已存在的代码，"
-                + "不要输出说明或 markdown。");
+        currentSb.append("\n\nPlease generate the ABAP code to be inserted at the [[[CURSOR_HERE]]] position. Note: the code already shown after [[[CURSOR_HERE]]] already exists in the document; only output the new code to be inserted at the cursor position, do not repeat this existing code, do not output explanations or markdown.");
         messages.add(new ChatMessage("user", currentSb.toString()));
 
         return messages;
