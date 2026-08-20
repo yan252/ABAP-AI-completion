@@ -259,9 +259,9 @@ $artifactsXml = @"
   </properties>
   <mappings size='2'>
     <rule filter='(&amp; (classifier=osgi.bundle))'
-          output='`${repoUrl}/plugins/'/>
+          output='`${repoUrl}/plugins/`${id}_`${version}.jar'/>
     <rule filter='(&amp; (classifier=org.eclipse.update.feature))'
-          output='`${repoUrl}/features/'/>
+          output='`${repoUrl}/features/`${id}_`${version}.jar'/>
   </mappings>
   <artifacts size='2'>
     <artifact classifier='osgi.bundle'
