@@ -54,8 +54,6 @@
 
    完成复制后，**重启Eclipse**即可加载插件。
 
-> 💡 **温馨提示（关于SKILL配置）**：本插件支持使用本地 SKILL 作为 AI 参考代码。如需要，可将仓库中的 `ABAP_SKILLS` 目录用作你的自定义开发 SKILL 配置目录，将你的 SKILL 目录复制到技能目录（Skill Directory）中即可被 AI 加载参考。自定义添加的函数说明格式可参考 `ABAP_SKILLS\CUSTOM-FUNCTIONS\SKILL.md`。
-
 ---
 
 ## 使用说明

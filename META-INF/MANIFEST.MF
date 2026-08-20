@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: ABAP AI Completion
 Bundle-SymbolicName: com.sap.abap.ai.completion; singleton:=true
-Bundle-Version: 1.0.0
+Bundle-Version: 1.0.2
 Bundle-Activator: com.sap.abap.ai.completion.Activator
 Bundle-Vendor: SAP ABAP AI Tools
 Bundle-ActivationPolicy: lazy

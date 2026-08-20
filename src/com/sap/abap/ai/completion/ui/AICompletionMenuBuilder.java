@@ -68,7 +68,7 @@ public final class AICompletionMenuBuilder {
         });
 
         final MenuItem autoCompleteItem = new MenuItem(menu, SWT.CHECK);
-        autoCompleteItem.setText("Auto-complete while typing (临时)");
+        autoCompleteItem.setText("Auto-complete while typing (Temporary)");
         autoCompleteItem.setSelection(isAutoCompletionEnabled());
         autoCompleteItem.addSelectionListener(new SelectionAdapter() {
             @Override

@@ -150,10 +150,12 @@ public class AICompletionService {
                 if (errorCallback != null) {
                     errorCallback.accept(msg);
                 }
-            } else if (result != null && !result.trim().isEmpty()) {
-                String cleaned = cleanupCompletion(result);
+            } else {
+                // 无论是否为空都通知调用方：为空表示无可用补全（AI 未返回内容或去重后为空），
+                // 由调用方（handler）据此显示“没有可用补全代码”，避免状态栏停留“补全进行中”。
+                String cleaned = cleanupCompletion(result, codeAfter);
                 if (callback != null) {
-                    callback.accept(cleaned);
+                    callback.accept(cleaned != null ? cleaned : "");
                 }
             }
         });
@@ -196,8 +198,10 @@ public class AICompletionService {
                         : ex.getMessage();
                 if (errorCallback != null) errorCallback.accept(msg);
             } else if (result != null && !result.trim().isEmpty()) {
-                String cleaned = cleanupCompletion(result);
-                if (callback != null) callback.accept(cleaned);
+                String cleaned = cleanupCompletion(result, null);
+                if (callback != null && cleaned != null && !cleaned.trim().isEmpty()) {
+                    callback.accept(cleaned);
+                }
             }
         });
 
@@ -255,9 +259,9 @@ public class AICompletionService {
      * 1. SKILL 文件内容
      * 2. 深度搜索到的相关程序(父程序调用上下文)
      * 3. 当前工作区打开的相关程序
-     * 4. 当前光标所在程序(含 INCLUDE 展开)
-     * 5. 程序文本标题属性描述等信息
-     * 6. 当前光标位置信息及上下文(前后N行)
+     * 4. 程序文本标题属性描述等信息
+     * 5. 当前光标所在程序(含 INCLUDE 展开)，并在光标位置插入 [[[CURSOR_HERE]]] 标记
+     *    （即原“节点4 完整代码”与“节点6 光标上下文”合并为新的节点5）
      *
      * 节点1-3 均通过 {@link PromptCacheManager#compressContent(String)} 直接压缩完整内容，
      * 不再使用 AI 服务端缓存 / 占位符。
@@ -310,23 +314,14 @@ public class AICompletionService {
                     "[WORKSPACE OPEN FILES - 节点3/6] 工作区中未找到其他已打开的 ABAP 程序，或该功能未启用。"));
         }
 
-        // ===== 节点4: 当前光标所在程序(含 INCLUDE 展开) =====
-        StringBuilder currentSb = new StringBuilder();
-        currentSb.append("[CURRENT PROGRAM - 节点4/6] 当前光标所在的 ABAP 程序（已展开 INCLUDE）\n\n");
-        currentSb.append("文件名: ").append(fileName).append("\n");
-        currentSb.append("代码类型: ").append(codeType != null ? codeType : "AUTO-DETECT").append("\n\n");
-        currentSb.append("--- 程序完整代码（含 INCLUDE 展开） ---\n");
-        currentSb.append(codeContext);
-        messages.add(new ChatMessage("user", currentSb.toString()));
-
-        // ===== 节点5: 程序文本标题属性描述等信息 =====
+        // ===== 节点4: 程序文本标题属性描述等信息 =====
         StringBuilder metaSb = new StringBuilder();
-        metaSb.append("[PROGRAM METADATA - 节点5/6] 程序文本标题与属性描述信息\n\n");
+        metaSb.append("[PROGRAM METADATA - 节点4/6] 程序文本标题与属性描述信息\n\n");
         metaSb.append("文件名: ").append(fileName).append("\n");
         metaSb.append("代码类型: ").append(codeType != null ? codeType : "UNKNOWN").append("\n");
         metaSb.append("检测到的 INCLUDE 数量: ").append(
                 (codeContext != null && codeContext.contains("INCLUDE"))
-                        ? "已展开（见节点4）" : "未检测到 INCLUDE 语句").append("\n");
+                        ? "已展开（见节点5）" : "未检测到 INCLUDE 语句").append("\n");
         metaSb.append("父级程序解析: ").append(
                 (parentProgramContext != null && !parentProgramContext.isEmpty())
                         ? "已找到（见节点2）" : "未找到或未启用").append("\n");
@@ -336,52 +331,42 @@ public class AICompletionService {
         metaSb.append("SKILL 加载: ").append(
                 (skillContent != null && !skillContent.isEmpty())
                         ? "已加载（见节点1）" : "无 SKILL 文件").append("\n");
-        metaSb.append("\n提示: 请综合以上所有上下文信息，在节点6的光标位置生成正确的 ABAP 代码。");
+        metaSb.append("\n提示: 请综合以上所有上下文信息，在节点5的光标位置生成正确的 ABAP 代码。");
         messages.add(new ChatMessage("user", metaSb.toString()));
 
-        // ===== 节点6: 当前光标位置信息及上下文(前后N行) =====
-        StringBuilder cursorSb = new StringBuilder();
-        cursorSb.append("[CURSOR CONTEXT - 节点6/6] 当前光标位置信息及上下文（前后N行）\n\n");
-
-        String[] lines = textBeforeCursor.split("\n");
-        int totalLines = lines.length;
-        int cursorLineNum = totalLines;
-        int cursorCol = 0;
-        if (totalLines > 0) {
-            cursorCol = lines[totalLines - 1].length() + 1;
-        }
-
-        cursorSb.append("光标位置: 第 ").append(cursorLineNum).append(" 行, 第 ").append(cursorCol).append(" 列\n\n");
-
-        int beforeLines = Math.min(15, lines.length);
-        if (beforeLines > 0) {
-            cursorSb.append("--- 光标前 ").append(beforeLines).append(" 行 ---\n");
-            for (int i = lines.length - beforeLines; i < lines.length; i++) {
-                cursorSb.append(String.format("%5d: ", i + 1)).append(lines[i]).append("\n");
-            }
-        }
-
-        cursorSb.append(String.format("%5d: ", cursorLineNum))
-                .append(lines.length > 0 ? lines[lines.length - 1] : "")
-                .append("[[[CURSOR_HERE]]]").append("\n");
-
-        String[] afterLines = textAfterCursor.split("\n");
-        int afterCount = Math.min(5, afterLines.length);
-        if (afterCount > 0 && !textAfterCursor.trim().isEmpty()) {
-            cursorSb.append("--- 光标后 ").append(afterCount).append(" 行 ---\n");
-            for (int i = 0; i < afterCount; i++) {
-                cursorSb.append(String.format("%5d: ", cursorLineNum + i + 1))
-                        .append(afterLines[i]).append("\n");
-            }
-        }
-
-        cursorSb.append("\n请在 [[[CURSOR_HERE]]] 位置生成插入的 ABAP 代码。输出 ONLY the code to insert - no explanations, no markdown.");
-        messages.add(new ChatMessage("user", cursorSb.toString()));
+        // ===== 节点5: 当前光标所在程序(含 INCLUDE 展开) + 光标位置（原节点4 + 节点6 合并） =====
+        StringBuilder currentSb = new StringBuilder();
+        currentSb.append("[CURRENT PROGRAM - 节点5/6] 当前光标所在的 ABAP 程序（已展开 INCLUDE，并在光标位置标记 [[[CURSOR_HERE]]]）\n\n");
+        currentSb.append("文件名: ").append(fileName).append("\n");
+        currentSb.append("代码类型: ").append(codeType != null ? codeType : "AUTO-DETECT").append("\n\n");
+        currentSb.append("--- 程序完整代码（含 INCLUDE 展开，[[[CURSOR_HERE]]] 为当前光标位置） ---\n");
+        currentSb.append(insertCursorMarkerInCode(codeContext, textBeforeCursor));
+        currentSb.append("\n\n请在 [[[CURSOR_HERE]]] 位置生成需要插入的 ABAP 代码。注意：[[[CURSOR_HERE]]] 之后"
+                + "已展示的代码已存在于文档中，只输出光标位置需要新增插入的代码，不要重复输出这些已存在的代码，"
+                + "不要输出说明或 markdown。");
+        messages.add(new ChatMessage("user", currentSb.toString()));
 
         return messages;
     }
 
-    private static String cleanupCompletion(String completion) {
+    /**
+     * 在完整程序代码中，于光标位置插入 [[[CURSOR_HERE]]] 标记。
+     *
+     * codeContext 由 {@link com.sap.abap.ai.completion.parser.AbapIncludeResolver.IncludeContext#buildPromptContext()}
+     * 生成，其结构为固定的前缀头部 "=== Current ABAP Program ===\n" + 完整主源码(全文) + 已解析的 INCLUDE 代码。
+     * 光标位于主源码内，其字符偏移 = 头部前缀长度 + 光标前文本长度。
+     */
+    private static String insertCursorMarkerInCode(String codeContext, String textBeforeCursor) {
+        final String header = "=== Current ABAP Program ===\n";
+        int prefixLen = header.length();
+        int insertAt = prefixLen + (textBeforeCursor != null ? textBeforeCursor.length() : 0);
+        insertAt = Math.max(0, Math.min(insertAt, codeContext.length()));
+        return codeContext.substring(0, insertAt)
+                + "[[[CURSOR_HERE]]]"
+                + codeContext.substring(insertAt);
+    }
+
+    private static String cleanupCompletion(String completion, String codeAfter) {
         if (completion == null) return null;
         String result = completion.trim();
         if (result.contains("```")) {
@@ -389,7 +374,60 @@ public class AICompletionService {
             result = result.replaceAll("\\n?```", "");
             result = result.trim();
         }
-        return result;
+        // 若 AI 返回的补全内容与光标后已存在的代码重复，去掉重复前缀。
+        // 去重后若为空，由调用方（callback 前的空判断）决定不展示补全。
+        return dedupeWithCodeAfter(result, codeAfter);
+    }
+
+    /**
+     * 去除补全内容中与光标后已存在代码重复的前缀。
+     * 逐行比较补全开头与 codeAfter 开头相同的行，将这些重复行从补全中移除。
+     * 若补全全部与现有代码重复，返回空字符串（由调用方丢弃、不展示）。
+     */
+    private static String dedupeWithCodeAfter(String completion, String codeAfter) {
+        if (completion == null || completion.isEmpty()) return completion;
+        if (codeAfter == null || codeAfter.trim().isEmpty()) return completion;
+
+        String[] compLines = completion.split("\n", -1);
+        String[] afterLines = codeAfter.split("\n", -1);
+
+        // 忽略两侧空白行，仅以实际代码行进行比较
+        int compStart = 0;
+        while (compStart < compLines.length && compLines[compStart].trim().isEmpty()) {
+            compStart++;
+        }
+        int afterStart = 0;
+        while (afterStart < afterLines.length && afterLines[afterStart].trim().isEmpty()) {
+            afterStart++;
+        }
+        if (compStart >= compLines.length || afterStart >= afterLines.length
+                || !compLines[compStart].trim().equals(afterLines[afterStart].trim())) {
+            return completion;
+        }
+
+        int i = compStart, j = afterStart;
+        while (i < compLines.length && j < afterLines.length
+                && compLines[i].trim().equals(afterLines[j].trim())) {
+            i++;
+            j++;
+        }
+
+        // 没有任何匹配行则原样返回
+        int matched = i - compStart;
+        if (matched == 0) return completion;
+
+        StringBuilder sb = new StringBuilder();
+        // 保留 completion 原先的开头空白行，仅去掉与光标后重复的实际代码块
+        for (int k = 0; k < compStart; k++) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(compLines[k]);
+        }
+        for (int k = i; k < compLines.length; k++) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(compLines[k]);
+        }
+        // 清理首尾空白后返回；若去重后为空，由调用方丢弃、不展示
+        return sb.toString().trim();
     }
 
 }

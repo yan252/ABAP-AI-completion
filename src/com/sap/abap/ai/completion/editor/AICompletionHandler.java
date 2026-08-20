@@ -116,7 +116,8 @@ public class AICompletionHandler extends AbstractHandler {
             file, textBefore, textAfter, fullDoc, project, workbenchPage,
             result -> Display.getDefault().asyncExec(() -> {
                 if (result == null || result.trim().isEmpty()) {
-                    clearStatus(event);
+                    // 去重后为空或无可用补全时，提示无可用补全，而不再停留在“AI 补全进行中”状态
+                    showStatus(event, "没有可用补全代码");
                     return;
                 }
                 if (viewer != null && doc != null) {
