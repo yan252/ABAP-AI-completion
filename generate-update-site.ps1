@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 #  generate-update-site.ps1
 #  Generates a P2 update site for the ABAP AI Completion plugin
 #
@@ -259,9 +259,9 @@ $artifactsXml = @"
   </properties>
   <mappings size='2'>
     <rule filter='(&amp; (classifier=osgi.bundle))'
-          output='$' + '{repoUrl}/plugins/${id}_${version}.jar'/>
+          output='`${repoUrl}/plugins/'/>
     <rule filter='(&amp; (classifier=org.eclipse.update.feature))'
-          output='$' + '{repoUrl}/features/${id}_${version}.jar'/>
+          output='`${repoUrl}/features/'/>
   </mappings>
   <artifacts size='2'>
     <artifact classifier='osgi.bundle'

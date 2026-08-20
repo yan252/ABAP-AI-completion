@@ -4,14 +4,14 @@
             type='org.eclipse.equinox.p2.artifact.repository.simpleRepository'
             version='1'>
   <properties size='2'>
-    <property name='p2.timestamp' value='1787194126156'/>
+    <property name='p2.timestamp' value='1787206298640'/>
     <property name='p2.compressed' value='true'/>
   </properties>
   <mappings size='2'>
     <rule filter='(&amp; (classifier=osgi.bundle))'
-          output='$' + '{repoUrl}/plugins/_.jar'/>
+          output='${repoUrl}/plugins/'/>
     <rule filter='(&amp; (classifier=org.eclipse.update.feature))'
-          output='$' + '{repoUrl}/features/_.jar'/>
+          output='${repoUrl}/features/'/>
   </mappings>
   <artifacts size='2'>
     <artifact classifier='osgi.bundle'
