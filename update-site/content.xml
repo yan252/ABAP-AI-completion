@@ -4,7 +4,7 @@
             type='org.eclipse.equinox.p2.metadata.repository.simpleRepository'
             version='1'>
   <properties size='2'>
-    <property name='p2.timestamp' value='1787208124357'/>
+    <property name='p2.timestamp' value='1787215311780'/>
     <property name='p2.compressed' value='true'/>
   </properties>
   <units size='2'>
