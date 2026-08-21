@@ -153,7 +153,8 @@ public class AICompletionService {
             } else {
                 // 无论是否为空都通知调用方：为空表示无可用补全（AI 未返回内容或去重后为空），
                 // 由调用方（handler）据此显示“没有可用补全代码”，避免状态栏停留“补全进行中”。
-                String cleaned = cleanupCompletion(result, codeAfter);
+                // codeBefore/codeAfter 均参与去重：先去掉与光标前重复的字符级前缀，再去掉与光标后重复的行级前缀
+                String cleaned = cleanupCompletion(result, codeAfter, codeBefore);
                 if (callback != null) {
                     callback.accept(cleaned != null ? cleaned : "");
                 }
@@ -198,7 +199,7 @@ public class AICompletionService {
                         : ex.getMessage();
                 if (errorCallback != null) errorCallback.accept(msg);
             } else if (result != null && !result.trim().isEmpty()) {
-                String cleaned = cleanupCompletion(result, null);
+                String cleaned = cleanupCompletion(result, null, null);
                 if (callback != null && cleaned != null && !cleaned.trim().isEmpty()) {
                     callback.accept(cleaned);
                 }
@@ -364,7 +365,7 @@ public class AICompletionService {
                 + codeContext.substring(insertAt);
     }
 
-    private static String cleanupCompletion(String completion, String codeAfter) {
+    private static String cleanupCompletion(String completion, String codeAfter, String codeBefore) {
         if (completion == null) return null;
         String result = completion.trim();
         if (result.contains("```")) {
@@ -372,9 +373,60 @@ public class AICompletionService {
             result = result.replaceAll("\\n?```", "");
             result = result.trim();
         }
-        // 若 AI 返回的补全内容与光标后已存在的代码重复，去掉重复前缀。
+        // 代码补全数据处理统一入口：
+        // 1) 先去重与光标前已存在代码重复的字符级前缀，
+        //    避免出现“B~”（光标前）+“B~MATID,”（AI返回）重复成“B~~MATID,”的问题；
+        // 2) 再去重与光标后已存在代码重复的行级前缀。
         // 去重后若为空，由调用方（callback 前的空判断）决定不展示补全。
+        result = dedupePrefixWithCodeBefore(result, codeBefore);
         return dedupeWithCodeAfter(result, codeAfter);
+    }
+
+    /**
+     * 去除补全内容中与光标前已存在代码重复的字符级前缀。
+     * <p>
+     * 当光标位于某一代码元素中间（如“B~”之后）时，AI 常会整体返回
+     * 包含该前缀在内的完整内容（如“B~MATID,”），若直接插入会与光标前
+     * 已存在的“B~”重复。本方法取光标前所在行的末尾文本（lineBefore），
+     * 计算补全开头与其最大重叠的公共前缀并去掉。
+     * <p>
+     * 仅针对光标前同一行内做前缀匹配，且设有长度上限，避免跨行或误删过长内容。
+     *
+     * @param completion 待处理的补全内容
+     * @param codeBefore 光标前的全部文本（用于取其所在行末尾）
+     * @return 去掉重叠前缀后的补全内容
+     */
+    private static String dedupePrefixWithCodeBefore(String completion, String codeBefore) {
+        if (completion == null || completion.isEmpty()) return completion;
+        if (codeBefore == null || codeBefore.isEmpty()) return completion;
+
+        // 光标所在行（光标前）已存在的文本
+        int lastNewline = codeBefore.lastIndexOf('\n');
+        String lineBefore = lastNewline >= 0
+                ? codeBefore.substring(lastNewline + 1)
+                : codeBefore;
+
+        // 光标行前没有内容则无需处理
+        String trimmedLine = lineBefore.trim();
+        if (trimmedLine.isEmpty()) return completion;
+        if (completion.startsWith(trimmedLine)) {
+            int stripLen = completion.indexOf(trimmedLine) + trimmedLine.length();
+            return completion.substring(stripLen);
+        }
+
+        // 否则取两者公共前后缀重叠部分（仅限光标行文本长度与上限内）
+        int maxOverlap = Math.min(lineBefore.length(), completion.length());
+        maxOverlap = Math.min(maxOverlap, 200); // 上限保护，避免误删过长内容
+
+        int overlap = 0;
+        for (int k = 1; k <= maxOverlap; k++) {
+            if (lineBefore.regionMatches(lineBefore.length() - k, completion, 0, k)) {
+                overlap = k;
+            }
+        }
+
+        if (overlap == 0) return completion;
+        return completion.substring(overlap);
     }
 
     /**
