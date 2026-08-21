@@ -109,7 +109,15 @@ Marketplace 允许 1–3 张截图。请实际运行插件后截图：
 
 ## 七、提交 Marketplace（英文表单，素材已备好）
 
-打开 https://marketplace.eclipse.org/listing-request ，用 `.trae/documents/Eclipse-Marketplace-Listing.md` 中的英文内容逐项填写。该文件已含：
+> ⚠️ 更新说明：直链 `https://marketplace.eclipse.org/listing-request` 已失效（返回 404），不要再使用。Eclipse Marketplace 是基于 Drupal 的站点，插件提交表单**必须登录后**才会显示。请按下面的修正版流程操作。
+
+### 正确入口（登录后提交）
+
+1. 登录：打开 `https://marketplace.eclipse.org/user/login`（无账号先点 `https://marketplace.eclipse.org/user/register` 注册，需邮箱）。
+2. 登录后，在页面顶部的 **Listings** 菜单里找到 **Submit a Solution / Add a Listing**（或直接访问可用的 listings 页面进入提交表单的入口）。
+3. 在提交表单中，用 `.trae/documents/Eclipse-Marketplace-Listing.md` 中的英文内容逐项填写并提交。
+
+该文件已含：
 - 标题 / 短描述 / 长描述（HTML）
 - 版本 / 分类 / 标签 / 许可证
 - 更新站点 URL（需要你把 `TODO` 替换成第四步得到的真实 URL）

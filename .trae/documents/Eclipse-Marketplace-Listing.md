@@ -1,6 +1,16 @@
 # Eclipse Marketplace Listing — ABAP AI Completion (final submission draft)
 
-Submit at: https://marketplace.eclipse.org/listing-request
+> NOTE: The direct URL `https://marketplace.eclipse.org/listing-request` is no
+> longer valid (it returns 404). The Eclipse Marketplace is Drupal-based and the
+> submission form only appears **after you log in**. Use the flow below to submit.
+
+## 0. HOW TO REACH THE SUBMISSION FORM (updated)
+
+1. Go to `https://marketplace.eclipse.org/user/login` (or
+   `https://marketplace.eclipse.org/user/register` first if you have no account).
+2. After logging in, use the **Listings** menu at the top of the site and choose
+   **Submit a Solution / Add a Listing** to open the submission webform.
+3. Fill in the form using the fields below (all copy-paste ready in this file).
 
 > All text below is in English for direct copy-paste into the marketplace form.
 > Replace the `TODO` placeholders (mainly the update-site URL, and swap in your own
@@ -21,7 +31,34 @@ AI-powered code completion for SAP ABAP in Eclipse. Uses any OpenAI-compatible
 LLM endpoint (local or cloud) for context-aware suggestions, resolves INCLUDE
 programs, and references sibling programs and custom SKILL templates.
 ```
+##Revision log message
+Initial submission of the ABAP-AI-completion plugin.
 
+This is an AI-powered code completion tool for SAP ABAP developers, leveraging Large Language Models (LLM) with flexible backend support, including local LLMs.
+
+Key Features:
+
+AI-Powered Completions: Provides context-aware ABAP code suggestions based on LLM.
+
+Enhanced Context (Beyond Copilot): Option to include all open ABAP code from the current workspace as context, not just the active editor.
+
+Deep Code Reference Search: Searches related programs (configurable depth, recommended 1 level) to provide richer context for suggestions.
+
+Local Skill Directory Support: Uses local .abap, .txt, or .skill files as reference material for more relevant completions. This is utilized for manual triggering, unlike Copilot's skill configuration.
+
+Flexible Triggers: Supports manual trigger (Ctrl+Shift+.) and optional auto-completion mode.
+
+ABAP INCLUDE Parsing: Automatically parses INCLUDE programs for accurate context.
+
+Floating Overlay & Customization: Displays suggestions in a Copilot-like floating overlay with customizable styles.
+
+Flexible Backend: Compatible with any service endpoint that supports the OpenAI Chat Completions API.
+
+Note on Completion Modes:
+
+Manual Trigger (Ctrl+Shift+.): Uses the full context, including the Skill Directory.
+
+Auto-Completion (requestQuickCompletion): Uses a simplified, independent prompt and does not load Skill Directory content. In Preferences, the manual trigger can be configured to show an overlay or insert directly.
 ## 3. LONG DESCRIPTION (HTML supported)
 
 ```html
