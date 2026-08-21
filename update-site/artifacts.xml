@@ -4,7 +4,7 @@
             type='org.eclipse.equinox.p2.artifact.repository.simpleRepository'
             version='1'>
   <properties size='2'>
-    <property name='p2.timestamp' value='1787215311780'/>
+    <property name='p2.timestamp' value='1787274298403'/>
     <property name='p2.compressed' value='true'/>
   </properties>
   <mappings size='2'>
@@ -16,15 +16,15 @@
   <artifacts size='2'>
     <artifact classifier='osgi.bundle'
               id='com.sap.abap.ai.completion'
-              version='1.0.2'>
+              version='1.0.3'>
       <properties size='2'>
-        <property name='artifact.size' value='134484'/>
-        <property name='download.size' value='134484'/>
+        <property name='artifact.size' value='134486'/>
+        <property name='download.size' value='134486'/>
       </properties>
     </artifact>
     <artifact classifier='org.eclipse.update.feature'
               id='com.sap.abap.ai.completion.feature'
-              version='1.0.2'>
+              version='1.0.3'>
       <properties size='2'>
         <property name='artifact.size' value='1343'/>
         <property name='download.size' value='1343'/>
