@@ -74,6 +74,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         main.setLayout(new GridLayout(1, false));
         main.setLayoutData(new GridData(GridData.FILL_BOTH));
 
+        createVersionHeader(main);
         createConnectionGroup(main);
         createFeatureGroup(main);
         createAutoCompletionGroup(main);
@@ -90,6 +91,48 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     }
 
     // ==================== UI Groups ====================
+
+    /**
+     * 在配置页顶部显示插件名称与版本号。
+     * 版本号从 OSGi Bundle 元数据（MANIFEST.MF 的 Bundle-Version）动态获取，
+     * 避免与代码中的常量不同步。
+     */
+    private void createVersionHeader(Composite parent) {
+        Label version = new Label(parent, SWT.NONE);
+        String v = getPluginVersion();
+        version.setText("ABAP AI Completion  v" + v);
+        version.setFont(new org.eclipse.swt.graphics.Font(parent.getDisplay(),
+                version.getFont().getFontData()[0].getName(), 11, SWT.BOLD));
+        GridData gd = new GridData(GridData.FILL_HORIZONTAL);
+        version.setLayoutData(gd);
+
+        Label hint = new Label(parent, SWT.WRAP);
+        hint.setText("Configure AI-powered ABAP code completion in the sections below.");
+        GridData hd = new GridData(GridData.FILL_HORIZONTAL);
+        hint.setLayoutData(hd);
+
+        // 分隔线，与下方分组保持视觉区隔
+        Label sep = new Label(parent, SWT.SEPARATOR | SWT.HORIZONTAL);
+        GridData sd = new GridData(GridData.FILL_HORIZONTAL);
+        sep.setLayoutData(sd);
+    }
+
+    /**
+     * 从当前插件的 OSGi Bundle 读取版本号；读取失败时回退为"unknown"。
+     * 使用 Platform.getBundle 按插件符号名获取 Bundle，避免依赖插件实例是否已激活。
+     */
+    private static String getPluginVersion() {
+        try {
+            org.osgi.framework.Bundle bundle =
+                    org.eclipse.core.runtime.Platform.getBundle(Activator.PLUGIN_ID);
+            if (bundle == null) {
+                return "unknown";
+            }
+            return bundle.getVersion().toString();
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
 
     private void createConnectionGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);

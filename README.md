@@ -6,9 +6,11 @@
 
 ## English
 
-An AI-powered code completion plugin for SAP ABAP developers, built for Eclipse. Based on Large Language Models (LLM), it supports local LLMs and provides intelligent code suggestions and auto-completion while writing ABAP code.
+An AI-powered code completion plugin for SAP ABAP developers, built for Eclipse. Based on Large Language Models (LLM), it supports local LLMs for in-house/enterprise use, preventing corporate code from being uploaded to the Internet to guarantee code confidentiality, and provides intelligent code suggestions and auto-completion while writing ABAP code.
 
 ### Advantages over Copilot
+- **✅ Local LLM support**: A local LLM can be used for in-house/enterprise use, preventing corporate code from being uploaded to the Internet to guarantee code confidentiality.
+- **✅ Fully open source, free for enterprise use**: This plugin is completely open source and free for enterprise use, with no fees required, and you can use it with peace of mind.
 - **🤖 Full workspace context**: Besides the current editor's ABAP code, you can optionally pass in all ABAP code currently open in the workspace. Copilot only supports the current editor's code and does not offer this feature.
 - **⌨️ Deep search for related code references**: Searches related programs and sends them to the AI as code references for completion. Note that deeper search levels affect performance; a maximum of one level is recommended.
 - **🎯 Local SKILL as code reference**: Define custom functions or templates in SKILL files and pass them as reference for more reasonable AI completions. Copilot also has configurable SKILLs, but they are only used for chat, not for AI reference code completion.

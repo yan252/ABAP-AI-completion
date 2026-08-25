@@ -1,0 +1,89 @@
+# Changelog
+
+本文件记录了 ABAP AI Completion 插件的主要修改记录。
+
+所有值得注意的变更都会按时间倒序记录在该文档中。
+
+格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+---
+
+## [Unreleased]
+
+### Fixed
+- **补全前缀去重优化**：在 `dedupePrefixWithCodeBefore` 中，当剥掉与光标行重复的前缀后，补充 `.trim()`，去掉 AI 在重复前缀与后续内容（如注释引号后）之间多余的空白，使补全结果更干净（例如只输出 `客户名称` 而非 ` LV_KUNNR = '1111' ."客户名称`）（未测试通过）。
+- **配置页中增加显示插件版本号（未测试通过）
+
+### Docs
+- 新增英文 `README.md` 与中文 `README_CN.md` 的对照同步：补齐介绍段中"本地 LLM / 企业内部使用 / 代码保密"的表述，并在"比 Copilot 的优势"中增加"本地 LLM 支持"与"完全开源、企业免费"两个条目。
+
+---
+
+## [1.0.4] - 2026-08-25
+
+### Changed
+- **补全显示前处理逻辑重构**：删除旧的 `dedupePrefixWithCodeBefore` / `dedupeWithCodeAfter` 处理逻辑，在 `cleanupCompletion` 中改为多情况分步处理（Case 1 去除前重复行、Case 2 当前行部分提示、Case 3 其它预留）。各子处理逻辑的方法注释中写明了处理说明。
+- 插件版本号由 `1.0.3` 提升至 `1.0.4`（插件 JAR）。
+
+---
+
+## [1.0.3] - 2026-08-24
+
+### Fixed
+- **补全内容去重**：新增 `cleanupCompletion` / `dedupePrefixWithCodeBefore` / `dedupeWithCodeAfter` 逻辑。当 AI 返回内容与光标前已有代码存在字符级前缀重复（如 `B~` → `B~MATID,` 重复成 `B~~MATID,`），或与光标后已有代码存在整行重复时，自动剔除，避免重复插入。
+
+### Changed
+- 插件构建并发布 `1.0.3` 版本（插件 JAR + p2 更新站点）。
+
+### Docs
+- 同步英文 README 与中文 README 的"发送给 AI 的 MESSAGE 节点说明"（1 个 system 节点 + 6 个 user 节点）。
+
+---
+
+## [1.0.2] - 2026
+
+### Added
+- 新增 AI 预览图标（`AI4.png` 等），清理旧的 dist 归档。
+- 插件右键菜单子菜单加入 SAP logo 图标（`AICompletionMenuBuilder` / `AICompletionEditorMenuContribution`）。
+
+### Fixed
+- 修正 p2 artifact 映射问题，使更新站点可正常下载（`id_version.jar` 映射）。
+
+### Changed
+- 带图标资源重建插件 JAR 与 p2 更新站点 `1.0.2`。
+
+### Docs
+- 新增中文 README `README_CN.md`。
+- 在 README 安装说明中补充自定义 SKILL 配置目录（`ABAP_SKILLS`）的说明。
+- 在 README Copilot 对比中澄清 SKILL 的用途（用于代码补全参考，而非仅用于对话）。
+
+---
+
+## [1.0.1] - 2026
+
+### Added
+- 引入三节点 `PromptCacheManager`（Prompt 压缩与多节点缓存管理）。
+- 仅对以 `Z`/`Y` 前缀的程序解析父级调用程序（提升性能）。
+
+### Changed
+- 默认工作区参考文件数量上限由 20 调整为 5。
+- 更新站点发布 `1.0.1`。
+
+---
+
+## [1.0.0] - 2026
+
+### Added
+- 首个正式发布版本。
+- 精简 parser / logger / preference 代码，新增编辑器右键菜单 UI。
+- 浮动覆盖层支持完整代码与滚动条显示、不透明设置、SKILL 在系统提示中优先。
+- 简化状态栏与偏好设置页面。
+
+---
+
+[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.4
+[1.0.3]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.3
+[1.0.2]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.2
+[1.0.1]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.1
+[1.0.0]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.0

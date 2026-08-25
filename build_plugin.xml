@@ -50,7 +50,7 @@
 
     <target name="jar" depends="compile">
         <mkdir dir="${dist.dir}"/>
-        <jar destfile="${dist.dir}/com.sap.abap.ai.completion_1.0.3.jar">
+        <jar destfile="${dist.dir}/com.sap.abap.ai.completion_1.0.4.jar">
             <fileset dir="${bin.dir}"/>
             <fileset dir="." includes="plugin.xml"/>
             <fileset dir="META-INF" includes="MANIFEST.MF"/>
@@ -59,7 +59,7 @@
                 <attribute name="Bundle-ManifestVersion" value="2"/>
                 <attribute name="Bundle-Name" value="ABAP AI Completion"/>
                 <attribute name="Bundle-SymbolicName" value="com.sap.abap.ai.completion; singleton:=true"/>
-                <attribute name="Bundle-Version" value="1.0.3"/>
+                <attribute name="Bundle-Version" value="1.0.4"/>
                 <attribute name="Bundle-Activator" value="com.sap.abap.ai.completion.Activator"/>
                 <attribute name="Bundle-Vendor" value="SAP ABAP AI Tools"/>
                 <attribute name="Require-Bundle" value="org.eclipse.ui,org.eclipse.core.runtime,org.eclipse.jface.text,org.eclipse.ui.workbench.texteditor,org.eclipse.core.resources,org.eclipse.ui.ide"/>
@@ -68,12 +68,12 @@
                 <attribute name="Export-Package" value="com.sap.abap.ai.completion,com.sap.abap.ai.completion.client,com.sap.abap.ai.completion.editor,com.sap.abap.ai.completion.parser,com.sap.abap.ai.completion.preferences"/>
             </manifest>
         </jar>
-        <echo>Plugin jar created at: ${dist.dir}/com.sap.abap.ai.completion_1.0.3.jar</echo>
+        <echo>Plugin jar created at: ${dist.dir}/com.sap.abap.ai.completion_1.0.4.jar</echo>
     </target>
 
     <target name="deploy" depends="jar">
         <fail unless="eclipse.dropins" message="Set -Declipse.dropins=path to deploy"/>
-        <copy file="${dist.dir}/com.sap.abap.ai.completion_1.0.3.jar" 
+        <copy file="${dist.dir}/com.sap.abap.ai.completion_1.0.4.jar" 
               todir="${eclipse.dropins}"/>
         <echo>Deployed to ${eclipse.dropins}</echo>
     </target>

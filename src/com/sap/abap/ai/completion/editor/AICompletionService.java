@@ -365,119 +365,189 @@ public class AICompletionService {
                 + codeContext.substring(insertAt);
     }
 
+    /**
+     * 补全代码显示前的处理统一入口。
+     * <p>
+     * 旧的处理逻辑（字符级前缀去重 dedupePrefixWithCodeBefore、行级前缀去重
+     * dedupeWithCodeAfter）存在问题，已全部删除。改为在此处按多种情况分别处理：
+     * <ul>
+     *   <li>Case 1：去除前重复行 —— 补全首行与光标所在行（或向上取到的代码行）内容相同时删除该行；</li>
+     *   <li>Case 2：当前行部分提示 —— 光标行前已有部分片段与补全首行开头重复时，去掉重复前缀；</li>
+     *   <li>Case 3：其它 —— 后续新增处理情况统一在此追加。</li>
+     * </ul>
+     * 各子处理逻辑的详细说明见对应方法的注释。
+     *
+     * @param completion AI 返回的原始补全内容
+     * @param codeAfter  光标后的全部文本（当前未使用，保留参数以便扩展）
+     * @param codeBefore 光标前的全部文本（用于与光标上下文做去重判断）
+     * @return 处理后的补全内容；若为空，由调用方决定不展示补全
+     */
     private static String cleanupCompletion(String completion, String codeAfter, String codeBefore) {
         if (completion == null) return null;
         String result = completion.trim();
+        // 去除 AI 返回内容中的 markdown 代码块标记（```...```）
         if (result.contains("```")) {
             result = result.replaceAll("```[a-zA-Z]*\\n?", "");
             result = result.replaceAll("\\n?```", "");
             result = result.trim();
         }
-        // 代码补全数据处理统一入口：
-        // 1) 先去重与光标前已存在代码重复的字符级前缀，
-        //    避免出现“B~”（光标前）+“B~MATID,”（AI返回）重复成“B~~MATID,”的问题；
-        // 2) 再去重与光标后已存在代码重复的行级前缀。
-        // 去重后若为空，由调用方（callback 前的空判断）决定不展示补全。
-        result = dedupePrefixWithCodeBefore(result, codeBefore);
-        return dedupeWithCodeAfter(result, codeAfter);
+        if (result.isEmpty()) return result;
+
+        // === 补全方法显示前的多情况分步处理 ===
+
+        // Case 1：去除前重复行 —— 若补全首行与光标所在行（或向上取到的代码行）内容相同，
+        //         视为该行在提示窗口中重复，删除此行不显示。
+        result = handleRemoveDuplicateFirstLine(result, codeBefore);
+
+        // Case 2：当前行部分提示 —— 光标所在行前已存在部分字符，且与补全首行开头相同时，
+        //         去掉重复开头，只提示不重复的其余部分。
+        result = handleCurrentLinePartialHint(result, codeBefore);
+
+        // Case 3：其它 —— 后续需要新增的处理情况在此继续追加、分别处理。
+
+        return result;
     }
 
     /**
-     * 去除补全内容中与光标前已存在代码重复的字符级前缀。
-     * <p>
-     * 当光标位于某一代码元素中间（如“B~”之后）时，AI 常会整体返回
-     * 包含该前缀在内的完整内容（如“B~MATID,”），若直接插入会与光标前
-     * 已存在的“B~”重复。本方法取光标前所在行的末尾文本（lineBefore），
-     * 计算补全开头与其最大重叠的公共前缀并去掉。
-     * <p>
-     * 仅针对光标前同一行内做前缀匹配，且设有长度上限，避免跨行或误删过长内容。
+     * 将一行文本规范化，用于后续比较：
+     * <ul>
+     *   <li>TAB 转换为空格；</li>
+     *   <li>多个连续空格合并为单个空格；</li>
+     *   <li>去除首尾空白。</li>
+     * </ul>
      *
-     * @param completion 待处理的补全内容
-     * @param codeBefore 光标前的全部文本（用于取其所在行末尾）
-     * @return 去掉重叠前缀后的补全内容
+     * @param s 原始文本
+     * @return 规范化后的文本
      */
-    private static String dedupePrefixWithCodeBefore(String completion, String codeBefore) {
+    private static String normalize(String s) {
+        if (s == null) return "";
+        s = s.replace('\t', ' ');       // TAB → 空格
+        s = s.replaceAll(" +", " ");    // 多空格 → 单空格
+        return s.trim();
+    }
+
+    /**
+     * 生成一行的“比较键”，用于判断两行代码内容是否相同（忽略格式与注释差异）：
+     * <ul>
+     *   <li>去除 * 号及其之后的内容（ABAP 行内注释）；</li>
+     *   <li>去除 " 号（ABAP 字符串引号，避免因引号差异误判）；</li>
+     *   <li>整体规范化（TAB→空格、多空格→单空格、去首尾空白）。</li>
+     * </ul>
+     *
+     * @param line 原始代码行
+     * @return 用于比较内容的键
+     */
+    private static String getComparisonKey(String line) {
+        if (line == null) return "";
+        // 去除 * 及其之后的内容
+        int starIdx = line.indexOf('*');
+        if (starIdx >= 0) line = line.substring(0, starIdx);
+        // 去除 " 号
+        line = line.replace("\"", "");
+        return normalize(line);
+    }
+
+    /**
+     * [Case 1] 去除前重复行逻辑：
+     * <p>
+     * 按行，取提示代码的第一行；与光标位置所在行进行比较。若光标所在行当前为空，
+     * 则向上取前一行，直到取到代码行为止。两侧均先做规范化（多空格→单空格、TAB→空格），
+     * 同时在比较前去除 " 号、以及 * 号之后的内容（ABAP 行内注释）。若内容相同，则认为
+     * 提示的第一行与光标前行内容重复，在提示窗口中删除此行、不显示。
+     *
+     * @param completion 补全内容
+     * @param codeBefore 光标前的全部文本
+     * @return 处理后的补全内容
+     */
+    private static String handleRemoveDuplicateFirstLine(String completion, String codeBefore) {
         if (completion == null || completion.isEmpty()) return completion;
         if (codeBefore == null || codeBefore.isEmpty()) return completion;
 
-        // 光标所在行（光标前）已存在的文本
+        // 取提示代码的第一行
+        String firstLine = completion.split("\n", 2)[0];
+
+        // 取光标位置所在行（光标前最后一行）；若当前行为空，向上取前一行直到取到代码行
+        String cursorLine = getCodeLineBeforeCursor(codeBefore);
+        if (cursorLine == null || cursorLine.trim().isEmpty()) return completion;
+
+        // 生成比较键：规范化 + 去除 " 号、* 后的内容
+        String firstKey = getComparisonKey(firstLine);
+        String cursorKey = getComparisonKey(cursorLine);
+        if (firstKey.isEmpty() || cursorKey.isEmpty()) return completion;
+
+        // 内容相同 → 提示第一行与光标前行内容重复，删除此行，不显示
+        if (firstKey.equals(cursorKey)) {
+            int nl = completion.indexOf('\n');
+            if (nl < 0) {
+                // 补全仅一行且与光标前行重复：整段均重复，返回空
+                return "";
+            }
+            return completion.substring(nl + 1).trim();
+        }
+        return completion;
+    }
+
+    /**
+     * 取光标位置所在行（仅光标前）的有效代码行。
+     * 若光标所在行为空（空白行），则向上取前一行，直到取到代码行为止。
+     *
+     * @param codeBefore 光标前的全部文本
+     * @return 找到的代码行；若没有则返回 null
+     */
+    private static String getCodeLineBeforeCursor(String codeBefore) {
+        String[] lines = codeBefore.split("\n", -1);
+        // 光标位于 codeBefore 末尾，当前行即最后一行；自下而上寻找第一个非空行
+        for (int i = lines.length - 1; i >= 0; i--) {
+            if (!lines[i].trim().isEmpty()) {
+                return lines[i];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * [Case 2] 当前行部分提示处理逻辑：
+     * <p>
+     * 仅当光标所在行前面有字符时处理。取光标所在位置行前面所有字符（只取光标所在行），
+     * 多空格转单空格、TAB 转空格后作为变量 A；AI 返回的取第一行，同样规范化后作为变量 B。
+     * 若 A 字符串与 B 字符串的开头部分相同，则去除 B 开头与 A 相同的内容，只返回不重复的
+     * 这部分内容作为提示代码的第一行。
+     *
+     * @param completion 补全内容
+     * @param codeBefore 光标前的全部文本
+     * @return 处理后的补全内容
+     */
+    private static String handleCurrentLinePartialHint(String completion, String codeBefore) {
+        if (completion == null || completion.isEmpty()) return completion;
+        if (codeBefore == null || codeBefore.isEmpty()) return completion;
+
+        // A = 光标所在行光标前的所有字符（只取光标所在行），规范化
         int lastNewline = codeBefore.lastIndexOf('\n');
         String lineBefore = lastNewline >= 0
                 ? codeBefore.substring(lastNewline + 1)
                 : codeBefore;
+        String A = normalize(lineBefore);
+        // 仅当光标所在行前面有字符时处理
+        if (A.isEmpty()) return completion;
 
-        // 光标行前没有内容则无需处理
-        String trimmedLine = lineBefore.trim();
-        if (trimmedLine.isEmpty()) return completion;
-        if (completion.startsWith(trimmedLine)) {
-            int stripLen = completion.indexOf(trimmedLine) + trimmedLine.length();
-            return completion.substring(stripLen);
+        // B = AI 返回内容的第一行，规范化
+        String firstLine = completion.split("\n", 2)[0];
+        String B = normalize(firstLine);
+        if (B.isEmpty()) return completion;
+
+        // 若 A 与 B 的开头部分相同，则去除 B 开头与 A 相同的内容
+        if (!B.startsWith(A)) return completion;
+        String remainder = B.substring(A.length()).trim();
+
+        // 用不重复的部分替换提示代码的第一行
+        int nl = completion.indexOf('\n');
+        if (nl < 0) {
+            // 补全仅一行：直接返回不重复的这部分内容
+            return remainder;
         }
-
-        // 否则取两者公共前后缀重叠部分（仅限光标行文本长度与上限内）
-        int maxOverlap = Math.min(lineBefore.length(), completion.length());
-        maxOverlap = Math.min(maxOverlap, 200); // 上限保护，避免误删过长内容
-
-        int overlap = 0;
-        for (int k = 1; k <= maxOverlap; k++) {
-            if (lineBefore.regionMatches(lineBefore.length() - k, completion, 0, k)) {
-                overlap = k;
-            }
-        }
-
-        if (overlap == 0) return completion;
-        return completion.substring(overlap);
-    }
-
-    /**
-     * 去除补全内容中与光标后已存在代码重复的前缀。
-     * 逐行比较补全开头与 codeAfter 开头相同的行，将这些重复行从补全中移除。
-     * 若补全全部与现有代码重复，返回空字符串（由调用方丢弃、不展示）。
-     */
-    private static String dedupeWithCodeAfter(String completion, String codeAfter) {
-        if (completion == null || completion.isEmpty()) return completion;
-        if (codeAfter == null || codeAfter.trim().isEmpty()) return completion;
-
-        String[] compLines = completion.split("\n", -1);
-        String[] afterLines = codeAfter.split("\n", -1);
-
-        // 忽略两侧空白行，仅以实际代码行进行比较
-        int compStart = 0;
-        while (compStart < compLines.length && compLines[compStart].trim().isEmpty()) {
-            compStart++;
-        }
-        int afterStart = 0;
-        while (afterStart < afterLines.length && afterLines[afterStart].trim().isEmpty()) {
-            afterStart++;
-        }
-        if (compStart >= compLines.length || afterStart >= afterLines.length
-                || !compLines[compStart].trim().equals(afterLines[afterStart].trim())) {
-            return completion;
-        }
-
-        int i = compStart, j = afterStart;
-        while (i < compLines.length && j < afterLines.length
-                && compLines[i].trim().equals(afterLines[j].trim())) {
-            i++;
-            j++;
-        }
-
-        // 没有任何匹配行则原样返回
-        int matched = i - compStart;
-        if (matched == 0) return completion;
-
-        StringBuilder sb = new StringBuilder();
-        // 保留 completion 原先的开头空白行，仅去掉与光标后重复的实际代码块
-        for (int k = 0; k < compStart; k++) {
-            if (sb.length() > 0) sb.append("\n");
-            sb.append(compLines[k]);
-        }
-        for (int k = i; k < compLines.length; k++) {
-            if (sb.length() > 0) sb.append("\n");
-            sb.append(compLines[k]);
-        }
-        // 清理首尾空白后返回；若去重后为空，由调用方丢弃、不展示
-        return sb.toString().trim();
+        // 拼接：不重复的首行 + 原补全的其余行
+        String rest = completion.substring(nl + 1);
+        return remainder.isEmpty() ? rest : remainder + "\n" + rest;
     }
 
 }
