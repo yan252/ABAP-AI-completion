@@ -337,25 +337,21 @@ public class PromptCacheManager {
 
     // ==================== 内容压缩 ====================
 
-    /** 压缩阈值：内容长度小于此值时直接返回原内容，不做压缩 */
-    private static final int COMPRESS_THRESHOLD = 500;
-
-    /** 默认最大输入字符数（用户未配置时使用）：约 240K tokens × 4 */
-    private static final int DEFAULT_MAX_INPUT_CHARS = 960000;
+    /** 压缩后按此字符数截断（超出部分按行丢弃） */
+    private static final int DEFAULT_MAX_INPUT_CHARS = 50000;
 
     /** 块状态: 当前所在代码块类型 */
     private enum BlockState {
         NORMAL,              // 普通模式（全局作用域），逐行判断
         IN_DEFINE,           // DEFINE ... END-OF-DEFINITION 宏定义内，所有行全部保留
-        IN_FORM_METHOD       // FORM/METHOD/FUNCTION 签名内，只保留签名参数行和结束关键字
+        IN_FORM_METHOD       // FORM/METHOD/FUNCTION 体内，只保留注释和结束关键字
     }
 
     /**
-     * 节点2、3内容压缩处理（使用默认最大输入字符数）。
-     * 若内容未超过最大输入字符数，则直接返回原内容不做压缩。
+     * 节点2、3内容压缩处理（使用默认最大输入字符数作为截断上限）。
      *
      * @param content 原始 ABAP 代码
-     * @return 压缩后的代码，长度大幅减少但保留语义
+     * @return 压缩并截断后的代码，长度大幅减少但保留语义
      */
     public String compressContent(String content) {
         return compressContent(content, DEFAULT_MAX_INPUT_CHARS);
@@ -363,38 +359,40 @@ public class PromptCacheManager {
 
     /**
      * 节点2、3内容压缩处理。
+     * <p>
+     * 处理流程：<b>先压缩、再按 maxInputChars 截断</b>。
+     * <ol>
+     *   <li>始终执行压缩（删除 *& 开头的段落注释行；将 FORM/METHOD/FUNCTION 体内只保留
+     *       注释；删除内部 DATA 变量定义与实现代码）。</li>
+     *   <li>压缩结果若超过 maxInputChars（如 50000），按行截断到该上限。</li>
+     * </ol>
      *
      * 压缩策略（ABAP 代码）:
-     *   - 内容长度 < 500 字符：直接返回原内容，不做压缩
-     *   - 内容长度 < maxInputChars：直接返回原内容，不做压缩（未超输入上限）
-     *   - 内容长度 >= maxInputChars 且 >= 500：执行智能压缩
+     *   - 删除 *& 开头的段落注释行（保留行注释 " 和一般 * 注释）
      *   - 块感知: DEFINE...END-OF-DEFINITION 内的所有内容全部保留
-     *   - 块感知: CLASS...DEFINITION 内的所有 METHODS/DATA 声明保留
+     *   - 块感知: FORM/METHOD/FUNCTION 体内只保留注释（到 ENDFORM 之间其余代码不保留）
      *   - 全局声明行全部保留 (TABLES:/TYPES:/DATA:/DEFINE 等)
-     *   - 控制流关键字保留，主体代码用省略标记替换
+     *   - 控制流关键字保留，其余主体代码直接删除（不输出省略标记）
      *
      * @param content 原始 ABAP 代码
-     * @param maxInputChars 最大输入字符数，超过此值才压缩
-     * @return 压缩后的代码，长度大幅减少但保留语义
+     * @param maxInputChars 压缩后允许保留的最大字符数（<=0 表示不截断）
+     * @return 压缩并截断后的代码，长度大幅减少但保留语义
      */
     public String compressContent(String content, int maxInputChars) {
         if (content == null || content.isEmpty()) return content;
-        // 内容较短或未超输入上限时，不压缩直接返回全量内容
-        if (content.length() < COMPRESS_THRESHOLD) return content;
-        if (maxInputChars > 0 && content.length() <= maxInputChars) {
-            return content;
-        }
+        // 始终执行压缩，不再按长度阈值跳过
 
         String[] lines = content.split("\n", -1);
         int totalLines = lines.length;
         StringBuilder sb = new StringBuilder(content.length() / 3);
-        boolean inSkippedBlock = false;
-        int consecutiveSkipped = 0;
         int keptLines = 0;
 
         BlockState blockState = BlockState.NORMAL;
-        // 是否仍处于 FORM/METHOD/FUNCTION 签名阶段（签名以含 "." 的语句行结束）
+        // 是否仍处于 FORM/METHOD/FUNCTION 签名阶段（签名以 FORM 后的第一个 . 号结束，
+        // 该 . 可能在签名行上，也可能在后续几行，且不一定是行尾字符）
         boolean inSignature = false;
+        // 是否处于 DATA/TYPES/TABLES/CONSTANTS 等变量定义块内（保留到语句结束的 . 号）
+        boolean inDeclBlock = false;
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
@@ -438,57 +436,64 @@ public class PromptCacheManager {
                 keep = true;
             }
 
-            // FORM/METHOD/FUNCTION 内部：只保留自身签名（输入/输出变量定义）
-            // 及注释和结束关键字；删除内部 DATA 声明、实现代码、CALL FUNCTION 等
+            // FORM/METHOD/FUNCTION 内部：签名阶段保留签名参数行（到第一个 . 号结束），
+            // 之后只保留注释；删除内部 DATA 变量定义、ENDIF/ENDDO、实现代码等
             if (blockState == BlockState.IN_FORM_METHOD) {
                 boolean isComment = trimmed.startsWith("\"") || trimmed.startsWith("*");
 
-                // 保留注释
-                if (isComment) {
+                // 仅保留注释（行注释 " 和一般注释 *，删除 *& 开头的段落注释行）
+                if (isComment && !trimmed.startsWith("*&")) {
                     keep = true;
                 }
 
-                // FORM/METHOD/FUNCTION 自身的定义行（签名第一行）
+                // FORM/METHOD/FUNCTION 自身的定义行；若行内无 . 号，则进入签名阶段
                 if (!keep && (trimmedUpper.startsWith("FORM ")
                         || trimmedUpper.startsWith("METHOD ")
                         || trimmedUpper.startsWith("FUNCTION "))) {
                     keep = true;
-                    // 若定义行已含句点，则签名在同一行结束；否则进入签名阶段
-                    inSignature = !trimmed.endsWith(".");
+                    inSignature = !containsSignEnd(trimmed);
                 }
 
-                // 签名阶段：保留 FORM/METHOD/FUNCTION 自身的输入/输出参数行
-                // （USING/IMPORTING/EXPORTING/CHANGING/TABLES/RECEIVING/VALUE 及 TYPE/LIKE 定义行）
-                if (!keep && inSignature
-                        && (trimmedUpper.matches("^(USING|IMPORTING|EXPORTING|CHANGING|TABLES|RECEIVING|VALUE\\()(.|\\s)*")
-                            || trimmedUpper.matches("^\\w+\\s+(TYPE|LIKE|STRUCTURE)\\s.*"))) {
+                // 签名阶段：保留签名参数行（FORM 第一个 . 号之前）
+                if (!keep && inSignature && isSignatureParamLine(trimmedUpper)) {
                     keep = true;
                 }
 
-                // 签名结束：签名阶段遇到非注释、以 "." 结尾的语句行（非新的 FORM/METHOD/FUNCTION 定义）
-                if (inSignature && !isComment && trimmed.endsWith(".")
+                // 签名结束：签名阶段遇到含 . 号（即 FORM 的第一个结束 . ）的非注释行，签名到此结束
+                if (inSignature && !isComment
+                        && containsSignEnd(trimmed)
                         && !(trimmedUpper.startsWith("FORM ")
                             || trimmedUpper.startsWith("METHOD ")
                             || trimmedUpper.startsWith("FUNCTION "))) {
                     inSignature = false;
                 }
-
-                // 保留结束关键字
-                if (!keep && isEndKeywordLine(trimmedUpper)) {
-                    keep = true;
-                }
+                // 其余（DATA 变量、ENDIF/ENDDO/实现代码等）一律不保留；
+                // ENDFORM/ENDMETHOD/ENDFUNCTION 由 NORMAL 模式的结束关键字规则保留
             }
 
             // ===== NORMAL 模式（全局作用域）：按规则判断 =====
             if (!keep && blockState == BlockState.NORMAL) {
-                // 1. 保留所有注释（行注释 " 和段落注释 *）
+                // 1. 保留注释（行注释 " 和一般注释 *），删除 *& 开头的段落注释行
                 if (trimmed.startsWith("\"") || trimmed.startsWith("*")) {
-                    keep = true;
+                    if (!trimmed.startsWith("*&")) {
+                        keep = true;
+                    }
                 }
 
-                // 2. 保留关键字声明和定义（DATA/CONSTANTS/TABLES/TYPES 等全局声明）
-                if (!keep && isDeclarationLine(trimmedUpper)) {
+                // 2. 保留关键字声明和定义，以及其后续到 . 号结束的整段变量定义
+                //    （DATA/TYPES/TABLES/CONSTANTS 等多行字段列表；以 . 号作为语句结束，
+                //     . 号可能位于行中，后接 " 注释）
+                if (inDeclBlock) {
+                    // 变量定义块内：整行保留；行中含 . 号即该定义语句结束
                     keep = true;
+                    if (containsSignEnd(trimmed)) {
+                        inDeclBlock = false;
+                    }
+                } else if (isDeclarationLine(trimmedUpper)) {
+                    keep = true;
+                    // 声明行若已含 . 号（单行完整定义）则不进入块；
+                    // 否则后续字段行一直保留到含 . 号的结束行
+                    inDeclBlock = !containsSignEnd(trimmed);
                 }
 
                 // 3. 保留控制流/核心逻辑语句（全局级）
@@ -528,33 +533,27 @@ public class PromptCacheManager {
             }
 
             if (keep) {
-                if (inSkippedBlock) {
-                    if (consecutiveSkipped > 3) {
-                        sb.append("...     [skipped ").append(consecutiveSkipped)
-                          .append(" lines of implementation]\n");
-                    }
-                    inSkippedBlock = false;
-                    consecutiveSkipped = 0;
-                }
                 sb.append(line).append("\n");
                 keptLines++;
-            } else {
-                inSkippedBlock = true;
-                consecutiveSkipped++;
             }
         }
 
-        if (consecutiveSkipped > 3) {
-            sb.append("...     [skipped ").append(consecutiveSkipped)
-              .append(" lines of implementation]\n");
+        // 先压缩，再按 maxInputChars 截断（按行截断，避免在行中间切断）
+        // maxInputChars 来自配置页的"工作区/上下文最大字符数"设置
+        String result = sb.toString();
+        boolean truncated = false;
+        if (maxInputChars > 0 && result.length() > maxInputChars) {
+            result = truncateByLines(result, maxInputChars);
+            truncated = true;
         }
 
-        // 调试日志：记录压缩统计
-        String result = sb.toString();
+        // 调试日志：记录压缩统计，并在发生超长截取时打上 [TRUNCATED] 标记
         String[] resultLines = result.split("\n", -1);
         AILogger.logDiagnostic("PromptCacheManager",
-                String.format("compressContent: totalLines=%d, kept=%d, resultLines=%d, resultLength=%d (%.1f%% reduction)",
+                String.format("compressContent: %stotalLines=%d, kept=%d, resultLines=%d, resultLength=%d, maxInputChars=%d (%.1f%% reduction)",
+                truncated ? "[TRUNCATED] " : "",
                 totalLines, keptLines, resultLines.length, result.length(),
+                maxInputChars,
                 (1.0 - (double)result.length() / content.length()) * 100));
         return result;
     }
@@ -663,6 +662,27 @@ public class PromptCacheManager {
                 && !trimmedUpper.contains(" FOR ALL ENTRIES ");
     }
 
+    /**
+     * 判断一行是否为 FORM/METHOD/FUNCTION 签名参数行。
+     * 匹配 USING/IMPORTING/EXPORTING/CHANGING/TABLES/RECEIVING/VALUE( 及 XXXX TYPE/LIKE/STRUCTURE 定义行。
+     */
+    private static boolean isSignatureParamLine(String trimmedUpper) {
+        return trimmedUpper.matches("^(USING|IMPORTING|EXPORTING|CHANGING|TABLES|RECEIVING|VALUE\\()(.|\\s)*")
+                || trimmedUpper.matches("^\\w+\\s+(TYPE|LIKE|STRUCTURE)\\s.*");
+    }
+
+    /**
+     * 判断一行中是否包含语句结束符 "."。
+     * 内联变量/签名/变量定义均以 "." 作为语句结束("." 后可能跟 " 行尾注释),
+     * 因此先剥离 " 之后的注释部分,再判断是否存在 "."——避免注释中的点号造成误判。
+     */
+    private static boolean containsSignEnd(String trimmed) {
+        if (trimmed == null) return false;
+        int comment = trimmed.indexOf('"');
+        String code = comment >= 0 ? trimmed.substring(0, comment) : trimmed;
+        return code.indexOf('.') >= 0;
+    }
+
     // ==================== 简短占位内容生成 ====================
 
     /**
@@ -678,6 +698,36 @@ public class PromptCacheManager {
     }
 
     // ==================== 辅助方法 ====================
+
+    /**
+     * 将压缩结果按行截断到不超过 maxChars 字符。
+     * 超过上限时在末尾追加截断提示，避免在行中间切断。
+     *
+     * @param s       压缩后的完整文本
+     * @param maxChars 允许的最大字符数
+     * @return 截断后的文本
+     */
+    private static String truncateByLines(String s, int maxChars) {
+        if (s == null || maxChars <= 0) return s;
+        StringBuilder sb = new StringBuilder(maxChars + 64);
+        int count = 0;
+        for (String line : s.split("\n", -1)) {
+            int add = line.length() + 1; // +1 换行符
+            if (count + add > maxChars) {
+                if (count > 0) {
+                    sb.append("\n");
+                }
+                sb.append("... [truncated]");
+                return sb.toString();
+            }
+            if (count > 0) {
+                sb.append("\n");
+            }
+            sb.append(line);
+            count += add;
+        }
+        return sb.toString();
+    }
 
     private static String safe(String s) {
         return s == null ? "" : s;

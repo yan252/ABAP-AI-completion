@@ -41,6 +41,12 @@ public final class AbapCodeTruncator {
         // 子过程内部的局部变量声明(DATA/TYPES/FIELD-SYMBOLS/DEFINE 等)不保留,
         // 仅保留输入输出参数、签名行与注释,以节省 Token。
         boolean inSubroutine = false;
+        // 标记当前是否处于一条多行的变量/DATA/TYPES 等声明语句块内。
+        // ABAP 中以 "." 作为语句结束符("." 后可能跟 " 行尾注释),
+        // 从声明行(如 DATA:/TYPES:/DATA X TYPE ...)起,其后的字段定义行
+        // 即使不以声明关键字开头,也属于同一条语句,应整体保留到 "." 结束,
+        // 避免把 TYPES:/DATA: 多行字段列表拆散、只留下关键字行。
+        boolean inDeclarationBlock = false;
         for (String line : lines) {
             String stripped = line.trim();
             String strippedUpper = stripped.toUpperCase();
@@ -74,9 +80,25 @@ public final class AbapCodeTruncator {
                 continue;
             }
 
+            // 变量/数据/类型声明语句块: 从声明行起,其后续字段定义行整体保留
+            // 到该语句以 "." 结束("." 后可能跟 " 行尾注释)。
+            if (inDeclarationBlock) {
+                if (kept.length() >= maxChars) break;
+                kept.append(line).append("\n");
+                if (hasStatementEnd(stripped)) {
+                    inDeclarationBlock = false;
+                }
+                continue;
+            }
+
             if (isStructuralLine(strippedUpper) || isComment(stripped)) {
                 if (kept.length() >= maxChars) break;
                 kept.append(line).append("\n");
+                // 若该结构行是一条 DATA/TYPES 等声明且尚未以 "." 结束,
+                // 则进入声明语句块,继续整体保留其后的多行字段定义。
+                if (isDeclarationStart(strippedUpper) && !hasStatementEnd(stripped)) {
+                    inDeclarationBlock = true;
+                }
             }
         }
 
@@ -207,6 +229,52 @@ public final class AbapCodeTruncator {
         // === INCLUDE 语句(用于追溯调用关系) ===
         if (strippedUpper.startsWith("INCLUDE ")) return true;
 
+        // === 结构定义结束标记(如 END OF TY_ALV.) ===
+        if (strippedUpper.startsWith("END OF ")) return true;
+
         return false;
+    }
+
+    /**
+     * 判断一行(已 trim 并大写化)是否为一条 DATA/TYPES 等变量/类型声明语句的起始行。
+     * 只有此类声明起始行会进入"声明语句块"——其后的多行字段定义(如 TYPES:/DATA:
+     * 冒号列表、BEGIN OF ... 结构)会整体保留到该语句以 "." 结束。
+     */
+    static boolean isDeclarationStart(String strippedUpper) {
+        if (strippedUpper == null || strippedUpper.isEmpty()) return false;
+        return strippedUpper.startsWith("DATA ")
+                || strippedUpper.startsWith("DATA:")
+                || strippedUpper.startsWith("TYPES ")
+                || strippedUpper.startsWith("TYPES:")
+                || strippedUpper.startsWith("CONSTANTS ")
+                || strippedUpper.startsWith("CONSTANTS:")
+                || strippedUpper.startsWith("TABLES ")
+                || strippedUpper.startsWith("TABLES:")
+                || strippedUpper.startsWith("STATICS ")
+                || strippedUpper.startsWith("STATICS:")
+                || strippedUpper.startsWith("RANGES ")
+                || strippedUpper.startsWith("RANGES:")
+                || strippedUpper.startsWith("CLASS-DATA ")
+                || strippedUpper.startsWith("CLASS-DATA:")
+                || strippedUpper.startsWith("INSTANCE-DATA ")
+                || strippedUpper.startsWith("INSTANCE-DATA:")
+                || strippedUpper.startsWith("PARAMETERS ")
+                || strippedUpper.startsWith("PARAMETERS:")
+                || strippedUpper.startsWith("SELECT-OPTIONS ")
+                || strippedUpper.startsWith("SELECT-OPTIONS:")
+                || strippedUpper.startsWith("FIELD-SYMBOLS ")
+                || strippedUpper.startsWith("FIELD-SYMBOLS:");
+    }
+
+    /**
+     * 判断一条语句是否已以 "." 结束。
+     * 仅当剥离 " 之后的"行尾注释后,行内仍存在 "." 才视为语句结束——
+     * 避免注释(如 " 错误显示组的ID)中的点号造成误判。
+     */
+    static boolean hasStatementEnd(String stripped) {
+        if (stripped == null) return false;
+        int comment = stripped.indexOf('"');
+        String code = comment >= 0 ? stripped.substring(0, comment) : stripped;
+        return code.indexOf('.') >= 0;
     }
 }

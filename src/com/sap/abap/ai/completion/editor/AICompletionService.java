@@ -295,7 +295,8 @@ public class AICompletionService {
         if (parentProgramContext != null && !parentProgramContext.isEmpty()) {
             StringBuilder parentSb = new StringBuilder();
             parentSb.append("[PARENT PROGRAMS - Node 2/5] Deep-searched related programs (context of the parent programs that call the current INCLUDE, truncated)\n\n");
-            parentSb.append(cacheManager.compressContent(parentProgramContext));
+            // 与节点3一致：先压缩，再按 workspaceMaxChars(默认5万字符) 截断
+            parentSb.append(cacheManager.compressContent(parentProgramContext, workspaceMaxChars));
             messages.add(new ChatMessage("user", parentSb.toString()));
         } else {
             messages.add(new ChatMessage("user",
@@ -384,12 +385,13 @@ public class AICompletionService {
      */
     private static String cleanupCompletion(String completion, String codeAfter, String codeBefore) {
         if (completion == null) return null;
-        String result = completion.trim();
+        // 只去除首尾的空白行与尾部空白，保留首行代码的前导缩进（空格），避免显示/插入时丢失首行缩进
+        String result = trimStartEndWhitespace(completion);
         // 去除 AI 返回内容中的 markdown 代码块标记（```...```）
         if (result.contains("```")) {
             result = result.replaceAll("```[a-zA-Z]*\\n?", "");
             result = result.replaceAll("\\n?```", "");
-            result = result.trim();
+            result = trimStartEndWhitespace(result);
         }
         if (result.isEmpty()) return result;
 
@@ -482,9 +484,40 @@ public class AICompletionService {
                 // 补全仅一行且与光标前行重复：整段均重复，返回空
                 return "";
             }
-            return completion.substring(nl + 1).trim();
+            return trimStartEndWhitespace(completion.substring(nl + 1));
         }
         return completion;
+    }
+
+    /**
+     * 去除字符串首尾的空白行与尾部空白，但保留首行代码的前导缩进（空格/制表符）。
+     * <p>
+     * 与 {@link String#trim()} 不同，本方法不会把第一个有效行左侧的前导空格一起去掉，
+     * 从而保证补全代码第一行在显示和插入时仍保持正确的缩进。
+     *
+     * @param s 原始文本
+     * @return 处理后的文本
+     */
+    private static String trimStartEndWhitespace(String s) {
+        if (s == null) return "";
+        // 先去掉尾部所有空白（含末尾换行与空格）
+        String r = s.replaceAll("\\s+$", "");
+        if (r.isEmpty()) return "";
+        // 去掉开头的空白行（仅含空白字符的行），但保留第一个有效行自身的前导缩进
+        int start = 0;
+        while (start < r.length()) {
+            int lineEnd = r.indexOf('\n', start);
+            String line = (lineEnd < 0) ? r.substring(start) : r.substring(start, lineEnd);
+            if (!line.trim().isEmpty()) {
+                break;
+            }
+            if (lineEnd < 0) {
+                start = r.length();
+                break;
+            }
+            start = lineEnd + 1;
+        }
+        return r.substring(start);
     }
 
     /**
