@@ -37,30 +37,40 @@ An AI-powered code completion plugin for SAP ABAP developers, built for Eclipse.
 - **Java**: JDK 17 or later
 - **Network**: Access to the configured AI API service
 
-#### Installation Steps
+#### Installation Methods
 
-1. **Download the plugin JAR**
+There are three ways to install; Method 1 (Eclipse Marketplace) is recommended.
 
-   Download the latest JAR file from the `dist` directory of the repository:
+##### Method 1: Install from the Eclipse Marketplace (recommended)
+
+1. In the Eclipse menu bar, open `Help` → `Eclipse Marketplace...`
+
+2. Type **`ABAP AI`** in the search box and find **`ABAP AI Completion`**
+
+3. Click `Install` and follow the prompts (accept the license, trust the certificate)
+
+4. After installation, click `Restart Now (Restart Eclipse)` to load the plugin
+
+##### Method 2: Install via Install New Software
+
+1. In the Eclipse menu bar, select `Help` → `Install New Software...` (some versions show `Help` → `Install Software...`)
+
+2. Click the `Add...` button in the `Available Software` dialog and enter the update site URL:
+
    ```
-   dist/com.sap.abap.ai.completion_1.0.0.jar
+   Name: ABAP AI Completion
+   Location: https://yan252.github.io/ABAP-AI-completion/update-site
    ```
 
-2. **Install into Eclipse**
+   > 💡 You can also click `Archive...` and select `ABAP-AI-Completion-UpdateSite-1.0.5.zip` for offline installation.
 
-   Copy the JAR file to Eclipse's `dropins` directory (create it if it does not exist):
-   ```
-   <Your-Eclipse-Install-Path>/dropins/
-   ```
+3. Check `ABAP AI Completion Feature`, then click `Next` → `Next` → accept the license → `Finish`
 
-   For example:
-   ```
-   C:\Users\YourName\eclipse\dropins\com.sap.abap.ai.completion_1.0.0.jar
-   ```
+4. After installation, click `Restart Now (Restart Eclipse)` to load the plugin
 
-3. **Restart Eclipse**
+##### Method 3: Use the `dropins` approach (debugging/development)
 
-   After copying, **restart Eclipse** to load the plugin.
+Copy `dist/com.sap.abap.ai.completion_1.0.5.jar` to Eclipse's `<install-path>/dropins/` directory (create it if it does not exist), then restart Eclipse.
 
 ---
 

@@ -51,30 +51,40 @@
 
 - **网络** : 需要能够访问配置的AI API服务
 
-### 安装步骤
+### 安装方法
 
-1. **下载插件JAR包**
+有三种安装方式，推荐使用方法1（Eclipse Marketplace）安装：
 
-从仓库的 `dist` 目录下载最新版本的JAR文件：
-```
-dist/com.sap.abap.ai.completion_1.0.0.jar
-```
+#### 方法1：使用 Eclipse Marketplace 安装（推荐）
 
-2. **安装到Eclipse**
+1. 在 Eclipse 菜单栏中打开 `Help` → `Eclipse Marketplace...`
 
-将JAR文件复制到Eclipse的 `dropins` 目录，如不存在此目录请先创建目录：
-```
-<你的Eclipse安装路径>/dropins/
-```
+2. 在搜索框中输入 **`ABAP AI`**，找到 **`ABAP AI Completion`**
 
-例如：
-```
-C:\Users\YourName\eclipse\dropins\com.sap.abap.ai.completion_1.0.0.jar
-```
+3. 点击 `Install`，并按照提示完成安装（同意许可协议、信任证书）
 
-3. **重启Eclipse**
+4. 安装完成后点击 `Restart Now (Restart Eclipse)` 重启 Eclipse，插件即被加载
 
-完成复制后，**重启Eclipse** 即可加载插件。
+#### 方法2：使用 Install New Software 安装
+
+1. 在 Eclipse 菜单栏中选择 `Help` → `Install New Software...`（部分版本为 `Help` → `Install Software...`）
+
+2. 在 `Available Software` 对话框中点击 `Add...` 按钮，添加以下更新站点地址：
+
+   ```
+   Name: ABAP AI Completion
+   Location: https://yan252.github.io/ABAP-AI-completion/update-site
+   ```
+
+   > 💡 也可点击 `Archive...` 选择 `ABAP-AI-Completion-UpdateSite-1.0.5.zip` 进行离线安装。
+
+3. 勾选 `ABAP AI Completion Feature`，点击 `Next` → `Next` → 同意许可协议 → `Finish`
+
+4. 安装完成后点击 `Restart Now (Restart Eclipse)` 重启 Eclipse，插件即被加载
+
+#### 方法3：使用 dropins 方式（调试/开发场景）
+
+将 `dist/com.sap.abap.ai.completion_1.0.5.jar` 复制到 Eclipse 的 `<安装路径>/dropins/` 目录（如不存在此目录请先创建），然后重启 Eclipse 即可。
 
 ---
 
