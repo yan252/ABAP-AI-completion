@@ -79,16 +79,6 @@ public final class AICompletionMenuBuilder {
 
         new MenuItem(menu, SWT.SEPARATOR);
 
-        final MenuItem workspaceCodeItem = new MenuItem(menu, SWT.CHECK);
-        workspaceCodeItem.setText("AI Reference Workspace Code");
-        workspaceCodeItem.setSelection(isWorkspaceCodeReferenceEnabled());
-        workspaceCodeItem.addSelectionListener(new SelectionAdapter() {
-            @Override
-            public void widgetSelected(SelectionEvent e) {
-                setWorkspaceCodeReferenceEnabled(workspaceCodeItem.getSelection());
-            }
-        });
-
         final MenuItem skillItem = new MenuItem(menu, SWT.CHECK);
         skillItem.setText("Enable Skill Reference");
         skillItem.setSelection(isSkillEnabled());
@@ -106,6 +96,16 @@ public final class AICompletionMenuBuilder {
             @Override
             public void widgetSelected(SelectionEvent e) {
                 setParentProgramResolutionEnabled(parentLookupItem.getSelection());
+            }
+        });
+
+        final MenuItem workspaceCodeItem = new MenuItem(menu, SWT.CHECK);
+        workspaceCodeItem.setText("AI Reference Workspace Code");
+        workspaceCodeItem.setSelection(isWorkspaceCodeReferenceEnabled());
+        workspaceCodeItem.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                setWorkspaceCodeReferenceEnabled(workspaceCodeItem.getSelection());
             }
         });
 

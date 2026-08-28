@@ -24,6 +24,14 @@
 
 ---
 
+## [1.0.5] - 2026-08-28
+
+### Changed
+- **菜单项顺序调整**：状态栏图标菜单与 ABAP 编辑器右键菜单中的启用项顺序由「AI Reference Workspace Code → Enable Skill Reference → Enable Parent Program Lookup」调整为「Enable Skill Reference → Enable Parent Program Lookup → AI Reference Workspace Code」。
+- 插件版本号由 `1.0.4` 提升至 `1.0.5`（插件 JAR + p2 更新站点）。
+
+---
+
 ## [1.0.4] - 2026-08-25
 
 ### Changed
@@ -86,7 +94,8 @@
 
 ---
 
-[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.5
 [1.0.4]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.4
 [1.0.3]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.3
 [1.0.2]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.2
