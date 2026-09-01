@@ -2,7 +2,9 @@
 
 > 🌐 **语言 / Language**: [English](README.md) | [中文](README_CN.md)
 
----
+![配置AI ](icons/AI1.png)![按CTRL+ALT+.](icons/AI2.png)
+
+
 
 ## 中文
 

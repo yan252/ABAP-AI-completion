@@ -104,7 +104,7 @@ available in the GitHub repository.
 ## 4. VERSION
 
 ```
-1.0.2
+1.0.5
 ```
 
 ## 5. CATEGORY
@@ -169,7 +169,7 @@ listing.
 | Field          | Value                                                       |
 |----------------|-------------------------------------------------------------|
 | Title          | ABAP AI Completion                                          |
-| Version        | 1.0.2                                                       |
+| Version        | 1.0.5                                                       |
 | Category       | Developer Tools                                             |
 | Update Site    | TODO: https://yan252.github.io/ABAP-AI-completion/update-site/ |
 | License        | MIT License                                                 |

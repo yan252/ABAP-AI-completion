@@ -6,27 +6,16 @@ Bundle-Version: 1.0.5
 Bundle-Activator: com.sap.abap.ai.completion.Activator
 Bundle-Vendor: SAP ABAP AI Tools
 Bundle-ActivationPolicy: lazy
-Require-Bundle: org.eclipse.ui,
- org.eclipse.core.runtime,
- org.eclipse.jface,
- org.eclipse.jface.text,
- org.eclipse.ui.workbench.texteditor,
- org.eclipse.core.resources,
- org.eclipse.ui.ide,
- org.eclipse.ui.views,
- org.eclipse.ui.forms,
- org.eclipse.swt,
- org.eclipse.equinox.preferences,
- org.eclipse.core.commands,
- org.eclipse.core.variables,
- org.eclipse.core.expressions,
- org.eclipse.core.filebuffers,
- org.eclipse.osgi
+Require-Bundle: org.eclipse.ui,org.eclipse.core.runtime,org.eclipse.jfac
+ e,org.eclipse.jface.text,org.eclipse.ui.workbench.texteditor,org.eclips
+ e.core.resources,org.eclipse.ui.ide,org.eclipse.ui.views,org.eclipse.ui
+ .forms,org.eclipse.swt,org.eclipse.equinox.preferences,org.eclipse.core
+ .commands,org.eclipse.core.variables,org.eclipse.core.expressions,org.e
+ clipse.core.filebuffers,org.eclipse.osgi
 Bundle-RequiredExecutionEnvironment: JavaSE-17
-Export-Package: com.sap.abap.ai.completion,
- com.sap.abap.ai.completion.client,
- com.sap.abap.ai.completion.editor,
- com.sap.abap.ai.completion.parser,
- com.sap.abap.ai.completion.preferences,
- com.sap.abap.ai.completion.ui
+Export-Package: com.sap.abap.ai.completion,com.sap.abap.ai.completion.cl
+ ient,com.sap.abap.ai.completion.editor,com.sap.abap.ai.completion.parse
+ r,com.sap.abap.ai.completion.preferences,com.sap.abap.ai.completion.ui
 Automatic-Module-Permissions: true
+Created-By: 23.0.2 (Eclipse Adoptium)
+

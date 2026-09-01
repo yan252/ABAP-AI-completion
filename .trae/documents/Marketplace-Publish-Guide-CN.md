@@ -14,7 +14,7 @@ Eclipse Marketplace 并不托管插件文件，它只提供一个**让用户在 
 ## 一、整体流程总览
 
 ```
-① 生成更新站点（已有，1.0.2）
+① 生成更新站点（已有，1.0.5）
 ② 确认仓库为 public 并推送到 GitHub
 ③ 开启 GitHub Pages，得到更新站点 URL
 ④ 用 Eclipse 验证该 URL 能正常安装
@@ -27,12 +27,12 @@ Eclipse Marketplace 并不托管插件文件，它只提供一个**让用户在 
 
 ## 二、生成更新站点（这一步基本已完成）
 
-你的 `update-site/` 目录已经由 [generate-update-site.ps1](file:///c:/Users/96000217/Documents/trae_projects/com.sap.abap.ai.completion/generate-update-site.ps1) 生成了 **1.0.2** 版本，内容正确：
+你的 `update-site/` 目录已经由 [generate-update-site.ps1](file:///c:/Users/96000217/Documents/trae_projects/com.sap.abap.ai.completion/generate-update-site.ps1) 生成了 **1.0.5** 版本，内容正确：
 - `site.xml`
 - `content.jar` / `content.xml`
 - `artifacts.jar` / `artifacts.xml`
-- `features/com.sap.abap.ai.completion.feature_1.0.2.jar`
-- `plugins/com.sap.abap.ai.completion_1.0.2.jar`
+- `features/com.sap.abap.ai.completion.feature_1.0.5.jar`
+- `plugins/com.sap.abap.ai.completion_1.0.5.jar`
 
 以后每次发新版：改版本号 → 重新编译打包到 `dist/` → 运行 `generate-update-site.ps1` 重新生成 → 再次提交并推送。
 
@@ -46,15 +46,15 @@ Marketplace 和用户都需要能访问你的源码与更新站点，仓库必�
 
 1. 在 GitHub 打开你的仓库 `https://github.com/yan252/ABAP-AI-completion`。
 2. `Settings` → 底部 `Danger Zone` → `Change visibility` → 选 **Public**（如尚为 private）。
-3. 把最新的 `update-site/`（1.0.2）、`dist/`、README 等提交并推送：
+3. 把最新的 `update-site/`（1.0.5）、`dist/`、README 等提交并推送：
 
 ```powershell
 git add update-site dist README.md
-git commit -m "chore: publish 1.0.2 update site"
+git commit -m "chore: publish 1.0.5 update site"
 git push origin main
 ```
 
-> 注意：`.gitignore` 目前**没有**排除 `update-site/`，所以它能正常提交；请确认 `update-site/` 中的 1.0.2 文件确实已被 `git add`（前面 `git status` 显示 1.0.2 文件还是未跟踪状态）。
+> 注意：`.gitignore` 目前**没有**排除 `update-site/`，所以它能正常提交；请确认 `update-site/` 中的 1.0.5 文件确实已被 `git add`（前面 `git status` 显示 1.0.5 文件还是未跟踪状态）。
 > 建议同时在仓库根目录放一个 `LICENSE` 文件（MIT，内容见英文素材），Marketplace 审核更顺畅。
 
 ---
@@ -130,7 +130,7 @@ Marketplace 允许 1–3 张截图。请实际运行插件后截图：
 | Listing Title | `ABAP AI Completion` |
 | Update Site / p2 | `https://yan252.github.io/ABAP-AI-completion/update-site/` |
 | License | MIT License |
-| Version | 1.0.2 |
+| Version | 1.0.5 |
 | Category | Developer Tools |
 | Source | https://github.com/yan252/ABAP-AI-completion |
 
@@ -166,5 +166,5 @@ Marketplace 允许 1–3 张截图。请实际运行插件后截图：
 | Marketplace 投稿稿（英文） | `.trae/documents/Eclipse-Marketplace-Listing.md` | ✅ 已完善，仅剩替换 URL 占位符 |
 | 用户安装说明（英文） | `.trae/documents/INSTALL-EN.md` | ✅ 已有 |
 | 截图素材 | 你拍摄后放入 `screenshots/` | ⏳ 待你提供 |
-| 更新站点（p2） | `update-site/`（1.0.2） | ✅ 已生成，待推送到 Pages |
+| 更新站点（p2） | `update-site/`（1.0.5） | ✅ 已生成，待推送到 Pages |
 | LICENSE 文件（推荐） | 仓库根目录 | ⏳ 建议补充 |
