@@ -29,6 +29,13 @@ public final class PreferenceConstants {
     public static final String MANUAL_COMPLETION_MODE = "manualCompletionMode";
     public static final String OVERLAY_OPACITY = "overlayOpacity";
 
+    // === Completion Display Type ===
+    /** 补全代码显示类型: 1-对话框显示(默认), 2-快捷显示(内联,类 Copilot,不真正插入) */
+    public static final String COMPLETION_DISPLAY_TYPE = "completionDisplayType";
+    public static final int COMPLETION_DISPLAY_DIALOG = 1;
+    public static final int COMPLETION_DISPLAY_INLINE = 2;
+    public static final int DEFAULT_COMPLETION_DISPLAY_TYPE = COMPLETION_DISPLAY_DIALOG;
+
     // === Skill & Prompt ===
     public static final String SKILL_ENABLED = "skillEnabled";
     public static final String SKILL_DIR = "skillDirectory";

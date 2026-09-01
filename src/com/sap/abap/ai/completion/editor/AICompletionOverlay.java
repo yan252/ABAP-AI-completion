@@ -22,7 +22,7 @@ import org.eclipse.swt.widgets.Shell;
  * <p>The overlay shows the full code with a vertical scrollbar.
  * TAB or Enter accepts the full completion text, Esc dismisses.</p>
  */
-public class AICompletionOverlay {
+public class AICompletionOverlay implements AICompletionOverlayBase {
 
     private static final int VISIBLE_LINES = 12;
 

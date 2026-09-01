@@ -53,6 +53,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Text txtWorkspaceFileLimit;
     private Combo cmbLogLevel;
     private Spinner spinnerOpacity;
+    private Combo cmbDisplayType;
 
     private IPreferenceStore store;
 
@@ -339,6 +340,22 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         createLabel(g, "Completion text color:");
         colorSelector = new ColorSelector(g);
 
+        createLabel(g, "Completion display type:");
+        cmbDisplayType = new Combo(g, SWT.DROP_DOWN | SWT.READ_ONLY);
+        cmbDisplayType.add("1 - Dialog display (show in popup window)");
+        cmbDisplayType.add("2 - Inline display (show at cursor, like Copilot)");
+        GridData cdtGd = new GridData(GridData.FILL_HORIZONTAL);
+        cmbDisplayType.setLayoutData(cdtGd);
+
+        Label displayNote = new Label(g, SWT.WRAP);
+        displayNote.setText("How AI completion code is shown.\n"
+                + "1 - Dialog display: shows the code in a floating popup window (default).\n"
+                + "2 - Inline display: shows ghost text at the cursor position without inserting; "
+                + "press TAB or Enter to accept, any other key cancels.");
+        GridData dn = new GridData(GridData.FILL_HORIZONTAL);
+        dn.horizontalSpan = 2;
+        displayNote.setLayoutData(dn);
+
         createLabel(g, "Overlay opacity (%):");
         spinnerOpacity = new Spinner(g, SWT.BORDER);
         spinnerOpacity.setMinimum(10);
@@ -392,6 +409,9 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         // Opacity
         spinnerOpacity.setSelection(AIConfiguration.getOverlayOpacityPercent());
+
+        // Display type (index 0-based, stored value 1-based)
+        cmbDisplayType.select(AIConfiguration.getCompletionDisplayType() - 1);
     }
 
     private void saveValues() {
@@ -433,6 +453,9 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         store.setValue(PreferenceConstants.OVERLAY_OPACITY,
                 String.valueOf(spinnerOpacity.getSelection()));
+
+        store.setValue(PreferenceConstants.COMPLETION_DISPLAY_TYPE,
+                String.valueOf(cmbDisplayType.getSelectionIndex() + 1));
     }
 
     @Override
@@ -472,6 +495,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         colorSelector.setColorValue(new RGB(0, 128, 0));
         spinnerOpacity.setSelection(Integer.parseInt(PreferenceConstants.DEFAULT_OVERLAY_OPACITY));
+        cmbDisplayType.select(PreferenceConstants.DEFAULT_COMPLETION_DISPLAY_TYPE - 1);
     }
 
     // ==================== Test Connection ====================

@@ -71,6 +71,26 @@ public final class AIConfiguration {
         return getStore().getString(PreferenceConstants.MANUAL_COMPLETION_MODE);
     }
 
+    /**
+     * 获取补全代码显示类型。
+     * <ul>
+     *   <li>{@link PreferenceConstants#COMPLETION_DISPLAY_DIALOG}=1 对话框显示(默认)</li>
+     *   <li>{@link PreferenceConstants#COMPLETION_DISPLAY_INLINE}=2 快捷显示(内联,类 Copilot)</li>
+     * </ul>
+     */
+    public static int getCompletionDisplayType() {
+        try {
+            int type = Integer.parseInt(getStore().getString(PreferenceConstants.COMPLETION_DISPLAY_TYPE));
+            if (type != PreferenceConstants.COMPLETION_DISPLAY_DIALOG
+                    && type != PreferenceConstants.COMPLETION_DISPLAY_INLINE) {
+                return PreferenceConstants.DEFAULT_COMPLETION_DISPLAY_TYPE;
+            }
+            return type;
+        } catch (NumberFormatException e) {
+            return PreferenceConstants.DEFAULT_COMPLETION_DISPLAY_TYPE;
+        }
+    }
+
     public static RGB getCompletionColor() {
         String val = getStore().getString(PreferenceConstants.COMPLETION_COLOR);
         if (val == null || val.isEmpty()) {

@@ -16,6 +16,7 @@ import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Shell;
 
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
+import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
 /**
  * Manages the lifecycle of the AI completion overlay.
@@ -33,7 +34,7 @@ public class AIOverlayManager {
         return instance;
     }
 
-    private AICompletionOverlay currentOverlay;
+    private AICompletionOverlayBase currentOverlay;
     private ITextViewer currentViewer;
     private IDocument currentDocument;
     private KeyAdapter overlayKeyListener;
@@ -42,6 +43,8 @@ public class AIOverlayManager {
 
     /**
      * Shows a completion suggestion in the overlay.
+     * The display style (dialog popup vs. inline ghost text, like Copilot)
+     * is chosen based on the "completion display type" preference.
      */
     public void showOverlay(ITextViewer viewer, IDocument document,
                             String completionText, int cursorOffset) {
@@ -59,6 +62,22 @@ public class AIOverlayManager {
         if (widget == null || widget.isDisposed()) return;
 
         Shell parentShell = widget.getShell();
+
+        boolean inline = AIConfiguration.getCompletionDisplayType()
+                == PreferenceConstants.COMPLETION_DISPLAY_INLINE;
+
+        if (inline) {
+            showInlineOverlay(parentShell, viewer, completionText, cursorOffset);
+        } else {
+            showDialogOverlay(parentShell, viewer, completionText, cursorOffset);
+        }
+    }
+
+    /**
+     * Builds and shows the dialog-style overlay (a floating popup window).
+     */
+    private void showDialogOverlay(Shell parentShell, ITextViewer viewer,
+                                   String completionText, int cursorOffset) {
         currentOverlay = new AICompletionOverlay(
                 parentShell,
                 completionText,
@@ -81,8 +100,9 @@ public class AIOverlayManager {
         // Register focus redirection: when user finishes interacting with overlay
         // (mouseUp on StyledText or scrollbar), redirect focus back to editor
         // so Tab/Enter/Esc keys are handled by our interceptor
-        StyledText overlayStyledText = currentOverlay.getStyledText();
-        if (overlayStyledText != null && !overlayStyledText.isDisposed()) {
+        if (currentOverlay instanceof AICompletionOverlay) {
+            StyledText overlayStyledText = ((AICompletionOverlay) currentOverlay).getStyledText();
+            if (overlayStyledText != null && !overlayStyledText.isDisposed()) {
             overlayStyledText.addMouseListener(new org.eclipse.swt.events.MouseAdapter() {
                 @Override
                 public void mouseUp(org.eclipse.swt.events.MouseEvent e) {
@@ -118,9 +138,44 @@ public class AIOverlayManager {
                     }
                 }
             });
+            }
         }
 
         // Register global mouse filter - click inside overlay -> accept, click outside -> dismiss
+        registerGlobalMouseFilter();
+    }
+
+    /**
+     * Builds and shows the inline (Copilot-like) overlay at the cursor position.
+     * The code is NOT inserted; only TAB/Enter accepts it (other keys cancel).
+     * Mouse: clicking the hint text accepts it, any other mouse click cancels it.
+     */
+    private void showInlineOverlay(Shell parentShell, ITextViewer viewer,
+                                   String completionText, int cursorOffset) {
+        currentOverlay = new AICompletionInlineOverlay(
+                parentShell,
+                completionText,
+                cursorOffset,
+                AIConfiguration.getCompletionColor(),
+                viewer,
+                currentDocument,
+                this::acceptSuggestion,
+                this::hideOverlay);
+
+        if (currentOverlay.getShell() == null || currentOverlay.getShell().isDisposed()) {
+            currentOverlay = null;
+            return;
+        }
+
+        // Position and show
+        currentOverlay.positionNearCursor(viewer);
+        currentOverlay.open();
+
+        // Register keyboard interceptor (TAB/Enter accept, other keys cancel)
+        registerKeyInterceptor(viewer);
+
+        // Register global mouse filter: click on suggestion -> accept (handled by the
+        // inline overlay's own mouse listener); click anywhere else -> dismiss
         registerGlobalMouseFilter();
     }
 
@@ -144,8 +199,12 @@ public class AIOverlayManager {
 
     /**
      * Detects mouse clicks via a global Display filter.
-     * - Click inside overlay (on its Shell or StyledText) → accept suggestion
-     * - Click anywhere else → dismiss overlay
+     * <ul>
+     *   <li>Dialog overlay: click inside overlay → accept suggestion; click anywhere else → dismiss.</li>
+     *   <li>Inline overlay: click on the editor StyledText is left to the inline overlay's own
+     *       mouse listener (click on hint → accept / click elsewhere in editor → dismiss);
+     *       any click outside the editor → dismiss.</li>
+     * </ul>
      */
     private void registerGlobalMouseFilter() {
         unregisterGlobalMouseFilter();
@@ -160,6 +219,17 @@ public class AIOverlayManager {
             if (overlayShell == null || overlayShell.isDisposed()) return;
             if (event.widget == null || event.widget.isDisposed()) return;
 
+            // Inline overlay: clicks on the editor widget are handled by the inline overlay's
+            // own mouse listener; clicks anywhere else dismiss the hint.
+            if (currentOverlay instanceof AICompletionInlineOverlay) {
+                if (isClickOnEditorWidget(event.widget)) {
+                    return;
+                }
+                hideOverlay();
+                return;
+            }
+
+            // Dialog overlay path below.
             // Check if click is on the overlay's StyledText scrollbar
             // (scrollbar clicks should scroll, not accept/dismiss)
             if (isScrollbarClick(event.widget, event.x)) {
@@ -196,11 +266,35 @@ public class AIOverlayManager {
     }
 
     /**
+     * Returns true when the click originated on (or inside) the current editor's StyledText
+     * widget. Used by the inline overlay path so its own hint-area mouse listener can
+     * decide accept vs. cancel, rather than the global filter.
+     */
+    private boolean isClickOnEditorWidget(org.eclipse.swt.widgets.Widget widget) {
+        if (currentViewer == null) return false;
+        StyledText st = currentViewer.getTextWidget();
+        if (st == null || st.isDisposed()) return false;
+
+        org.eclipse.swt.widgets.Widget w = widget;
+        while (w != null) {
+            if (w == st) return true;
+            if (w instanceof org.eclipse.swt.widgets.Control) {
+                w = ((org.eclipse.swt.widgets.Control) w).getParent();
+            } else {
+                break;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Check if the clicked widget is a scrollbar of the overlay's StyledText.
      * Scrollbar clicks should be allowed to pass through for scrolling.
      */
     private boolean isScrollbarClick(org.eclipse.swt.widgets.Widget widget, int clickX) {
-        StyledText st = currentOverlay.getStyledText();
+        // Only the dialog overlay has a scrollable StyledText; inline overlay is not mouse-handled
+        if (!(currentOverlay instanceof AICompletionOverlay)) return false;
+        StyledText st = ((AICompletionOverlay) currentOverlay).getStyledText();
         if (st == null || st.isDisposed()) return false;
 
         // Check if the widget is the StyledText's vertical or horizontal scrollbar
