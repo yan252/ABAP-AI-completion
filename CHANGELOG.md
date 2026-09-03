@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+### Added
+- **内联（类 Copilot）补全显示模式**：新增 `AICompletionInlineOverlay` 与公共抽象 `AICompletionOverlayBase`，可在配置页「Overlay Style → Completion display type」中选择补全代码的显示方式：
+  - **1 - Dialog display（默认）**：以浮动弹窗形式展示（原有行为），新增鼠标/键盘交互完善（点击弹窗空白处接受、点击外部取消、Esc 取消、滚动条点击不误触）。
+  - **2 - Inline display（内联幽灵文本）**：直接在编辑器光标处绘制与真实代码同字体同字号的幽灵文本（不真正插入文档），可用配置的补全字体颜色渲染；按 `Tab`/`Enter` 或点击提示文本处接受并插入，按其它任意键或点击编辑器外部取消。`AIOverlayManager` 统一通过 `AICompletionOverlayBase` 管理两种覆盖层的显示、定位与关闭，并修正了鼠标监听器清理逻辑。
+
 ### Changed
 - **补全触发门控优化**：`AICompletionHandler` 中调整判断逻辑 —— 只要光标所在行内、光标之后存在非空白字符（行中间或行首）即直接退出补全，且不显示任何提示（包括状态栏提示）；只有光标位于行尾或空行时才触发 AI 代码补全。
 - **节点2/3 压缩截取日志标记**：`PromptCacheManager.compressContent` 在压缩结果超过配置设定的"工作区/上下文最大字符数"而触发截取时，诊断日志前缀打上 `[TRUNCATED]` 标记，并在日志中记录 `maxInputChars`（当前截取上限配置值），便于确认是否发生超长截取。
@@ -21,6 +26,17 @@
 
 ### Docs
 - 新增英文 `README.md` 与中文 `README_CN.md` 的对照同步：补齐介绍段中"本地 LLM / 企业内部使用 / 代码保密"的表述，并在"比 Copilot 的优势"中增加"本地 LLM 支持"与"完全开源、企业免费"两个条目。
+
+---
+
+## [1.0.6] - 2026-09-03
+
+### Fixed
+- **API Key 保存无效修复**：`AICompletionPreferencePage.saveValues()` 之前未调用 `store.setValue(PreferenceConstants.API_KEY, ...)`，导致 API Key 从未写入偏好存储，重新打开配置页后为空。已补上保存逻辑（在测试连接时正常、但保存后丢失的问题）。
+- **配置页过宽问题**：将「System Prompt」输入框的 `widthHint` 由 `500` 收窄至 `420`（约 5 个汉字宽度），避免在部分电脑上出现横向滚动条。
+
+### Changed
+- 插件版本号由 `1.0.5` 提升至 `1.0.6`（插件 JAR + p2 更新站点）。
 
 ---
 
@@ -94,7 +110,8 @@
 
 ---
 
-[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.6
 [1.0.5]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.5
 [1.0.4]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.4
 [1.0.3]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.3

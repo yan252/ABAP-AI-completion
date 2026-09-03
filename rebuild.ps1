@@ -1,7 +1,7 @@
 # Rebuild the plugin JAR with correct META-INF/MANIFEST.MF inclusion
 
 $JDK23 = "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre"
-$PROJ = "C:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
+$PROJ = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $jar = "$JDK23\bin\jar"
 
 Write-Host "=== Rebuilding plugin JAR ==="
@@ -29,7 +29,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: ABAP AI Completion
 Bundle-SymbolicName: com.sap.abap.ai.completion; singleton:=true
-Bundle-Version: 1.0.5
+Bundle-Version: 1.0.6
 Bundle-Activator: com.sap.abap.ai.completion.Activator
 Bundle-Vendor: SAP ABAP AI Tools
 Bundle-ActivationPolicy: lazy
@@ -67,18 +67,18 @@ Write-Host "---"
 # Build the JAR - explicitly include META-INF/MANIFEST.MF, plugin.xml, classes and icons
 Push-Location $tmpDir
 if (Test-Path "$tmpDir\icons") {
-    & $jar cfm "$PROJ\dist\com.sap.abap.ai.completion_1.0.5.jar" "META-INF\MANIFEST.MF" plugin.xml com\ icons\
+    & $jar cfm "$PROJ\dist\com.sap.abap.ai.completion_1.0.6.jar" "META-INF\MANIFEST.MF" plugin.xml com\ icons\
 } else {
-    & $jar cfm "$PROJ\dist\com.sap.abap.ai.completion_1.0.5.jar" "META-INF\MANIFEST.MF" plugin.xml com\
+    & $jar cfm "$PROJ\dist\com.sap.abap.ai.completion_1.0.6.jar" "META-INF\MANIFEST.MF" plugin.xml com\
 }
 Pop-Location
 
 Write-Host ""
 Write-Host "=== Verifying JAR contents ==="
-& $jar tf "$PROJ\dist\com.sap.abap.ai.completion_1.0.5.jar"
+& $jar tf "$PROJ\dist\com.sap.abap.ai.completion_1.0.6.jar"
 
 Write-Host ""
-Write-Host "File size: $((Get-Item "$PROJ\dist\com.sap.abap.ai.completion_1.0.5.jar").Length / 1KB) KB"
+Write-Host "File size: $((Get-Item "$PROJ\dist\com.sap.abap.ai.completion_1.0.6.jar").Length / 1KB) KB"
 
 # Clean up temp
 Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue

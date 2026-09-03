@@ -327,7 +327,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtSystemPrompt = new Text(g, SWT.MULTI | SWT.BORDER | SWT.WRAP | SWT.V_SCROLL);
         GridData td = new GridData(GridData.FILL_HORIZONTAL);
         td.heightHint = 120;
-        td.widthHint = 500;
+        td.widthHint = 420;
         txtSystemPrompt.setLayoutData(td);
     }
 
@@ -417,6 +417,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private void saveValues() {
         store.setValue(PreferenceConstants.API_BASE_URL, txtBaseUrl.getText());
         store.setValue(PreferenceConstants.API_MODEL, txtModel.getText());
+        store.setValue(PreferenceConstants.API_KEY, txtApiKey.getText());
         store.setValue(PreferenceConstants.MAX_TOKENS, txtMaxTokens.getText());
         store.setValue(PreferenceConstants.TEMPERATURE, txtTemperature.getText());
         String skillDirValue = txtSkillDir.getText().trim();

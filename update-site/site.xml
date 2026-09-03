@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <site>
-   <feature url="features/com.sap.abap.ai.completion.feature_1.0.5.jar"
+   <feature url="features/com.sap.abap.ai.completion.feature_1.0.6.jar"
             id="com.sap.abap.ai.completion.feature"
-            version="1.0.5">
+            version="1.0.6">
       <category name="ABAP AI Completion"/>
    </feature>
    <category-def name="ABAP AI Completion" label="ABAP AI Completion">
