@@ -252,19 +252,18 @@ This plugin integrates through the following Eclipse extension points:
 
 #### MESSAGE Nodes Sent to AI
 
-When manual completion (`Ctrl+Shift+.`) is triggered, the plugin constructs a message list of **1 `system` node + 6 `user` nodes** to send to the AI (corresponding to the `buildUserMessages` method in [AICompletionService.java](src/com/sap/abap/ai/completion/editor/AICompletionService.java)). The meaning of each node is as follows:
+When manual completion (`Ctrl+Shift+.`) is triggered, the plugin constructs a message list of **1 `system` node + 5 `user` nodes** to send to the AI (corresponding to the `buildUserMessages` method in [AICompletionService.java](src/com/sap/abap/ai/completion/editor/AICompletionService.java)). The meaning of each node is as follows:
 
 | Node | Role | Content |
 |------|------|---------|
 | **System** | `system` | System prompt. Defines the AI's role (senior SAP ABAP development expert), completion rules, and output constraints. Can be overridden using `Custom System Prompt` |
-| **Node 1/6** | `user` | **SKILL file content**: `.abap`/`.txt`/`.skill` files loaded from the skill directory as code style and best-practice references. If no SKILL, it states "use system default ABAP coding standards" |
-| **Node 2/6** | `user` | **Parent program call context**: When the current file is an INCLUDE, deep search finds the code of the parent programs that call it (recursively searched by configured search depth). Compressed via `PromptCacheManager.compressAbapContext` |
-| **Node 3/6** | `user` | **Programs open in workspace**: Other ABAP files open in the current Eclipse workspace as style reference and supplementary context (collected by `WorkspaceCodeCollector`, also compressed) |
-| **Node 4/6** | `user` | **Current program**: Complete code of the program at the cursor position (with all INCLUDEs expanded via `AbapIncludeResolver`), with filename and code type labeled |
-| **Node 5/6** | `user` | **Program metadata**: Summary of filename, code type, INCLUDE count, parent program/workspace/SKILL load status to help the AI comprehensively understand the overall context |
-| **Node 6/6** | `user` | **Cursor position context**: The cursor's line and column number, plus the 15 lines before and 5 lines after the cursor, with the insertion position marked with `[[[CURSOR_HERE]]]` — this is exactly where the AI generates the completion content |
+| **Node 1/5** | `user` | **SKILL file content**: `.abap`/`.txt`/`.skill` files loaded from the skill directory as code style and best-practice references. If no SKILL, it states "use system default ABAP coding standards" |
+| **Node 2/5** | `user` | **Parent program call context**: When the current file is an INCLUDE, deep search finds the code of the parent programs that call it (recursively searched by configured search depth). Compressed via `PromptCacheManager.compressContent` |
+| **Node 3/5** | `user` | **Programs open in workspace**: Other ABAP files open in the current Eclipse workspace as style reference and supplementary context (collected by `WorkspaceCodeCollector`, also compressed) |
+| **Node 4/5** | `user` | **Program metadata**: Summary of filename, code type, INCLUDE count, parent program/workspace/SKILL load status to help the AI comprehensively understand the overall context |
+| **Node 5/5** | `user` | **Current program at cursor (with cursor position)**: Merged from the original "full code" node and "cursor context" node. Shows the complete code of the program at the cursor (with all INCLUDEs expanded via `AbapIncludeResolver`), with the insertion position marked with `[[[CURSOR_HERE]]]` — this is exactly where the AI generates the completion content |
 
-> **Note**: Nodes 2 and 3 are uniformly compressed before sending based on the `Max Context Chars (getMaxContextChars)` threshold to avoid context window overflow; the other nodes are sent as-is according to their own rules. If a node has no matching content, a placeholder message (stating that node's current status) is still sent to ensure the AI always receives the complete 1+6 node structure.
+> **Note**: Nodes 2 and 3 are uniformly compressed before sending via `PromptCacheManager.compressContent` (with the compression limit following the `Max Workspace Code Chars` configuration) to avoid context window overflow; Node 1 (SKILL) is sent in full, while the other nodes are sent according to their own rules. If a node has no matching content, a placeholder message (stating that node's current status) is still sent to ensure the AI always receives the complete 1+5 node structure.
 
 > **Comparison**: Auto-completion (`requestQuickCompletion`) does not load SKILL or the above context; it uses a simplified standalone prompt and only sends 1 `system` node + 1 `user` node (current line context).
 

@@ -287,19 +287,18 @@ com.sap.abap.ai.completion/
 
 ### 发送给AI的MESSAGE节点说明
 
-手动触发补全（`Ctrl+Shift+.`）时，插件会构造 **1个 `system` 节点 + 6个 `user` 节点** 的消息列表发送给 AI（对应 [AICompletionService.java](src/com/sap/abap/ai/completion/editor/AICompletionService.java) 中的 `buildUserMessages` 方法）。各节点含义如下：
+手动触发补全（`Ctrl+Shift+.`）时，插件会构造 **1个 `system` 节点 + 5个 `user` 节点** 的消息列表发送给 AI（对应 [AICompletionService.java](src/com/sap/abap/ai/completion/editor/AICompletionService.java) 中的 `buildUserMessages` 方法）。各节点含义如下：
 
 | 节点 | 角色 | 内容说明 |
 |---|---|---|
 | **System** | `system` | 系统提示词。定义AI的角色（SAP ABAP资深开发专家）、补全规则与输出约束。可使用 `自定义系统提示 (Custom System Prompt)` 覆盖默认值 |
-| **节点1/6** | `user` | **SKILL 文件内容**：技能目录中加载的 `.abap`/`.txt`/`.skill` 文件，作为代码风格与最佳实践参考。无SKILL时标明“使用系统默认ABAP编码规范” |
-| **节点2/6** | `user` | **父程序调用上下文**：当当前文件是 INCLUDE 时，深度搜索到的调用它的父级程序代码（按配置的搜索深度递归查找）。该节点内容通过 `PromptCacheManager.compressAbapContext` 压缩 |
-| **节点3/6** | `user` | **工作区打开的程序**：当前 Eclipse 工作区中已打开的其它 ABAP 文件，作为风格参考与补充上下文（由 `WorkspaceCodeCollector` 收集，同样会压缩） |
-| **节点4/6** | `user` | **当前程序**：当前光标所在程序的完整代码（已通过 `AbapIncludeResolver` 展开所有 INCLUDE），并标注文件名与代码类型 |
-| **节点5/6** | `user` | **程序元数据**：文件名、代码类型、INCLUDE 数量、父级程序/工作区/SKILL 加载情况的汇总说明，帮助AI综合理解整体上下文 |
-| **节点6/6** | `user` | **光标位置上下文**：光标所在行列号，以及光标前15行、光标后5行的代码，并用 `[[[CURSOR_HERE]]]` 标记插入位置，这是AI真正生成补全内容的位置 |
+| **节点1/5** | `user` | **SKILL 文件内容**：技能目录中加载的 `.abap`/`.txt`/`.skill` 文件，作为代码风格与最佳实践参考。无SKILL时标明“使用系统默认ABAP编码规范” |
+| **节点2/5** | `user` | **父程序调用上下文**：当当前文件是 INCLUDE 时，深度搜索到的调用它的父级程序代码（按配置的搜索深度递归查找）。该节点内容经 `PromptCacheManager.compressContent` 压缩 |
+| **节点3/5** | `user` | **工作区打开的程序**：当前 Eclipse 工作区中已打开的其它 ABAP 文件，作为风格参考与补充上下文（由 `WorkspaceCodeCollector` 收集，同样会压缩） |
+| **节点4/5** | `user` | **程序元数据**：文件名、代码类型、INCLUDE 数量、父级程序/工作区/SKILL 加载情况的汇总说明，帮助AI综合理解整体上下文 |
+| **节点5/5** | `user` | **当前光标程序（含光标位置）**：由原“完整代码”节点与“光标上下文”节点合并而来。展示当前光标所在程序的完整代码（已通过 `AbapIncludeResolver` 展开所有 INCLUDE），并在光标位置用 `[[[CURSOR_HERE]]]` 标记插入位置，这是AI真正生成补全内容的位置 |
 
-> **说明**：节点2、3在发送前会依据 `Max Context Chars (getMaxContextChars)` 阈值统一压缩，避免上下文窗口溢出；其余节点按各自规则直接发送。若某一节点无对应内容，仍会发送一条占位说明消息（标明该节点当前状态），保证AI始终收到完整的1+6节点结构。
+> **说明**：节点2、3在发送前会通过 `PromptCacheManager.compressContent` 统一压缩（压缩上限沿用工作区代码字符数配置 `Max Workspace Code Chars`），避免上下文窗口溢出；节点1（SKILL）全量直接发送，其余节点按各自规则发送。若某节点无对应内容，仍会发送一条占位说明消息（标明该节点当前状态），保证AI始终收到完整的 1+5 节点结构。
 
 > **对比**：自动补全（`requestQuickCompletion`）不加载SKILL与上述上下文，使用的是简化后的独立 prompt，仅发送 1个 `system` 节点 + 1个 `user` 节点（当前行上下文）。
 
