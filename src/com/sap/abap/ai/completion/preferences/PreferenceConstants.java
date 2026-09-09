@@ -63,6 +63,28 @@ public final class PreferenceConstants {
     // === Prompt Cache ===
     public static final String PROMPT_CACHE_ENABLED = "promptCacheEnabled";
 
+    // === SAP Connection Settings (JCo) ===
+    /** SAP 应用服务器地址(如 10.0.0.1 或 host.example.com)。 */
+    public static final String SAP_HOST = "sapHost";
+    /** SAP 系统编号/SID 系统号(如 00)。 */
+    public static final String SAP_SYSTEM_NUMBER = "sapSystemNumber";
+    /** SAP Client。 */
+    public static final String SAP_CLIENT = "sapClient";
+    /** 登录语言(如 EN / ZH)。 */
+    public static final String SAP_LANGUAGE = "sapLanguage";
+    /** SAP 用户名。 */
+    public static final String SAP_USER = "sapUser";
+    /** SAP 用户密码。 */
+    public static final String SAP_PASSWORD = "sapPassword";
+    /** JCo native 库(sapjco3.dll / libsapjco3.so)所在目录(可选)。
+     *  仅在 JCo 未由 OSGi fragment(com.sap.conn.jco.win32.x86_64)自动加载时需要。 */
+    public static final String SAP_NATIVE_LIB_DIR = "sapNativeLibraryDir";
+
+    // === Defaults for SAP Connection Settings ===
+    public static final String DEFAULT_SAP_SYSTEM_NUMBER = "00";
+    public static final String DEFAULT_SAP_CLIENT = "001";
+    public static final String DEFAULT_SAP_LANGUAGE = "EN";
+
     // === Default Values ===
     public static final String DEFAULT_API_BASE_URL = "https://api.openai.com/v1";
     public static final String DEFAULT_API_MODEL = "gpt-4";

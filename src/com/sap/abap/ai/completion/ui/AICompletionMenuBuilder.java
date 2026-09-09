@@ -55,6 +55,15 @@ public final class AICompletionMenuBuilder {
             }
         });
 
+        MenuItem sapPrefsItem = new MenuItem(menu, SWT.PUSH);
+        sapPrefsItem.setText("SAP Connection Config...");
+        sapPrefsItem.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                openSapPreferences();
+            }
+        });
+
         new MenuItem(menu, SWT.SEPARATOR);
 
         final MenuItem enableItem = new MenuItem(menu, SWT.CHECK);
@@ -108,6 +117,27 @@ public final class AICompletionMenuBuilder {
                 setWorkspaceCodeReferenceEnabled(workspaceCodeItem.getSelection());
             }
         });
+
+        new MenuItem(menu, SWT.SEPARATOR);
+
+        // ==================== 模板 子菜单 ====================
+        // 每个子项对应 references/ 下的一个 zip 文件，
+        // 点击后通过 JCo 调用 RFC Z_ABAPGIT_UPLOAD_FROM_XSTRING 上传到 SAP 系统。
+        MenuItem templateItem = new MenuItem(menu, SWT.CASCADE);
+        templateItem.setText("模板");
+        Menu templateMenu = new Menu(templateItem);
+        for (final ABAPTemplateService.TemplateZipDef def
+                : ABAPTemplateService.getTemplateDefs()) {
+            MenuItem item = new MenuItem(templateMenu, SWT.PUSH);
+            item.setText(def.getLabel());
+            item.addSelectionListener(new SelectionAdapter() {
+                @Override
+                public void widgetSelected(SelectionEvent e) {
+                    ABAPTemplateService.runTemplateUpload(def.getLabel());
+                }
+            });
+        }
+        templateItem.setMenu(templateMenu);
 
         new MenuItem(menu, SWT.SEPARATOR);
 
@@ -264,6 +294,14 @@ public final class AICompletionMenuBuilder {
     }
 
     static void openPreferences() {
+        openPreferenceDialog("com.sap.abap.ai.completion.preferencePage");
+    }
+
+    static void openSapPreferences() {
+        openPreferenceDialog("com.sap.abap.ai.completion.preferencePage.sap");
+    }
+
+    private static void openPreferenceDialog(final String pageId) {
         try {
             PlatformUI.getWorkbench().getDisplay().asyncExec(() -> {
                 try {
@@ -275,7 +313,7 @@ public final class AICompletionMenuBuilder {
                             String[].class,
                             Object.class);
                     Object dialog = createDialog.invoke(null, getShell(),
-                            "com.sap.abap.ai.completion.preferencePage", null, null);
+                            pageId, null, null);
                     if (dialog instanceof org.eclipse.jface.dialogs.Dialog) {
                         ((org.eclipse.jface.dialogs.Dialog) dialog).open();
                     }

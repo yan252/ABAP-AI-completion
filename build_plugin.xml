@@ -37,6 +37,7 @@
                 <include name="org.eclipse.swt_*.jar"/>
                 <include name="org.eclipse.text_*.jar"/>
                 <include name="com.google.gson_*.jar"/>
+                <include name="com.sap.conn.jco_*.jar"/>
             </fileset>
         </path>
 
@@ -53,6 +54,7 @@
         <jar destfile="${dist.dir}/com.sap.abap.ai.completion_1.0.6.jar">
             <fileset dir="${bin.dir}"/>
             <fileset dir="." includes="plugin.xml"/>
+            <fileset dir="references" includes="**/*"/>
             <fileset dir="META-INF" includes="MANIFEST.MF"/>
             <manifest>
                 <attribute name="Manifest-Version" value="1.0"/>
@@ -62,7 +64,7 @@
                 <attribute name="Bundle-Version" value="1.0.6"/>
                 <attribute name="Bundle-Activator" value="com.sap.abap.ai.completion.Activator"/>
                 <attribute name="Bundle-Vendor" value="SAP ABAP AI Tools"/>
-                <attribute name="Require-Bundle" value="org.eclipse.ui,org.eclipse.core.runtime,org.eclipse.jface.text,org.eclipse.ui.workbench.texteditor,org.eclipse.core.resources,org.eclipse.ui.ide"/>
+                <attribute name="Require-Bundle" value="org.eclipse.ui,org.eclipse.core.runtime,org.eclipse.jface.text,org.eclipse.ui.workbench.texteditor,org.eclipse.core.resources,org.eclipse.ui.ide,org.eclipse.ui.editors,org.eclipse.core.filesystem"/>
                 <attribute name="Bundle-RequiredExecutionEnvironment" value="JavaSE-17"/>
                 <attribute name="Automatic-Module-Permissions" value="true"/>
                 <attribute name="Export-Package" value="com.sap.abap.ai.completion,com.sap.abap.ai.completion.client,com.sap.abap.ai.completion.editor,com.sap.abap.ai.completion.parser,com.sap.abap.ai.completion.preferences"/>

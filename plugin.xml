@@ -12,6 +12,13 @@
             class="com.sap.abap.ai.completion.preferences.AICompletionPreferencePage"
             name="ABAP AI Completion">
       </page>
+      <!-- SAP 连接信息配置页(JCo), 从“模板”菜单的 “SAP Connection Config...” 打开 -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.sap"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.SapPreferencePage"
+            name="SAP 配置">
+      </page>
    </extension>
 
    <extension point="org.eclipse.core.runtime.preferences">
@@ -53,6 +60,19 @@
                   class="com.sap.abap.ai.completion.ui.AbapAIStatusLineContribution">
             </control>
          </toolbar>
+      </menuContribution>
+   </extension>
+
+   <!-- "ABAP AI Completion" cascade submenu added to the Eclipse main menu bar
+        (reuses the same content as the status-bar popup and the editor context
+        menu via AICompletionMenuBuilder, including the "模板" submenu). -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="menu:org.eclipse.ui.main.menu?after=additions">
+         <dynamic
+               id="com.sap.abap.ai.completion.mainMenu"
+               class="com.sap.abap.ai.completion.ui.AICompletionMainMenuContribution">
+         </dynamic>
       </menuContribution>
    </extension>
 

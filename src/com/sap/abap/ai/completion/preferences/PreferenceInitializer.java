@@ -51,5 +51,17 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
 
         store.setDefault(PreferenceConstants.PROMPT_CACHE_ENABLED,
                 PreferenceConstants.DEFAULT_PROMPT_CACHE_ENABLED);
+
+        // === SAP 连接配置(JCo) ===
+        store.setDefault(PreferenceConstants.SAP_HOST, "");
+        store.setDefault(PreferenceConstants.SAP_SYSTEM_NUMBER,
+                PreferenceConstants.DEFAULT_SAP_SYSTEM_NUMBER);
+        store.setDefault(PreferenceConstants.SAP_CLIENT,
+                PreferenceConstants.DEFAULT_SAP_CLIENT);
+        store.setDefault(PreferenceConstants.SAP_LANGUAGE,
+                PreferenceConstants.DEFAULT_SAP_LANGUAGE);
+        store.setDefault(PreferenceConstants.SAP_USER, "");
+        store.setDefault(PreferenceConstants.SAP_PASSWORD, "");
+        store.setDefault(PreferenceConstants.SAP_NATIVE_LIB_DIR, "");
     }
 }

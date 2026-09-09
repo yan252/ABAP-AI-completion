@@ -493,6 +493,46 @@ public final class AIConfiguration {
         return getStore().getBoolean(PreferenceConstants.PROMPT_CACHE_ENABLED);
     }
 
+    // === SAP Connection Settings (JCo) ===
+
+    /** SAP 应用服务器地址，如 "10.0.0.1" 或 "host.example.com"。 */
+    public static String getSapHost() {
+        return getStore().getString(PreferenceConstants.SAP_HOST);
+    }
+
+    /** SAP 系统编号，如 "00"。 */
+    public static String getSapSystemNumber() {
+        return getStore().getString(PreferenceConstants.SAP_SYSTEM_NUMBER);
+    }
+
+    /** SAP Client，如 "001"。 */
+    public static String getSapClient() {
+        return getStore().getString(PreferenceConstants.SAP_CLIENT);
+    }
+
+    /** 登录语言，如 "EN" / "ZH"。 */
+    public static String getSapLanguage() {
+        return getStore().getString(PreferenceConstants.SAP_LANGUAGE);
+    }
+
+    /** SAP 登录用户名。 */
+    public static String getSapUser() {
+        return getStore().getString(PreferenceConstants.SAP_USER);
+    }
+
+    /** SAP 登录密码。 */
+    public static String getSapPassword() {
+        return getStore().getString(PreferenceConstants.SAP_PASSWORD);
+    }
+
+    /**
+     * JCo native 库(sapjco3.dll / libsapjco3.so)所在目录。
+     * 可能为空字符串(表示由 OSGi fragment 自动加载 native 库)。
+     */
+    public static String getSapNativeLibDirectory() {
+        return getStore().getString(PreferenceConstants.SAP_NATIVE_LIB_DIR);
+    }
+
     // === Helpers ===
 
     private static RGB parseRgb(String rgbStr) {

@@ -214,7 +214,7 @@ Bundle-Version: 1.0.6
                   name='com.sap.abap.ai.completion'
                   version='1.0.6'/>
       </provides>
-      <requires size='8'>
+      <requires size='9'>
         <required namespace='osgi.bundle'
                   name='org.eclipse.ui' range='0.0.0'/>
         <required namespace='osgi.bundle'
@@ -231,6 +231,8 @@ Bundle-Version: 1.0.6
                   name='org.eclipse.ui.ide' range='0.0.0'/>
         <required namespace='osgi.bundle'
                   name='org.eclipse.swt' range='0.0.0'/>
+        <required namespace='osgi.bundle'
+                  name='com.sap.conn.jco' range='0.0.0'/>
       </requires>
       <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.6'/>
       <touchpointData size='1'>

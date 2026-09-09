@@ -26,7 +26,9 @@ $deps = @(
     "$p2Pool\org.eclipse.core.variables_*.jar"
     "$p2Pool\org.eclipse.core.expressions_*.jar"
     "$p2Pool\org.eclipse.core.filebuffers_*.jar"
+    "$p2Pool\org.eclipse.core.filesystem_*.jar"
     "$p2Pool\org.eclipse.core.jobs_*.jar"
+    "$p2Pool\com.sap.conn.jco_*.jar"
 )
 
 Write-Host "=== Cleaning old bin ==="
@@ -64,15 +66,19 @@ if (Test-Path "$proj\icons") {
     Copy-Item -Recurse "$proj\icons" "$bin\" -Force
 }
 
+# Copy references (模板参考目录) if exists
+if (Test-Path "$proj\references") {
+    Copy-Item -Recurse "$proj\references" "$bin\" -Force
+}
+
 Write-Host "=== Creating JAR with full plugin structure ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $jarExe = "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe"
 Push-Location $bin
-if (Test-Path "$bin\icons") {
-    & $jarExe cfm "$jarPath" "META-INF\MANIFEST.MF" plugin.xml com\ icons\
-} else {
-    & $jarExe cfm "$jarPath" "META-INF\MANIFEST.MF" plugin.xml com\
-}
+$jarArgs = @("cfm", "$jarPath", "META-INF\MANIFEST.MF", "plugin.xml", "com\")
+if (Test-Path "$bin\icons") { $jarArgs += "icons\" }
+if (Test-Path "$bin\references") { $jarArgs += "references\" }
+& $jarExe $jarArgs
 Pop-Location
 
 $size = (Get-Item "$jarPath").Length / 1KB
