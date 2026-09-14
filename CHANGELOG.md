@@ -8,21 +8,25 @@
 
 ---
 
-## [Unreleased]
+## [1.0.8] - 2026-09-14
 
 ### Added
 - **内联（类 Copilot）补全显示模式**：新增 `AICompletionInlineOverlay` 与公共抽象 `AICompletionOverlayBase`，可在配置页「Overlay Style → Completion display type」中选择补全代码的显示方式：
   - **1 - Dialog display（默认）**：以浮动弹窗形式展示（原有行为），新增鼠标/键盘交互完善（点击弹窗空白处接受、点击外部取消、Esc 取消、滚动条点击不误触）。
   - **2 - Inline display（内联幽灵文本）**：直接在编辑器光标处绘制与真实代码同字体同字号的幽灵文本（不真正插入文档），可用配置的补全字体颜色渲染；按 `Tab`/`Enter` 或点击提示文本处接受并插入，按其它任意键或点击编辑器外部取消。`AIOverlayManager` 统一通过 `AICompletionOverlayBase` 管理两种覆盖层的显示、定位与关闭，并修正了鼠标监听器清理逻辑。
+- **ABAP Git (abap-cli) 模板导入服务**：新增 `MultiTabTemplateImportService`，通过 `node abap-cli` 依次执行 `prog-xml-create` / `prog-xml-update` / `prog-source-push` / `prog-xml-push` / `prog-xml-verify` / `inspect` 六步完成模板程序导入（含对象重命名统计），替代旧的 JCo/RFC 上传函数。
 
 ### Changed
+- **SAP 配置「测试连接」改为 abapGit/abap-cli 方式**：不再校验旧的 RFC 函数 `Z_ABAPGIT_UPLOAD_FROM_XSTRING` 是否存在/是否远程启用，改为执行 `node abap-cli profile test <system>` 探测 `tls` / `auth` / `adt` 层（全 `ok` 即成功）；新增 `AbapCliConnectionTester` 负责环境检查、profile 解析（`~/.abap-cli/systems.json`，自动补齐 `.abap.json` 的 `system` 字段）、超时控制与输出解析。配置页 SAP 标签同步改为英文 `SAP Connection Config`。
 - **补全触发门控优化**：`AICompletionHandler` 中调整判断逻辑 —— 只要光标所在行内、光标之后存在非空白字符（行中间或行首）即直接退出补全，且不显示任何提示（包括状态栏提示）；只有光标位于行尾或空行时才触发 AI 代码补全。
 - **节点2/3 压缩截取日志标记**：`PromptCacheManager.compressContent` 在压缩结果超过配置设定的"工作区/上下文最大字符数"而触发截取时，诊断日志前缀打上 `[TRUNCATED]` 标记，并在日志中记录 `maxInputChars`（当前截取上限配置值），便于确认是否发生超长截取。
+- **模板导入流程改由 ABAP Git (abap-cli) 驱动**：模板 zip 改为随 jar 打包的 `references/ZTEMPLATE10.zip`，暂存到工作区 `_abap-cli-stage/` 后通过 `node abap-cli` 执行 prog-* 步骤导入，`Com.sap.conn.jco`（JCo）不再承担模板上传职责。
+- 插件版本号提升至 `1.0.8`（插件 JAR + p2 更新站点）。
 
 ### Fixed
 - **节点2/3 变量定义块压缩修复**：压缩 `DATA`/`TYPES`/`TABLES` 等多行变量定义时，按 ABAP 语句结束符 `.` 作为定义结束（`.` 后可能跟 `"` 行尾注释），整体保留从声明行起的全部字段行，不再把 `TYPES:`/`DATA:` 多行字段列表拆散、仅保留关键字行。同步修复：`AbapCodeTruncator` 引入声明语句块识别并补齐 `END OF` 结构行；`PromptCacheManager.containsSignEnd` 剥离 `"` 注释后再判断 `.`，避免注释中点号误判。
 - **补全前缀去重优化**：在 `dedupePrefixWithCodeBefore` 中，当剥掉与光标行重复的前缀后，补充 `.trim()`，去掉 AI 在重复前缀与后续内容（如注释引号后）之间多余的空白，使补全结果更干净（例如只输出 `客户名称` 而非 ` LV_KUNNR = '1111' ."客户名称`）（未测试通过）。
-- **配置页中增加显示插件版本号（未测试通过）
+- **配置页中增加显示插件版本号**：配置页底部展示插件当前版本（未测试通过）。
 
 ### Docs
 - 新增英文 `README.md` 与中文 `README_CN.md` 的对照同步：补齐介绍段中"本地 LLM / 企业内部使用 / 代码保密"的表述，并在"比 Copilot 的优势"中增加"本地 LLM 支持"与"完全开源、企业免费"两个条目。
@@ -110,7 +114,8 @@
 
 ---
 
-[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.8
 [1.0.6]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.6
 [1.0.5]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.5
 [1.0.4]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.4

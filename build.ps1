@@ -2,7 +2,7 @@ $proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $src = "$proj\src"
 $bin = "$proj\bin"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.0.6.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.0.8.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "C:\Users\96000217\.p2\pool\plugins"
@@ -35,7 +35,9 @@ Write-Host "=== Cleaning old bin ==="
 Remove-Item -Recurse -Force "$bin\com" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$bin\META-INF" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$bin\icons" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$bin\references" -ErrorAction SilentlyContinue
 Remove-Item -Force "$bin\plugin.xml" -ErrorAction SilentlyContinue
+Remove-Item -Force "$bin\templates.properties" -ErrorAction SilentlyContinue
 
 Write-Host "=== Compiling ==="
 $depPaths = ($deps | ForEach-Object { (Resolve-Path $_).Path }) -join ";"
@@ -71,6 +73,11 @@ if (Test-Path "$proj\references") {
     Copy-Item -Recurse "$proj\references" "$bin\" -Force
 }
 
+# Copy templates.properties (模板菜单与 zip 文件名映射配置) if exists
+if (Test-Path "$proj\templates.properties") {
+    Copy-Item "$proj\templates.properties" "$bin\" -Force
+}
+
 Write-Host "=== Creating JAR with full plugin structure ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $jarExe = "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe"
@@ -78,6 +85,7 @@ Push-Location $bin
 $jarArgs = @("cfm", "$jarPath", "META-INF\MANIFEST.MF", "plugin.xml", "com\")
 if (Test-Path "$bin\icons") { $jarArgs += "icons\" }
 if (Test-Path "$bin\references") { $jarArgs += "references\" }
+if (Test-Path "$bin\templates.properties") { $jarArgs += "templates.properties" }
 & $jarExe $jarArgs
 Pop-Location
 

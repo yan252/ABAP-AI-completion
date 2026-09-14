@@ -55,15 +55,6 @@ public final class AICompletionMenuBuilder {
             }
         });
 
-        MenuItem sapPrefsItem = new MenuItem(menu, SWT.PUSH);
-        sapPrefsItem.setText("SAP Connection Config...");
-        sapPrefsItem.addSelectionListener(new SelectionAdapter() {
-            @Override
-            public void widgetSelected(SelectionEvent e) {
-                openSapPreferences();
-            }
-        });
-
         new MenuItem(menu, SWT.SEPARATOR);
 
         final MenuItem enableItem = new MenuItem(menu, SWT.CHECK);
@@ -120,12 +111,27 @@ public final class AICompletionMenuBuilder {
 
         new MenuItem(menu, SWT.SEPARATOR);
 
-        // ==================== 模板 子菜单 ====================
-        // 每个子项对应 references/ 下的一个 zip 文件，
-        // 点击后通过 JCo 调用 RFC Z_ABAPGIT_UPLOAD_FROM_XSTRING 上传到 SAP 系统。
+        // ==================== Templates 子菜单 ====================
+        // Each child item corresponds to a zip file under references/,
+        // uploaded to SAP via RFC Z_ABAPGIT_UPLOAD_FROM_XSTRING.
+        // The "SAP Connection Config..." entry is placed at the top of this
+        // submenu, followed by a separator and then the template items.
         MenuItem templateItem = new MenuItem(menu, SWT.CASCADE);
-        templateItem.setText("模板");
+        templateItem.setText("Templates");
         Menu templateMenu = new Menu(templateItem);
+
+        // SAP Connection Config as the first (top) child of the Templates submenu
+        MenuItem sapPrefsItem = new MenuItem(templateMenu, SWT.PUSH);
+        sapPrefsItem.setText("SAP Connection Config...");
+        sapPrefsItem.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                openSapPreferences();
+            }
+        });
+
+        new MenuItem(templateMenu, SWT.SEPARATOR);
+
         for (final ABAPTemplateService.TemplateZipDef def
                 : ABAPTemplateService.getTemplateDefs()) {
             MenuItem item = new MenuItem(templateMenu, SWT.PUSH);
@@ -137,6 +143,18 @@ public final class AICompletionMenuBuilder {
                 }
             });
         }
+        // Multi-Tab Query Handler Template: imports ZTEMPLATE10.zip via abap-cli
+        // (stage directory + node), renaming ztemplate10 to the user-entered name.
+        new MenuItem(templateMenu, SWT.SEPARATOR);
+        final MenuItem multiTabItem = new MenuItem(templateMenu, SWT.PUSH);
+        multiTabItem.setText("Multi-Tab Query Handler Template");
+        multiTabItem.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                MultiTabTemplateImportService.runImport();
+            }
+        });
+
         templateItem.setMenu(templateMenu);
 
         new MenuItem(menu, SWT.SEPARATOR);

@@ -17,7 +17,7 @@
             id="com.sap.abap.ai.completion.preferencePage.sap"
             category="com.sap.abap.ai.completion.preferencePage"
             class="com.sap.abap.ai.completion.preferences.SapPreferencePage"
-            name="SAP 配置">
+            name="SAP Connection Config">
       </page>
    </extension>
 

@@ -3,7 +3,7 @@ $jar = "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre
 $targets = @(
   "D:\Users\96000217\eclipse\plugins\com.sap.abap.ai.completion_1.0.5.jar",
   "D:\Users\96000217\eclipse\plugins\com.sap.abap.ai.completion_1.0.6.jar",
-  "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\dist\com.sap.abap.ai.completion_1.0.6.jar"
+  "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\dist\com.sap.abap.ai.completion_1.0.8.jar"
 )
 foreach ($j in $targets) {
   Write-Host "=== $j ==="
