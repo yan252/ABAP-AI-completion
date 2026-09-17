@@ -8,6 +8,14 @@
 
 ---
 
+## [1.0.11] - 2026-09-17
+
+### Changed
+- **模板导入彻底改由 ABAP Git (abap-cli) 驱动**：删除遗留的 RFC/JCo 单次上传实现 —— `AbapGITUploadService`、`ABAPTemplateService` 与 `templates.properties` 均从代码库移除；`AICompletionMenuBuilder` 的 Templates 子菜单不再遍历旧的模板 zip 定义，只保留 `Multi-Tab Query Handler Template`（由 `MultiTabTemplateImportService` 通过 `node abap-cli` 导入到工作区）。
+- 插件版本号提升至 `1.0.11`（插件 JAR + p2 更新站点）。
+
+---
+
 ## [1.0.8] - 2026-09-14
 
 ### Added
@@ -114,7 +122,8 @@
 
 ---
 
-[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/yan252/ABAP-AI-completion/compare/v1.0.11...HEAD
+[1.0.11]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.11
 [1.0.8]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.8
 [1.0.6]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.6
 [1.0.5]: https://github.com/yan252/ABAP-AI-completion/releases/tag/v1.0.5
