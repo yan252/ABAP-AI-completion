@@ -526,6 +526,15 @@ public final class AIConfiguration {
     }
 
     /**
+     * abap-cli(abapGit)连接 URL，如 "https://s4devapp.app.com.cn:1443"。
+     * 可能为空字符串(表示"Test Connection"与模板导入都回退到
+     * {@code ~/.abap-cli/systems.json} 里已有的 profile)。
+     */
+    public static String getSapAbapCliUrl() {
+        return getStore().getString(PreferenceConstants.SAP_ABAP_CLI_URL);
+    }
+
+    /**
      * JCo native 库(sapjco3.dll / libsapjco3.so)所在目录。
      * 可能为空字符串(表示由 OSGi fragment 自动加载 native 库)。
      */

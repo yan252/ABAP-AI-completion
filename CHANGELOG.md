@@ -8,6 +8,23 @@
 
 ---
 
+## [1.0.19] - 2026-09-18
+
+### Changed
+- **模板导入结果只做三态汇总**：`Simple Query Handler Template` 导入结束后，结果对话框只显示 `SUCCESS` / `FAILED` / `PARTIALLY FAILED`（含 Package / Program / Transport 与日志文件位置），不再展开步骤明细、对象类型核对与 Check 提示；三种结论分别对应信息 / 错误 / 警告对话框。
+- **导入明细逐行写入 Eclipse Error Log**：每一步骤、每一条提示都以一条独立记录写入 `Window → Show View → Error Log`，便于逐条查看与筛选；级别随步骤结果动态取 `ERROR` / `WARNING` / `INFO`。
+- **导入明细同时落盘到插件 state area**：新增插件自有日志文件 `<workspace>/.metadata/.plugins/com.sap.abap.ai.completion/import_<程序名>_<时间戳>.log`，与 Error Log 内容一致（每行带 `INFO/WARNING/ERROR` 前缀），避免只能在 Error Log 视图里翻找。
+- **修正 Error Log 中含糊的路径提示**：原来只输出 `…\_abap-cli-stage\_simple_query_handler_*.txt` 一行，易被误认为插件日志；现明确说明这些是 abap-cli 自身写出的各步骤原始输出文件（排错用，非插件日志），并给出目录、abap-cli 连接 profile 位置以及本次插件日志文件路径。
+- 插件版本号提升至 `1.0.19`（插件 JAR + p2 更新站点）。
+
+### Fixed
+- **对象被锁不再判定为导入失败**：abap-cli 报 `Object is locked by another user` / `locked in request …` 时，仅把该步骤标记为警告（`PARTIALLY FAILED`），其余对象仍视为导入成功，不再因锁冲突把整体结果置为 `FAILED`。
+
+### Removed
+- 删除 Templates 子菜单中重复出现的 `菜单查询处理程序模板` 菜单项及其处理程序，只保留 `Simple Query Handler Template`。
+
+---
+
 ## [1.0.11] - 2026-09-17
 
 ### Changed

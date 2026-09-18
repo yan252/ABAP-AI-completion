@@ -48,6 +48,17 @@ public final class AbapCliConnectionTester {
     /** 连接成功所必需的核心探测层。 */
     private static final List<String> REQUIRED_LAYERS = List.of("tls", "auth", "adt");
 
+    /**
+     * 直连探测脚本名（位于 abap-cli stage 根目录）。
+     *
+     * <p>abap-cli CLI 的 {@code profile test} 只认
+     * {@code ~/.abap-cli/systems.json} + 系统钥匙串里的 profile，不允许用命令行
+     * 覆盖 url / 用户名 / 密码。而"SAP 配置"页的 URL / Client / User / Password
+     * 是页面上填写的信息，因此用这个独立脚本在进程内复刻同一套探测逻辑
+     * （tls → auth → adt → icf），输出同样的人读格式供 {@link #parseLayers} 解析。</p>
+     */
+    private static final String PROBE_SCRIPT_NAME = "_probe_direct.mjs";
+
     /** {@code .abap.json} 中 "system" 字段的提取正则。 */
     private static final Pattern SYSTEM_FIELD =
             Pattern.compile("\"system\"\\s*:\\s*\"([^\"]+)\"");
@@ -167,6 +178,128 @@ public final class AbapCliConnectionTester {
         return new Result(ok, system, summary.toString(),
                 "abap-cli profile test '" + system + "' (exit=" + exitCode + ")\n\n"
                         + tailLines(output, 20));
+    }
+
+    /**
+     * 用"SAP 配置"页上填写的连接信息直接做 abapGit（abap-cli 同款）连接测试。
+     *
+     * <p>不读 {@code ~/.abap-cli/systems.json}、不读系统钥匙串、不走 JCo：
+     * 在 abap-cli stage 目录下运行 {@code node _probe_direct.mjs --url=... --client=...
+     * --username=... --password=... --language=... --insecure=1}，该脚本用
+     * abap-adt-api 依次探测 tls / auth / adt / icf，输出与人读格式一致的行。</p>
+     *
+     * @param url      abap-cli URL，如 {@code https://s4devapp.app.com.cn:1443}
+     *                 （缺 scheme 时自动补 {@code https://}）
+     * @param client   SAP Client，如 {@code 150}
+     * @param user     SAP 用户名
+     * @param password SAP 密码
+     * @param language 登录语言，如 {@code EN}
+     * @return 测试结果（不会抛出异常，所有失败都通过 {@link Result#success}
+     *         与 {@link Result#detail} 表达）
+     */
+    public static Result testConnection(String url, String client, String user,
+                                        String password, String language) {
+        // ===== [1] URL 必填校验 / 规范化 =====
+        final String target;
+        try {
+            target = normalizeRequiredUrl(url);
+        } catch (IllegalArgumentException iae) {
+            return new Result(false, "", "", iae.getMessage());
+        }
+
+        // ===== [2] 环境检查（stage 目录 + 探测脚本 + node） =====
+        Path stageRoot = Paths.get(
+                com.sap.abap.ai.completion.ui.MultiTabTemplateImportService.STAGE_DIR)
+                .toAbsolutePath().normalize();
+        String envError = checkEnvironment();
+        if (envError != null) {
+            return new Result(false, target, "", envError);
+        }
+        Path probeScript = stageRoot.resolve(PROBE_SCRIPT_NAME);
+        if (!Files.isRegularFile(probeScript)) {
+            return new Result(false, target, "",
+                    "Probe script location:\n  " + probeScript
+                            + "\n\nFile not found. Please copy " + PROBE_SCRIPT_NAME
+                            + " into the abap-cli stage directory.");
+        }
+
+        // ===== [3] 运行 node _probe_direct.mjs =====
+        List<String> cmd = new ArrayList<>();
+        cmd.add("node");
+        cmd.add(probeScript.toString());
+        cmd.add("--url=" + target);
+        cmd.add("--client=" + nullToEmpty(client));
+        cmd.add("--username=" + nullToEmpty(user));
+        cmd.add("--password=" + nullToEmpty(password));
+        cmd.add("--language=" + nullToEmpty(language));
+        cmd.add("--insecure=1");
+
+        List<String> output;
+        int exitCode;
+        try {
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.directory(stageRoot.toRealPath().toFile());
+            pb.redirectErrorStream(true);
+            Map<String, String> env = pb.environment();
+            String canonicalHome = Paths.get(System.getProperty("user.home")).toRealPath().toString();
+            env.put("HOME", canonicalHome);
+            env.put("USERPROFILE", canonicalHome);
+            env.put("NODE_TLS_REJECT_UNAUTHORIZED", "0");
+
+            Process p = pb.start();
+            output = readProcessOutput(p, TIMEOUT_SEC);
+            exitCode = p.exitValue();
+        } catch (Exception e) {
+            return new Result(false, target, "",
+                    "Failed to run " + PROBE_SCRIPT_NAME + ":\n"
+                            + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+
+        // ===== [4] 解析各层结果 =====
+        Map<String, String> layers = parseLayers(output);
+        if (layers.isEmpty()) {
+            return new Result(false, target, "",
+                    PROBE_SCRIPT_NAME + " did not run (exit=" + exitCode
+                            + ").\n\nOutput:\n" + tailLines(output, 15));
+        }
+
+        boolean ok = true;
+        for (String layer : REQUIRED_LAYERS) {
+            if (!"ok".equals(layers.get(layer))) {
+                ok = false;
+            }
+        }
+        StringBuilder summary = new StringBuilder();
+        for (Map.Entry<String, String> e : new TreeMap<>(layers).entrySet()) {
+            if (summary.length() > 0) {
+                summary.append(", ");
+            }
+            summary.append(e.getKey()).append('=').append(e.getValue());
+        }
+
+        return new Result(ok, target, summary.toString(),
+                " Connection probe '" + target + "' (exit=" + exitCode + ")\n\n"
+                        + tailLines(output, 20));
+    }
+
+    /**
+     * 校验并规范化 abap-cli URL：空白即报错；缺 {@code http(s)://} 前缀时补
+     * {@code https://}。
+     */
+    private static String normalizeRequiredUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            throw new IllegalArgumentException("No abap-cli URL given.\n"
+                    + "Please fill in the 'abap-cli URL' field before testing the connection.");
+        }
+        String u = url.trim();
+        if (!u.matches("(?i)^https?://.*")) {
+            u = "https://" + u;
+        }
+        return u;
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     // ====================================================================

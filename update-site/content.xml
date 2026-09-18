@@ -4,16 +4,16 @@
             type='org.eclipse.equinox.p2.metadata.repository.simpleRepository'
             version='1'>
   <properties size='2'>
-    <property name='p2.timestamp' value='1789614713225'/>
+    <property name='p2.timestamp' value='1789698087265'/>
     <property name='p2.compressed' value='true'/>
   </properties>
   <units size='2'>
 
     <!-- Feature (group) IU -->
     <unit id='com.sap.abap.ai.completion.feature.feature.group'
-          version='1.0.11' singleton='false'>
+          version='1.0.19' singleton='false'>
       <update id='com.sap.abap.ai.completion.feature.feature.group'
-              range='[0.0.0,1.0.11]' severity='0'/>
+              range='[0.0.0,1.0.19]' severity='0'/>
       <properties size='4'>
         <property name='org.eclipse.equinox.p2.name'
                   value='ABAP AI Completion Feature'/>
@@ -27,22 +27,22 @@
       <provides size='2'>
         <provided namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion.feature.feature.group'
-                  version='1.0.11'/>
+                  version='1.0.19'/>
         <provided namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion.feature.feature.jar'
-                  version='1.0.11'/>
+                  version='1.0.19'/>
       </provides>
       <requires size='1'>
         <required namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion'
-                  range='[1.0.11,1.0.11]'/>
+                  range='[1.0.19,1.0.19]'/>
       </requires>
-      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.11'/>
+      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.19'/>
       <touchpointData size='1'>
         <instructions size='1'>
           <instruction key='manifest'>
             Bundle-SymbolicName: com.sap.abap.ai.completion.feature; singleton:=true
-Bundle-Version: 1.0.11
+Bundle-Version: 1.0.19
           </instruction>
         </instructions>
       </touchpointData>
@@ -50,9 +50,9 @@ Bundle-Version: 1.0.11
 
     <!-- Plugin (bundle) IU -->
     <unit id='com.sap.abap.ai.completion'
-          version='1.0.11' singleton='false'>
+          version='1.0.19' singleton='false'>
       <update id='com.sap.abap.ai.completion'
-              range='[0.0.0,1.0.11]' severity='0'/>
+              range='[0.0.0,1.0.19]' severity='0'/>
       <properties size='3'>
         <property name='org.eclipse.equinox.p2.name'
                   value='ABAP AI Completion'/>
@@ -64,7 +64,7 @@ Bundle-Version: 1.0.11
       <provides size='1'>
         <provided namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion'
-                  version='1.0.11'/>
+                  version='1.0.19'/>
       </provides>
       <requires size='9'>
         <required namespace='osgi.bundle'
@@ -86,12 +86,12 @@ Bundle-Version: 1.0.11
         <required namespace='osgi.bundle'
                   name='com.sap.conn.jco' range='0.0.0'/>
       </requires>
-      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.11'/>
+      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.19'/>
       <touchpointData size='1'>
         <instructions size='1'>
           <instruction key='manifest'>
             Bundle-SymbolicName: com.sap.abap.ai.completion
-Bundle-Version: 1.0.11
+Bundle-Version: 1.0.19
           </instruction>
         </instructions>
       </touchpointData>

@@ -63,6 +63,16 @@ public final class PreferenceConstants {
     // === Prompt Cache ===
     public static final String PROMPT_CACHE_ENABLED = "promptCacheEnabled";
 
+    // === SAP Connection Settings ===
+    /**
+     * abap-cli(abapGit)连接 URL(可选)，如 https://s4devapp.app.com.cn:1443。
+     *
+     * <p>填写后，"Test Connection" 直接用它做 abapGit 方式探测，模板导入也会把
+     * 它写进 abap-cli 的 {@code ~/.abap-cli/systems.json} profile（临时套用、导入后回滚）。
+     * 留空则回退到 systems.json 里已有的 profile。</p>
+     */
+    public static final String SAP_ABAP_CLI_URL = "sapAbapCliUrl";
+
     // === SAP Connection Settings (JCo) ===
     /** SAP 应用服务器地址(如 10.0.0.1 或 host.example.com)。 */
     public static final String SAP_HOST = "sapHost";
@@ -84,6 +94,8 @@ public final class PreferenceConstants {
     public static final String DEFAULT_SAP_SYSTEM_NUMBER = "00";
     public static final String DEFAULT_SAP_CLIENT = "001";
     public static final String DEFAULT_SAP_LANGUAGE = "EN";
+    /** abap-cli URL 默认为空(留空则回退到 ~/.abap-cli/systems.json 里的 profile)。 */
+    public static final String DEFAULT_SAP_ABAP_CLI_URL = "";
 
     // === Default Values ===
     public static final String DEFAULT_API_BASE_URL = "https://api.openai.com/v1";

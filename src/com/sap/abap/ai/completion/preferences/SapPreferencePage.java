@@ -23,21 +23,19 @@ import com.sap.abap.ai.completion.sap.AbapCliConnectionTester;
 import com.sap.abap.ai.completion.sap.SapConnectionManager;
 
 /**
- * “SAP 配置”偏好页：配置 JCo 调用 SAP 系统所需的连接信息
- * (应用服务器、系统编号、Client、语言、用户、密码)，
- * 以及可选的 JCo native 库(sapjco3.dll / libsapjco3.so)所在目录。
+ * “SAP 配置”偏好页：配置 abapGit（abap-cli）连接 URL —— 供 “Test Connection”
+ * 与模板导入使用；下方保留遗留 JCo 字段（应用服务器号码、Client、语言、用户、密码），
+ * 仅供基于 RFC 的 “Templates” 菜单使用，另可配置可选的 JCo native 库目录。
  *
  * <p>保存后调用 {@link SapConnectionManager#refreshDestination()} 使新配置立即生效。</p>
  *
- * <p><b>测试连接</b>：SAP 程序导入已改为 abapGit（abap-cli）方式，
- * 因此“Test Connection”改为运行 {@code node abap-cli profile test &lt;system&gt;}
- * 逐层探测 tls / auth / adt 等（见 {@link AbapCliConnectionTester}），
- * 不再校验原 RFC 函数 {@code Z_ABAPGIT_UPLOAD_FROM_XSTRING} 是否存在或远程启用。
- * 上方的 JCo 连接字段仅供遗留的 RFC 上传菜单（Templates 子菜单前半部分）使用。</p>
+ * <p><b>测试连接</b>：使用页面顶部的 abap-cli URL，按 abapGit（abap-cli）方式探测
+ * tls / auth / adt 等分层（见 {@link AbapCliConnectionTester}）。
+ * 不涉及 JCo，也不读取 {@code ~/.abap-cli/systems.json} 中的 profile。</p>
  */
 public class SapPreferencePage extends PreferencePage implements IWorkbenchPreferencePage {
 
-    private Text txtHost;
+    private Text txtAbapCliUrl;
     private Text txtSystemNumber;
     private Text txtClient;
     private Text txtLanguage;
@@ -50,13 +48,11 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
 
     public SapPreferencePage() {
         super("SAP Connection Config");
-        setDescription("Configure the JCo connection to the SAP system (used by the legacy "
-                + "RFC-based \"Templates\" menu items), and test the abapGit (abap-cli) "
-                + "connection used by the template import.\n\n"
-                + "Note: The template import now runs via abapGit / abap-cli "
-                + "(node abap-cli, credentials in ~/.abap-cli/systems.json). "
-                + "\"Test Connection\" probes that abap-cli profile; it no longer "
-                + "checks for the RFC function Z_ABAPGIT_UPLOAD_FROM_XSTRING.");
+        setDescription("Configure the abapGit (abap-cli) connection URL used by \"Test Connection\" "
+                + "and the template import, plus the legacy JCo fields used by the RFC-based "
+                + "\"Templates\" menu items.\n\n"
+                + "Note: \"Test Connection\" uses the abap-cli URL at the top and probes it via the "
+                + "abapGit (abap-cli) approach -- no JCo, no ~/.abap-cli/systems.json profile involved.");
     }
 
     @Override
@@ -87,8 +83,8 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-        createLabel(g, "Application Server:");
-        txtHost = createText(g);
+        createLabel(g, "abap-cli URL (Optional):");
+        txtAbapCliUrl = createText(g);
 
         createLabel(g, "System Number:");
         txtSystemNumber = createText(g);
@@ -146,16 +142,14 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("- Template import now uses the abapGit (abap-cli) approach:\n"
-                + "  node abap-cli runs the prog-* extension steps from the stage\n"
-                + "  directory against the SAP system configured in\n"
-                + "  ~/.abap-cli/systems.json (password kept in the OS keychain).\n"
-                + "- \"Test Connection\" runs 'abap-cli profile test <system>' and\n"
-                + "  probes tls / auth / adt (and icf / capabilities as extra info).\n"
-                + "  It does NOT check for the RFC function Z_ABAPGIT_UPLOAD_FROM_XSTRING\n"
-                + "  any more (that check belongs to the legacy JCo/RFC upload path).\n"
-                + "- The JCo fields above are only used by the legacy RFC-based\n"
-                + "  \"Templates\" menu items.");
+        note.setText("- Template import now uses the abapGit (abap-cli) approach from the\n"
+                + "  stage directory (node abap-cli + prog-* extensions).\n"
+                + "- \"Test Connection\" uses the abap-cli URL at the top (e.g.\n"
+                + "  https://s4devapp.app.com.cn:1443) and probes tls / auth / adt.\n"
+                + "  It never touches JCo or ~/.abap-cli/systems.json.\n"
+                + "- The JCo fields below are only used by the legacy RFC-based \"Templates\"\n"
+                + "  menu items. The Application Server field has been removed; the abapGit\n"
+                + "  test / import no longer derives a URL from host + system number.");
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.verticalSpan = 1;
         nd.widthHint = 500;
@@ -165,7 +159,7 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
     // ==================== Data Loading/Saving ====================
 
     private void loadValues() {
-        txtHost.setText(store.getString(PreferenceConstants.SAP_HOST));
+        txtAbapCliUrl.setText(store.getString(PreferenceConstants.SAP_ABAP_CLI_URL));
         txtSystemNumber.setText(store.getString(PreferenceConstants.SAP_SYSTEM_NUMBER));
         txtClient.setText(store.getString(PreferenceConstants.SAP_CLIENT));
         txtLanguage.setText(store.getString(PreferenceConstants.SAP_LANGUAGE));
@@ -175,7 +169,7 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
     }
 
     private void saveValues() {
-        store.setValue(PreferenceConstants.SAP_HOST, txtHost.getText().trim());
+        store.setValue(PreferenceConstants.SAP_ABAP_CLI_URL, txtAbapCliUrl.getText().trim());
         store.setValue(PreferenceConstants.SAP_SYSTEM_NUMBER, txtSystemNumber.getText().trim());
         store.setValue(PreferenceConstants.SAP_CLIENT, txtClient.getText().trim());
         store.setValue(PreferenceConstants.SAP_LANGUAGE, txtLanguage.getText().trim());
@@ -194,7 +188,7 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
 
     @Override
     protected void performDefaults() {
-        txtHost.setText("");
+        txtAbapCliUrl.setText(PreferenceConstants.DEFAULT_SAP_ABAP_CLI_URL);
         txtSystemNumber.setText(PreferenceConstants.DEFAULT_SAP_SYSTEM_NUMBER);
         txtClient.setText(PreferenceConstants.DEFAULT_SAP_CLIENT);
         txtLanguage.setText(PreferenceConstants.DEFAULT_SAP_LANGUAGE);
@@ -208,23 +202,36 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
     /**
      * abapGit（abap-cli）方式测试连接。
      *
-     * <p>运行 {@code node abap-cli profile test <system>}（后台线程），
-     * 逐层探测 tls / auth / adt 等；tls+auth+adt 全部 ok 即视为成功。
-     * 不再校验原 RFC 函数 {@code Z_ABAPGIT_UPLOAD_FROM_XSTRING}
-     * 是否存在 / 是否远程启用（导入已不走该函数）。</p>
+     * <p>使用页面顶部的 abap-cli URL（如 https://s4devapp.app.com.cn:1443），
+     * 在后台线程逐层探测 tls / auth / adt 等；tls+auth+adt 全部 ok 即视为成功。
+     * 不涉及 JCo，也不使用 {@code ~/.abap-cli/systems.json} 中的 profile。</p>
      */
     private void testConnection() {
+        final String url = txtAbapCliUrl.getText().trim();
+        if (url.isEmpty()) {
+            setTestResult("FAILED: please fill in the abap-cli URL", SWT.COLOR_RED);
+            MessageDialog.openError(getShell(), "abapGit Connection Test Failed",
+                    "Please fill in the 'abap-cli URL' field before testing the connection.");
+            return;
+        }
+        final String client = txtClient.getText().trim();
+        final String user = txtUser.getText().trim();
+        final String password = txtPassword.getText().trim();
+        final String language = txtLanguage.getText().trim();
+
         setTestResult("Testing abapGit (abap-cli) connection...", SWT.COLOR_BLUE);
 
         new Thread(() -> {
-            AbapCliConnectionTester.Result r = AbapCliConnectionTester.testConnection();
+            AbapCliConnectionTester.Result r = AbapCliConnectionTester.testConnection(
+                    url, client, user, password, language);
             Display.getDefault().asyncExec(() -> {
                 if (r.success) {
                     setTestResult("SUCCESS: abapGit connection OK (" + r.layersSummary + ")",
                             SWT.COLOR_DARK_GREEN);
                     MessageDialog.openInformation(getShell(),
                             "abapGit Connection Test Succeeded",
-                            "abap-cli connection to system '" + r.systemName + "' succeeded.\n\n"
+                            "abapGit (abap-cli) connection succeeded.\n\n"
+                                    + "Target: " + url + "\n\n"
                                     + "Layers: " + r.layersSummary + "\n\n"
                                     + "Details:\n" + r.detail);
                 } else {
@@ -234,8 +241,8 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
                             "abapGit (abap-cli) connection test failed: " + r.detail, null));
                     MessageDialog.openError(getShell(),
                             "abapGit Connection Test Failed",
-                            "abap-cli connection test failed"
-                                    + (r.systemName.isEmpty() ? "" : " (system '" + r.systemName + "')")
+                            "abapGit (abap-cli) connection test failed"
+                                    + (url.isEmpty() ? "" : " (target '" + url + "')")
                                     + ".\n\n" + r.detail
                                     + "\n\nSee Window -> Show View -> Error Log for details.");
                 }

@@ -130,10 +130,10 @@ public final class AICompletionMenuBuilder {
 
         new MenuItem(templateMenu, SWT.SEPARATOR);
 
-        // Multi-Tab Query Handler Template: imports ZTEMPLATE10.zip via abap-cli
+        // Simple Query Handler Template: imports ZTEMPLATE10.zip via abap-cli
         // (stage directory + node), renaming ztemplate10 to the user-entered name.
         final MenuItem multiTabItem = new MenuItem(templateMenu, SWT.PUSH);
-        multiTabItem.setText("Multi-Tab Query Handler Template");
+        multiTabItem.setText("Simple Query Handler Template");
         multiTabItem.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
