@@ -1441,7 +1441,8 @@ public final class MultiTabTemplateImportService {
             emit(fileLines, sev, sb.toString());
         }
         emit(fileLines, overallSev, r.overallRc == 0
-                ? "  Overall: OK" : "  Overall: FAILED (exit=" + r.overallRc + ")");
+                ? "  Overall: OK"
+                : "  Overall: FAILED (exit=" + r.overallRc + ")");
 
         // 对象锁（ENQUEUE）只作告警：被锁的通常只是个别对象，其余对象已成功导入。
         boolean anyLock = false;

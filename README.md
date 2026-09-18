@@ -10,6 +10,10 @@
 
 An AI-powered code completion plugin for SAP ABAP developers, built for Eclipse. Based on Large Language Models (LLM), it pursues ultimate privacy and data security, supports local LLMs for in-house/enterprise use, preventing corporate code from being uploaded to the Internet to guarantee code confidentiality, and provides intelligent code suggestions and auto-completion while writing ABAP code.
 
+### Token Usage for Code Completion
+- **1.** Token consumption is minimal when using only the current program or open editor as context — typically a few hundred tokens. With DeepSeek priced at $0.04 per million tokens, one dollar can cover ~25,000 completions (output tokens are negligible).
+- **2.** Free model tiers are also viable; I tested [agnes-2.5-flash](https://agnes-ai.cn/) free model and found it works well.
+
 ### Advantages over Copilot
 - **✅ Local LLM support**: A local LLM can be used for in-house/enterprise use, preventing corporate code from being uploaded to the Internet to guarantee code confidentiality.
 - **✅ Fully open source, free for enterprise use**: This plugin is completely open source and free for enterprise use, with no fees required, and you can use it with peace of mind.
