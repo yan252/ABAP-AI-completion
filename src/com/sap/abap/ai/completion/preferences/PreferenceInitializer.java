@@ -52,6 +52,10 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         store.setDefault(PreferenceConstants.PROMPT_CACHE_ENABLED,
                 PreferenceConstants.DEFAULT_PROMPT_CACHE_ENABLED);
 
+        // === AI Multi-Connection Settings ===
+        store.setDefault(PreferenceConstants.AI_CONNECTIONS, "");
+        store.setDefault(PreferenceConstants.AI_DEFAULT_CONNECTION_NAME, "");
+
         // === SAP 连接配置(JCo) ===
         store.setDefault(PreferenceConstants.SAP_HOST, "");
         store.setDefault(PreferenceConstants.SAP_SYSTEM_NUMBER,

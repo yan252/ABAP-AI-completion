@@ -10,12 +10,18 @@ public final class PreferenceConstants {
     private PreferenceConstants() {
     }
 
-    // === AI Connection Settings ===
+    // === AI Connection Settings (Legacy single-connection keys - kept for backward compat) ===
     public static final String API_BASE_URL = "aiApiBaseUrl";
     public static final String API_MODEL = "aiApiModel";
     public static final String API_KEY = "aiApiKey";
     public static final String MAX_TOKENS = "aiMaxTokens";
     public static final String TEMPERATURE = "aiTemperature";
+
+    // === AI Multi-Connection Settings ===
+    /** 已保存的 AI 连接列表，JSON 数组字符串，每项含 name/baseUrl/model/apiKey/maxTokens/temperature/isDefault */
+    public static final String AI_CONNECTIONS = "aiConnections";
+    /** 当前默认 AI 连接的 name（用于快速查找）；为空时从列表中取 isDefault=true 的条目 */
+    public static final String AI_DEFAULT_CONNECTION_NAME = "aiDefaultConnectionName";
 
     // === Feature Switches ===
     public static final String PLUGIN_ENABLED = "pluginEnabled";
@@ -98,9 +104,9 @@ public final class PreferenceConstants {
     public static final String DEFAULT_SAP_ABAP_CLI_URL = "";
 
     // === Default Values ===
-    public static final String DEFAULT_API_BASE_URL = "https://api.openai.com/v1";
-    public static final String DEFAULT_API_MODEL = "gpt-4";
-    public static final String DEFAULT_MAX_TOKENS = "256";
+    public static final String DEFAULT_API_BASE_URL = "https://api.deepseek.com";
+    public static final String DEFAULT_API_MODEL = "deepseek-flash";
+    public static final String DEFAULT_MAX_TOKENS = "240640";
     public static final String DEFAULT_TEMPERATURE = "0.3";
     public static final boolean DEFAULT_PLUGIN_ENABLED = true;
     public static final boolean DEFAULT_AUTO_COMPLETION_ENABLED = false;

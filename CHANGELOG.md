@@ -8,6 +8,26 @@
 
 ---
 
+## [1.1.0] - 2026-09-20
+
+### Added
+- **支持配置多个 AI 连接**：新增独立配置页 `AI Connections`（位于 `ABAP AI Completion` 一级下、`SAP Connection Config` 之前），左侧为 AI 连接列表，可选中其中任意一个；双击连接名称在右侧显示该连接的详细信息。
+- **新增 `AI Connection Name` 字段**：用于在左侧列表中标识各连接。
+- **新增 `Set as Default` 按钮**：把右侧当前显示的连接设为插件使用的默认 AI，并在左侧列表连接名后追加 `(Default)` 标识。
+- 新增 `Add` / `Remove` / `Clear` 按钮用于维护连接列表；至少保留一个连接，删除默认连接时自动把列表中第一个连接提升为默认。
+- 新增 `AIConnectionEntry` 数据模型，连接列表以 JSON 形式保存在偏好项 `aiConnections` 中；首次启动时自动把旧的单连接配置（`API Base URL` / `Model` / `API Key` / `Max Tokens` / `Temperature`）迁移为名为 `Default` 的默认连接。
+
+### Changed
+- **AI 连接配置从主页面迁出**：`ABAP AI Completion` 主配置页不再包含 AI 连接表单，只保留功能、自动补全、提示词、样式与日志等设置；`AIConfiguration` 改为统一从默认连接读取 Base URL / Model / API Key / Max Tokens / Temperature。
+- **`Test Connection` 保留在 `AI Connections` 页**，测试的是右侧当前显示的连接。
+- **`Apply` 后同步左侧列表**：点击 `Apply` 会保存修改并立即刷新左侧列表中显示的 AI 名称（改名后同样生效）。
+- 插件版本号提升至 `1.1.0`（插件 JAR + p2 更新站点）。
+
+### Removed
+- 删除 `AI Connections` 配置页的 `Restore Defaults` 按钮及其功能（连接列表由用户自行维护）。
+
+---
+
 ## [1.0.19] - 2026-09-18
 
 ### Changed

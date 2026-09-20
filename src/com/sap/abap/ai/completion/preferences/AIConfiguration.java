@@ -15,23 +15,23 @@ public final class AIConfiguration {
     private AIConfiguration() {
     }
 
-    // === Connection Settings ===
+    // === Connection Settings (read from default AI connection) ===
 
     public static String getApiBaseUrl() {
-        return getStore().getString(PreferenceConstants.API_BASE_URL);
+        return getActiveConnection().baseUrl;
     }
 
     public static String getModel() {
-        return getStore().getString(PreferenceConstants.API_MODEL);
+        return getActiveConnection().model;
     }
 
     public static String getApiKey() {
-        return getStore().getString(PreferenceConstants.API_KEY);
+        return getActiveConnection().apiKey;
     }
 
     public static int getMaxTokens() {
         try {
-            return Integer.parseInt(getStore().getString(PreferenceConstants.MAX_TOKENS));
+            return Integer.parseInt(getActiveConnection().maxTokens);
         } catch (NumberFormatException e) {
             return Integer.parseInt(PreferenceConstants.DEFAULT_MAX_TOKENS);
         }
@@ -39,10 +39,34 @@ public final class AIConfiguration {
 
     public static double getTemperature() {
         try {
-            return Double.parseDouble(getStore().getString(PreferenceConstants.TEMPERATURE));
+            return Double.parseDouble(getActiveConnection().temperature);
         } catch (NumberFormatException e) {
             return Double.parseDouble(PreferenceConstants.DEFAULT_TEMPERATURE);
         }
+    }
+
+    /**
+     * 获取当前默认（活跃）AI 连接条目。
+     * 优先使用 {@link PreferenceConstants#AI_DEFAULT_CONNECTION_NAME} 指定的连接；
+     * 若未指定或找不到，则回退到列表中 isDefault=true 的条目；
+     * 均无则新建一个空默认条目（确保 AIClient 调用不抛异常）。
+     */
+    public static AIConnectionEntry getActiveConnection() {
+        IPreferenceStore store = getStore();
+        String defaultName = store.getString(PreferenceConstants.AI_DEFAULT_CONNECTION_NAME);
+        java.util.List<AIConnectionEntry> entries = AIConnectionEntry.loadAll(store);
+        if (defaultName != null && !defaultName.isEmpty()) {
+            AIConnectionEntry found = AIConnectionEntry.findBy_name(entries, defaultName);
+            if (found != null) return found;
+        }
+        for (AIConnectionEntry e : entries) {
+            if (e.isDefault) return e;
+        }
+        // 无条目则返回空默认条目（向后兼容）
+        AIConnectionEntry def = new AIConnectionEntry();
+        def.name = "Default";
+        def.isDefault = true;
+        return def;
     }
 
     // === Feature Switches ===

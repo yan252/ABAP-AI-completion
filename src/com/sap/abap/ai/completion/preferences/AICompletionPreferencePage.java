@@ -13,7 +13,6 @@ import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.DirectoryDialog;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Spinner;
@@ -22,20 +21,18 @@ import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
 
 import com.sap.abap.ai.completion.Activator;
-import com.sap.abap.ai.completion.client.AIClient;
-import com.sap.abap.ai.completion.client.AIClientException;
 
 /**
  * Preference page for ABAP AI Completion.
  * Manually built UI (not FieldEditorPreferencePage) to avoid parent assertion issues.
+ *
+ * <p>Feature, auto-completion, prompt, style and logging settings are configured here.
+ * The AI connection settings live on the separate "AI Connections" child page
+ * (see {@link AIConnectionPreferencePage}).</p>
  */
 public class AICompletionPreferencePage extends PreferencePage implements IWorkbenchPreferencePage {
 
-    private Text txtBaseUrl;
-    private Text txtModel;
-    private Text txtApiKey;
-    private Text txtMaxTokens;
-    private Text txtTemperature;
+    // --- Other settings ---
     private Text txtSkillDir;
     private Button chkSkillEnabled;
     private Text txtSystemPrompt;
@@ -43,7 +40,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Button chkPluginEnabled;
     private Button chkAutoComplete;
     private ColorSelector colorSelector;
-    private Label lblTestResult;
     private Label lblKeybinding;
     private Button chkParentResolution;
     private Text txtSearchDepth;
@@ -76,7 +72,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         main.setLayoutData(new GridData(GridData.FILL_BOTH));
 
         createVersionHeader(main);
-        createConnectionGroup(main);
         createFeatureGroup(main);
         createAutoCompletionGroup(main);
         createParentProgramGroup(main);
@@ -95,8 +90,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     /**
      * 在配置页顶部显示插件名称与版本号。
-     * 版本号从 OSGi Bundle 元数据（MANIFEST.MF 的 Bundle-Version）动态获取，
-     * 避免与代码中的常量不同步。
      */
     private void createVersionHeader(Composite parent) {
         Label version = new Label(parent, SWT.NONE);
@@ -112,59 +105,21 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         GridData hd = new GridData(GridData.FILL_HORIZONTAL);
         hint.setLayoutData(hd);
 
-        // 分隔线，与下方分组保持视觉区隔
+        // Separator
         Label sep = new Label(parent, SWT.SEPARATOR | SWT.HORIZONTAL);
         GridData sd = new GridData(GridData.FILL_HORIZONTAL);
         sep.setLayoutData(sd);
     }
 
-    /**
-     * 从当前插件的 OSGi Bundle 读取版本号；读取失败时回退为"unknown"。
-     * 使用 Platform.getBundle 按插件符号名获取 Bundle，避免依赖插件实例是否已激活。
-     */
     private static String getPluginVersion() {
         try {
             org.osgi.framework.Bundle bundle =
                     org.eclipse.core.runtime.Platform.getBundle(Activator.PLUGIN_ID);
-            if (bundle == null) {
-                return "unknown";
-            }
+            if (bundle == null) return "unknown";
             return bundle.getVersion().toString();
         } catch (Exception e) {
             return "unknown";
         }
-    }
-
-    private void createConnectionGroup(Composite parent) {
-        Group g = new Group(parent, SWT.NONE);
-        g.setText("AI Connection Settings");
-        g.setLayout(new GridLayout(2, false));
-        g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-        createLabel(g, "API Base URL:");
-        txtBaseUrl = createText(g, 1);
-
-        createLabel(g, "Model Name:");
-        txtModel = createText(g, 1);
-
-        createLabel(g, "API Key:");
-        txtApiKey = createText(g, 1);
-        txtApiKey.setEchoChar('*');
-
-        createLabel(g, "Max Tokens:");
-        txtMaxTokens = createText(g, 1);
-
-        createLabel(g, "Temperature:");
-        txtTemperature = createText(g, 1);
-
-        // Test button
-        Button testBtn = new Button(g, SWT.PUSH);
-        testBtn.setText("Test Connection");
-        testBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> testConnection()));
-
-        lblTestResult = new Label(g, SWT.NONE);
-        lblTestResult.setText("");
-        lblTestResult.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
     }
 
     private void createFeatureGroup(Composite parent) {
@@ -190,7 +145,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         chkAutoComplete.setLayoutData(ckGd);
 
         createLabel(g, "Delay after typing (ms):");
-        txtAutoDelay = createText(g, 1);
+        txtAutoDelay = createText(g);
 
         Label note = new Label(g, SWT.WRAP);
         note.setText("How long to wait after you stop typing before AI suggests code.\n"
@@ -199,7 +154,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
 
-        // Keybinding info
         lblKeybinding = new Label(g, SWT.WRAP);
         lblKeybinding.setText(
             "Manual trigger key: Ctrl+Shift+.\n"
@@ -217,7 +171,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         g.setLayout(new GridLayout(3, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-        // 启用 SKILL 复选框 (放在 Skill Directory 输入框前面)
         chkSkillEnabled = new Button(g, SWT.CHECK);
         chkSkillEnabled.setText("Enable Skill reference for AI completion");
         GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
@@ -225,7 +178,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         chkSkillEnabled.setLayoutData(ckGd);
 
         createLabel(g, "Skill directory:");
-        txtSkillDir = createText(g, 1);
+        txtSkillDir = createText(g);
 
         Button browseBtn = new Button(g, SWT.PUSH);
         browseBtn.setText("Browse...");
@@ -254,10 +207,10 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         chkParentResolution.setLayoutData(ckGd);
 
         createLabel(g, "ABAP search depth (levels):");
-        txtSearchDepth = createText(g, 1);
+        txtSearchDepth = createText(g);
 
         createLabel(g, "Max context chars per parent:");
-        txtMaxContextChars = createText(g, 1);
+        txtMaxContextChars = createText(g);
 
         Label note = new Label(g, SWT.WRAP);
         note.setText("Parent lookup searches ABAP files containing INCLUDE <current file>.\n"
@@ -280,10 +233,10 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         chkWorkspaceCodeRef.setLayoutData(wsGd);
 
         createLabel(g, "Max workspace chars:");
-        txtMaxWorkspaceChars = createText(g, 1);
+        txtMaxWorkspaceChars = createText(g);
 
         createLabel(g, "Max workspace files:");
-        txtWorkspaceFileLimit = createText(g, 1);
+        txtWorkspaceFileLimit = createText(g);
 
         Label note = new Label(g, SWT.WRAP);
         note.setText("Workspace code reference sends other ABAP files from your workspace as AI context.");
@@ -307,7 +260,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         GridData cgGd = new GridData(GridData.FILL_HORIZONTAL);
         cmbLogLevel.setLayoutData(cgGd);
 
-        // 显示日志文件所在目录
         Label note = new Label(g, SWT.WRAP);
         note.setText("0 = No logging; 1 = Record interface request/response logs; "
                 + "2 = Additionally record DEBUG logs (parser, context collection, etc.).\n"
@@ -371,14 +323,9 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         opacityNote.setLayoutData(ond);
     }
 
-    // ==================== Data Loading/Saving ====================
+    // ==================== Data Loading/Saving (other settings) ====================
 
     private void loadValues() {
-        txtBaseUrl.setText(store.getString(PreferenceConstants.API_BASE_URL));
-        txtModel.setText(store.getString(PreferenceConstants.API_MODEL));
-        txtApiKey.setText(store.getString(PreferenceConstants.API_KEY));
-        txtMaxTokens.setText(store.getString(PreferenceConstants.MAX_TOKENS));
-        txtTemperature.setText(store.getString(PreferenceConstants.TEMPERATURE));
         txtSkillDir.setText(getDisplaySkillDir());
         chkSkillEnabled.setSelection(store.getBoolean(PreferenceConstants.SKILL_ENABLED));
         txtSystemPrompt.setText(store.getString(PreferenceConstants.SYSTEM_PROMPT));
@@ -401,25 +348,16 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         cmbLogLevel.select(clampLogLevelIndex(
                 Integer.parseInt(store.getString(PreferenceConstants.INTERFACE_LOG_LEVEL))));
 
-        // Color
         String colorStr = store.getString(PreferenceConstants.COMPLETION_COLOR);
         if (colorStr != null && !colorStr.isEmpty()) {
             colorSelector.setColorValue(AIConfiguration.getCompletionColor());
         }
 
-        // Opacity
         spinnerOpacity.setSelection(AIConfiguration.getOverlayOpacityPercent());
-
-        // Display type (index 0-based, stored value 1-based)
         cmbDisplayType.select(AIConfiguration.getCompletionDisplayType() - 1);
     }
 
     private void saveValues() {
-        store.setValue(PreferenceConstants.API_BASE_URL, txtBaseUrl.getText());
-        store.setValue(PreferenceConstants.API_MODEL, txtModel.getText());
-        store.setValue(PreferenceConstants.API_KEY, txtApiKey.getText());
-        store.setValue(PreferenceConstants.MAX_TOKENS, txtMaxTokens.getText());
-        store.setValue(PreferenceConstants.TEMPERATURE, txtTemperature.getText());
         String skillDirValue = txtSkillDir.getText().trim();
         String defaultSkillDir = AIConfiguration.getDefaultSkillDirectory();
         if (skillDirValue.isEmpty() || skillDirValue.equals(defaultSkillDir)) {
@@ -467,11 +405,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     @Override
     protected void performDefaults() {
-        txtBaseUrl.setText(PreferenceConstants.DEFAULT_API_BASE_URL);
-        txtModel.setText(PreferenceConstants.DEFAULT_API_MODEL);
-        txtApiKey.setText("");
-        txtMaxTokens.setText(PreferenceConstants.DEFAULT_MAX_TOKENS);
-        txtTemperature.setText(PreferenceConstants.DEFAULT_TEMPERATURE);
         txtSkillDir.setText(AIConfiguration.getDefaultSkillDirectory());
         chkSkillEnabled.setSelection(PreferenceConstants.DEFAULT_SKILL_ENABLED);
         txtSystemPrompt.setText(PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
@@ -499,90 +432,27 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         cmbDisplayType.select(PreferenceConstants.DEFAULT_COMPLETION_DISPLAY_TYPE - 1);
     }
 
-    // ==================== Test Connection ====================
-
-    private void testConnection() {
-        String baseUrl = txtBaseUrl.getText().trim();
-        String model = txtModel.getText().trim();
-        String apiKey = txtApiKey.getText().trim();
-        String maxTokensStr = txtMaxTokens.getText().trim();
-        String tempStr = txtTemperature.getText().trim();
-        if (baseUrl.isEmpty()) {
-            setTestResult("Please enter API Base URL", SWT.COLOR_RED);
-            return;
-        }
-        if (apiKey.isEmpty()) {
-            setTestResult("Please enter API Key", SWT.COLOR_RED);
-            return;
-        }
-
-        setTestResult("Testing connection...", SWT.COLOR_BLUE);
-
-        new Thread(() -> {
-            try {
-                int maxTokens = 20;
-                double temp = 0.1;
-                try { maxTokens = Integer.parseInt(maxTokensStr); } catch (Exception ignored) {}
-                try { temp = Double.parseDouble(tempStr); } catch (Exception ignored) {}
-
-                String result = AIClient.testConnection(baseUrl, model.isEmpty() ? "gpt-4" : model,
-                        apiKey, maxTokens, temp);
-
-                Display.getDefault().asyncExec(() ->
-                    setTestResult("SUCCESS: " + result, SWT.COLOR_DARK_GREEN));
-            } catch (AIClientException ex) {
-                Display.getDefault().asyncExec(() ->
-                    setTestResult("FAILED: " + ex.getMessage(), SWT.COLOR_RED));
-            } catch (Exception ex) {
-                Display.getDefault().asyncExec(() ->
-                    setTestResult("ERROR: " + ex.getMessage(), SWT.COLOR_RED));
-            }
-        }).start();
-    }
-
-    private void setTestResult(String text, int colorConstant) {
-        if (lblTestResult != null && !lblTestResult.isDisposed()) {
-            lblTestResult.setText(text);
-            lblTestResult.setForeground(Display.getDefault().getSystemColor(colorConstant));
-            lblTestResult.getParent().layout();
-        }
-    }
-
     // ==================== Helpers ====================
 
-    /**
-     * 将日志等级值限制在合法的下拉索引范围 (0-2) 内。
-     */
     private static int clampLogLevelIndex(int value) {
         return Math.max(PreferenceConstants.LOG_LEVEL_NONE,
                 Math.min(PreferenceConstants.LOG_LEVEL_DEBUG, value));
     }
 
     private Label createLabel(Composite parent, String text) {
-        return createLabel(parent, text, 1);
-    }
-
-    private Label createLabel(Composite parent, String text, int hSpan) {
         Label lbl = new Label(parent, SWT.NONE);
         lbl.setText(text);
-        GridData gd = new GridData();
-        gd.horizontalSpan = hSpan;
-        lbl.setLayoutData(gd);
         return lbl;
     }
 
-    private Text createText(Composite parent, int hSpan) {
+    private Text createText(Composite parent) {
         Text txt = new Text(parent, SWT.BORDER);
         GridData gd = new GridData(GridData.FILL_HORIZONTAL);
-        gd.horizontalSpan = hSpan;
+        gd.horizontalSpan = 2;
         txt.setLayoutData(gd);
         return txt;
     }
 
-    /**
-     * 获取用于显示的 Skill 目录路径。
-     * 如果用户未配置(空字符串),则返回计算出的默认路径用于显示。
-     */
     private String getDisplaySkillDir() {
         String configured = store.getString(PreferenceConstants.SKILL_DIR);
         if (configured != null && !configured.trim().isEmpty()) {
@@ -591,19 +461,14 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         return AIConfiguration.getDefaultSkillDirectory();
     }
 
-    /**
-     * 打开目录选择对话框,让用户选择本机目录作为 Skill 目录。
-     */
     private void browseSkillDir() {
         DirectoryDialog dialog = new DirectoryDialog(getShell(), SWT.OPEN);
         dialog.setText("Select Skill Directory");
         dialog.setMessage("Select a directory containing .abap, .txt or .skill files:");
-
         String currentPath = txtSkillDir.getText().trim();
         if (currentPath != null && !currentPath.isEmpty()) {
             dialog.setFilterPath(currentPath);
         }
-
         String selected = dialog.open();
         if (selected != null && !selected.isEmpty()) {
             txtSkillDir.setText(selected);

@@ -1,10 +1,10 @@
-﻿<?xml version='1.0' encoding='UTF-8'?>
+<?xml version='1.0' encoding='UTF-8'?>
 <?artifactRepository version='1.1.0'?>
 <repository name='ABAP AI Completion Update Site'
             type='org.eclipse.equinox.p2.artifact.repository.simpleRepository'
             version='1'>
   <properties size='2'>
-    <property name='p2.timestamp' value='1789698087265'/>
+    <property name='p2.timestamp' value='1789868478748'/>
     <property name='p2.compressed' value='true'/>
   </properties>
   <mappings size='2'>
@@ -16,18 +16,18 @@
   <artifacts size='2'>
     <artifact classifier='osgi.bundle'
               id='com.sap.abap.ai.completion'
-              version='1.0.19'>
+              version='1.1.0'>
       <properties size='2'>
-        <property name='artifact.size' value='701573'/>
-        <property name='download.size' value='701573'/>
+        <property name='artifact.size' value='710819'/>
+        <property name='download.size' value='710819'/>
       </properties>
     </artifact>
     <artifact classifier='org.eclipse.update.feature'
               id='com.sap.abap.ai.completion.feature'
-              version='1.0.19'>
+              version='1.1.0'>
       <properties size='2'>
-        <property name='artifact.size' value='1335'/>
-        <property name='download.size' value='1335'/>
+        <property name='artifact.size' value='1321'/>
+        <property name='download.size' value='1321'/>
       </properties>
     </artifact>
   </artifacts>

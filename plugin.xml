@@ -7,12 +7,20 @@
    </extension>
 
    <extension point="org.eclipse.ui.preferencePages">
+      <!-- ABAP AI Completion 主配置页（顶级页面，承载其余功能设置） -->
       <page
             id="com.sap.abap.ai.completion.preferencePage"
             class="com.sap.abap.ai.completion.preferences.AICompletionPreferencePage"
             name="ABAP AI Completion">
       </page>
-      <!-- SAP 连接信息配置页(JCo), 从“模板”菜单的 “SAP Connection Config...” 打开 -->
+      <!-- AI 连接管理配置页 - 作为 ABAP AI Completion 的子页面，显示在 SAP Connection Config 前面 -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.aiConnections"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.AIConnectionPreferencePage"
+            name="AI Connections">
+      </page>
+      <!-- SAP 连接信息配置页(JCo), 从"模板"菜单的 "SAP Connection Config..." 打开 -->
       <page
             id="com.sap.abap.ai.completion.preferencePage.sap"
             category="com.sap.abap.ai.completion.preferencePage"

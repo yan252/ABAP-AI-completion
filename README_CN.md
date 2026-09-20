@@ -147,7 +147,7 @@
 | **API Base URL** | AI服务端点地址 | `https://api.openai.com/v1` |
 | **Model Name** | 使用的AI模型名称 | `gpt-4`, `deepseek-v4-flash` |
 | **API Key** | API认证密钥 | （将以星号显示） |
-| **Max Tokens** | 最大生成Token数 | `256` |
+| **Max Tokens** | 最大生成Token数 | `240640` |
 | **Temperature** | 创造性温度 (0.0-2.0) | `0.3`（较低值表示更确定性的输出） |
 
 > 💡 **提示** : 点击 `Test Connection` 按钮测试API连接是否正常。
