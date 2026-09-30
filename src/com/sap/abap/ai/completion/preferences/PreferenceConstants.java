@@ -71,7 +71,7 @@ public final class PreferenceConstants {
 
     // === SAP Connection Settings ===
     /**
-     * abap-cli(abapGit)连接 URL(可选)，如 https://s4devapp.app.com.cn:1443。
+     * abap-cli(abapGit)连接 URL(可选)，如 https://s4devapp.sap.com.cn:1443。
      *
      * <p>填写后，"Test Connection" 直接用它做 abapGit 方式探测，模板导入也会把
      * 它写进 abap-cli 的 {@code ~/.abap-cli/systems.json} profile（临时套用、导入后回滚）。
@@ -108,8 +108,21 @@ public final class PreferenceConstants {
     public static final String DEFAULT_API_MODEL = "deepseek-flash";
     public static final String DEFAULT_MAX_TOKENS = "240640";
     public static final String DEFAULT_TEMPERATURE = "0.3";
+
+    // === Built-in default AI connections (seeded on first run and restored by "Restore Default") ===
+    /** 内置默认连接 1（同时为默认 AI）：FREE_AI (Agnes AI) */
+    public static final String DEFAULT_FREE_AI_NAME = "FREE_AI";
+    public static final String DEFAULT_FREE_AI_BASE_URL = "https://api.agnes-ai.cn/v1";
+    public static final String DEFAULT_FREE_AI_MODEL = "agnes-2.5-flash";
+    public static final String DEFAULT_FREE_AI_API_KEY =
+            "sk-bsiuUUiLyI4BJ7KRVLRSNRjt4LVDQ2sEB6P2n6rBy9RSOP9l";
+    /** 内置默认连接 2：deepseek */
+    public static final String DEFAULT_DEEPSEEK_NAME = "deepseek";
+    public static final String DEFAULT_DEEPSEEK_BASE_URL = DEFAULT_API_BASE_URL;
+    public static final String DEFAULT_DEEPSEEK_MODEL = DEFAULT_API_MODEL;
+    public static final String DEFAULT_DEEPSEEK_API_KEY = "sk-12345";
     public static final boolean DEFAULT_PLUGIN_ENABLED = true;
-    public static final boolean DEFAULT_AUTO_COMPLETION_ENABLED = false;
+    public static final boolean DEFAULT_AUTO_COMPLETION_ENABLED = true;
     public static final String DEFAULT_AUTO_COMPLETE_DELAY = "2000";
     public static final String DEFAULT_COMPLETION_COLOR = "0,128,0";
     public static final String DEFAULT_MANUAL_COMPLETION_MODE = "direct";
@@ -143,8 +156,18 @@ public final class PreferenceConstants {
     public static final String DEFAULT_WORKSPACE_CODE_FILE_LIMIT = "5";
 
     // === Defaults for Interface Logging ===
-    public static final String DEFAULT_INTERFACE_LOG_LEVEL = "0";
+    public static final String DEFAULT_INTERFACE_LOG_LEVEL = "2";
 
     // === Defaults for Prompt Cache ===
     public static final boolean DEFAULT_PROMPT_CACHE_ENABLED = true;
+
+    // === Auto Completion Trigger Characters ===
+    /** 触发字符列表，JSON 数组字符串，每项含 char/enabled/description */
+    public static final String AUTO_COMPLETE_TRIGGER_CHARS = "autoCompleteTriggerChars";
+
+    // === Auto Completion Result Status (最近一次补全结果的去重判断用) ===
+    public static final int COMPLETION_RESULT_NONE = 0;
+    public static final int COMPLETION_RESULT_ESC = 1;
+    public static final int COMPLETION_RESULT_CONFIRMED = 2;
+    public static final int COMPLETION_RESULT_OTHER = 3;
 }

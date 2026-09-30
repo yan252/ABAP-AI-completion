@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -63,18 +64,27 @@ import com.sap.abap.ai.completion.preferences.AIConfiguration;
  *   <li>弹窗输入 PACKAGE / 程序名</li>
  *   <li>从 bundle 解压 {@code references/ZTEMPLATE10.zip} 到 stage 工作区</li>
  *   <li>把解压目录里所有 {@code ztemplate10}（文件名 + 文本文件内容）替换为用户输入的新名字</li>
- *   <li>写 {@code .abap.json}（注册 6 个 abap-cli 扩展 + 用户输入的包名）</li>
- *   <li>调 {@code node abap-cli} 的 7 步：
+ *   <li>写 {@code .abap.json}（注册 8 个 abap-cli 扩展 + 用户输入的包名）</li>
+ *   <li>调 {@code node abap-cli} 的 9 步：
  *       {@code prog-xml-create} → {@code ddic-xml-create} →
- *       {@code prog-xml-update} → {@code prog-source-push} →
- *       {@code prog-xml-push} → {@code inspect} → {@code prog-xml-verify}</li>
- *   <li>汇总 7 步退出码并弹结果对话框</li>
+ *       {@code oo-xml-create} → {@code prog-xml-update} →
+ *       {@code prog-source-push} → {@code prog-xml-push} → {@code inspect} →
+ *       {@code prog-xml-verify} → {@code prog-batch-activate}</li>
+ *   <li>汇总 9 步退出码并弹结果对话框</li>
  * </ol>
+ *
+ * <p><b>为何最后才整体激活</b>：程序 / INCLUDE / 结构 / 表 / 表类型 / 类互相引用，
+ * 逐个对象边写边激活会拿着尚未更新的依赖去编译（报
+ * {@code Field "X" is unknown.} 之类伪错误）而留在 inactive。
+ * 因此 {@code prog-source-push} 只写源码不激活，等所有对象写入完成后，
+ * 由最后一步 {@code prog-batch-activate} 把它们合并成
+ * <b>一次</b> {@code POST /sap/bc/adt/activation}，让 SAP 自行解析依赖顺序。</p>
  *
  *
  * <p><b>依赖</b>：用户机器上必须已存在 abap-cli stage 工作区
- * {@link #STAGE_DIR}，其下含 {@code node_modules/abap-cli/} 与 6 个扩展
- * {@code extensions/prog-*.mjs} + {@code extensions/ddic-xml-create.mjs}。
+ * {@link #STAGE_DIR}，其下含 {@code node_modules/abap-cli/} 与 8 个扩展
+ * {@code extensions/prog-*.mjs} + {@code extensions/ddic-xml-create.mjs}
+ * + {@code extensions/oo-xml-create.mjs}。
  * {@code node} 必须在 PATH 中。HOME /
  * USERPROFILE 必须可解析（keychain 凭据在 {@code ~/.abap-cli/systems.json}）。</p>
  *
@@ -85,7 +95,7 @@ import com.sap.abap.ai.completion.preferences.AIConfiguration;
  */
 public final class MultiTabTemplateImportService {
 
-    /** 用户机器上的 abap-cli stage 根目录（abap-cli node_modules + 6 个扩展均在此）。 */
+    /** 用户机器上的 abap-cli stage 根目录（abap-cli node_modules + 8 个扩展均在此）。 */
     public static final String STAGE_DIR =
             "D:\\Users\\96000217\\Documents\\trae_projects\\_abap-cli-stage";
 
@@ -103,24 +113,31 @@ public final class MultiTabTemplateImportService {
     private static final String EXTENSIONS_DIR_REL = "extensions";
 
     /**
-     * abap-cli 扩展名（按 ZTemplate10Import 顺序 + DDIC 导入扩展）。
+     * abap-cli 扩展名（按 ZTemplate10Import 顺序 + DDIC / OO 导入扩展）。
      *
      * <p><b>ddic-xml-create</b>：把 {@code *.tabl.xml}（TABCLASS=INTTAB → 结构、
      * TRANSP → 透明表）与 {@code *.ttyp.xml}（表类型）真正建成并激活。
      * 缺了它，ZIP 里的 zsztest10.tabl.xml / ztztest10.tabl.xml /
      * zttztest10.ttyp.xml 永远不会被推送，SE11 里也就看不到对应的
      * ZSZTEST10 / ZTZTEST10 / ZTTZTEST10。</p>
+     *
+     * <p><b>oo-xml-create</b>：把 {@code *.clas.xml} + {@code *.clas.abap}
+     * （CLAS/OC 类）与 {@code *.intf.xml} + {@code *.intf.abap}（INTF/OI 接口）
+     * 建成并推送源码。缺了它，ZIP 里的 ZCL_TEST_01.clas.abap 会被静默丢弃，
+     * SE24 里看不到 ZCL_TEST_01。</p>
      */
     private static final List<String> EXTENSION_NAMES = Arrays.asList(
-            "prog-xml-create", "ddic-xml-create", "prog-xml-update",
-            "prog-source-push", "prog-xml-push", "prog-xml-verify");
+            "prog-xml-create", "ddic-xml-create", "oo-xml-create",
+            "prog-xml-update", "prog-source-push", "prog-xml-push",
+            "prog-xml-verify", "prog-batch-activate");
 
     /**
      * 进度对话框中的步骤总数：
-     * prog-xml-create / ddic-xml-create / prog-xml-update / prog-source-push /
-     * prog-xml-push / inspect / prog-xml-verify。
+     * prog-xml-create / ddic-xml-create / oo-xml-create / prog-xml-update /
+     * prog-source-push / prog-xml-push / inspect / prog-xml-verify /
+     * prog-batch-activate。
      */
-    private static final int TOTAL_STEPS = 7;
+    private static final int TOTAL_STEPS = 9;
 
     /** 文本类文件扩展名（用于 zip 内占位符重命名）。 */
     private static final Set<String> TEXT_EXTENSIONS = new HashSet<>(Arrays.asList(
@@ -147,7 +164,9 @@ public final class MultiTabTemplateImportService {
     private static final String[] LOCK_MARKERS = {
         "already locked",
         "locked in request",
+        "currently editing",
         "current editing",
+        "locked by another user/request",
         "当前编辑",
         "ENQUEUE",
         "Lock exists",
@@ -165,7 +184,7 @@ public final class MultiTabTemplateImportService {
 
     /**
      * 公共入口：从菜单点击触发。
-     * 流程：环境检查 → 输入 → 进度对话框跑 7 步 → 弹结果。
+     * 流程：环境检查 → 输入 → 进度对话框跑 9 步 → 弹结果。
      */
     public static void runImport() {
         // ===== [1] 环境检查 =====
@@ -205,7 +224,7 @@ public final class MultiTabTemplateImportService {
         if (ivTransport == null) return; // 用户取消
         final String transportInputFinal = ivTransport.trim().isEmpty() ? null : ivTransport.trim();
 
-        // ===== 进度对话框跑解压+改名+7 步 abap-cli =====
+        // ===== 进度对话框跑解压+改名+9 步 abap-cli =====
         final Path stageFinal = stageRoot;
         final String pkgFinal = ivPackage;
         final String progFinal = ivProgName;
@@ -236,9 +255,9 @@ public final class MultiTabTemplateImportService {
             return;
         }
 
-        // ===== 弹结果：对话框只报 成功 / 失败 / 部分失败，明细走 Eclipse Error Log =====
+        // ===== 弹结果：对话框只报 成功 / 失败，明细走 Eclipse Error Log =====
         ImportResult r = holder[0];
-        final boolean anyLock = hasLock(r);
+        final List<String> lockedNames = lockedObjectNames(r);
 
         final String status;
         final String title;
@@ -247,10 +266,6 @@ public final class MultiTabTemplateImportService {
             status = "FAILED";
             title = "Import Failed";
             overallSev = IStatus.ERROR;
-        } else if (anyLock) {
-            status = "PARTIALLY FAILED";
-            title = "Import Partially Failed";
-            overallSev = IStatus.WARNING;
         } else {
             status = "SUCCESS";
             title = "Import Succeeded";
@@ -267,8 +282,14 @@ public final class MultiTabTemplateImportService {
         sb.append("  Program   : ").append(progFinal).append('\n');
         sb.append("  Transport : ").append(r.transportRequest != null
                 ? r.transportRequest : "(none / skipped)").append('\n');
-        if (anyLock) {
-            sb.append("\n  Some objects were skipped because they are locked by another user.\n");
+        if (!lockedNames.isEmpty()) {
+            sb.append("\n  Failed — object(s) locked in another transport request,\n");
+            sb.append("  so they could NOT be imported:\n");
+            for (String n : lockedNames) {
+                sb.append("    • ").append(n).append('\n');
+            }
+            sb.append("  Release the lock (SE03 → 传输组织器 → 请求/任务 → 释放对象锁)\n");
+            sb.append("  and re-run the import.\n");
         }
         sb.append("\n  Details were written to:\n");
         sb.append("    • Eclipse Error Log : Window → Show View → Error Log\n");
@@ -288,16 +309,19 @@ public final class MultiTabTemplateImportService {
     }
 
     // ====================================================================
-    // 主流程：解压 → 改名 → 写 .abap.json → 跑 7 步
+    // 主流程：解压 → 改名 → 写 .abap.json → 跑 9 步
     // ====================================================================
 
     /**
-     * 解压 + 改名 + 写 .abap.json + 7 步 abap-cli。
+     * 解压 + 改名 + 写 .abap.json + 9 步 abap-cli。
      *
      * <p>{@code transportInput} 为 null 或空 = 自动创建新传输请求；否则复用该请求号。
-     * 解析出的传输号会在 7 个步骤中以 {@code ABAP_TRANSPORT} 环境变量注入
+     * 解析出的传输号会在 8 个步骤中以 {@code ABAP_TRANSPORT} 环境变量注入
      * （S4DEV 的 source/textpool 推送缺 corrNr 会报
      * <i>Parameter corrNr could not be found</i>，这是本类历史故障根因）。</p>
+     *
+     * <p>最后一步 {@code prog-batch-activate} 在全部对象写入完成后，把它们合并成
+     * 一次整体激活请求（见该类顶部说明）。</p>
      *
      * 全部完成后返回 ImportResult。
      */
@@ -354,7 +378,20 @@ public final class MultiTabTemplateImportService {
         List<Path> ddicXmlFiles = new ArrayList<>(collectByExt(dstDir, ".tabl.xml"));
         ddicXmlFiles.addAll(collectByExt(dstDir, ".ttyp.xml"));
 
-        // 7 步 abap-cli
+        // OO 文件：*.clas.xml / *.intf.xml（类 / 接口元数据）+ *.clas.abap /
+        // *.intf.abap（源码）。oo-xml-create 同时建壳并推送源码，xml 与 abap
+        // 都要传（扩展内部按对象 URL 去重，同一对象只处理一次）。
+        List<Path> ooFiles = new ArrayList<>(collectByExt(dstDir, ".clas.xml"));
+        ooFiles.addAll(collectByExt(dstDir, ".intf.xml"));
+        ooFiles.addAll(collectByExt(dstDir, ".clas.abap"));
+        ooFiles.addAll(collectByExt(dstDir, ".intf.abap"));
+
+        // 未被本流程处理的 abapGit 对象类型（如 *.doma.xml / *.dtel.xml /
+        // *.fugr.* / *.ddls.asddls …）。只报告不阻断：这些类型目前没有对应的
+        // abap-cli 扩展，静默丢弃会让人以为"ZIP 里的对象都导进来了"。
+        List<String> unhandledTypes = findUnhandledObjectTypes(dstDir);
+
+        // 9 步 abap-cli
         List<StepOutcome> steps = new ArrayList<>();
 
         // [6.1] prog-xml-create
@@ -387,9 +424,27 @@ public final class MultiTabTemplateImportService {
             // 但整体判失败由下方 steps 校验统一处理。
         }
 
-        // [6.3] prog-xml-update
+        // [6.3] oo-xml-create（类 CLAS/OC / 接口 INTF/OI）
+        // 必须早于 prog-source-push：程序源码里引用了 ZCL_TEST_01 等类，
+        // 类不存在时源码推上去也无法激活。
+        if (ooFiles.isEmpty()) {
+            steps.add(new StepOutcome(3, "oo-xml-create", 0, null,
+                    "no *.clas.* / *.intf.* in src — OO step skipped"));
+        } else {
+            steps.add(runAbapCliStep(3, "oo-xml-create",
+                    stageRoot,
+                    new ArrayList<>(Arrays.asList("oo-xml-create")),
+                    relToStage(stageRoot, ooFiles),
+                    stageRoot.resolve("_simple_query_handler_oo_result.txt"),
+                    transport,
+                    monitor));
+            // OO 非零不即刻阻断（仍继续推送程序源码，尽量多建对象），
+            // 但整体判失败由下方 steps 校验统一处理。
+        }
+
+        // [6.4] prog-xml-update
         if (createOk) {
-            steps.add(runAbapCliStep(3, "prog-xml-update",
+            steps.add(runAbapCliStep(4, "prog-xml-update",
                     stageRoot,
                     new ArrayList<>(Arrays.asList("prog-xml-update")),
                     relToStage(stageRoot, xmlFiles),
@@ -399,8 +454,8 @@ public final class MultiTabTemplateImportService {
             // update 非零不阻断（对象已由 create 建好，源码由 source-push 推送）
         }
 
-        // [6.4] prog-source-push
-        steps.add(runAbapCliStep(4, "prog-source-push",
+        // [6.5] prog-source-push
+        steps.add(runAbapCliStep(5, "prog-source-push",
                 stageRoot,
                 new ArrayList<>(Arrays.asList("prog-source-push")),
                 relToStage(stageRoot, abapFiles),
@@ -408,9 +463,9 @@ public final class MultiTabTemplateImportService {
                 transport,
                 monitor));
 
-        // [6.5] prog-xml-push (DYNPROS / CUA / I18N_TPOOL)
+        // [6.6] prog-xml-push (DYNPROS / CUA / I18N_TPOOL)
         if (Files.isRegularFile(mainXml)) {
-            steps.add(runAbapCliStep(5, "prog-xml-push",
+            steps.add(runAbapCliStep(6, "prog-xml-push",
                     stageRoot,
                     new ArrayList<>(Arrays.asList("prog-xml-push")),
                     Arrays.asList(relToStage(stageRoot, mainXml)),
@@ -419,12 +474,12 @@ public final class MultiTabTemplateImportService {
                     monitor));
             // xml-push 非零不阻断
         } else {
-            steps.add(new StepOutcome(5, "prog-xml-push", -1, null,
+            steps.add(new StepOutcome(6, "prog-xml-push", -1, null,
                     "main prog.xml not found: " + mainXml));
         }
 
-        // [6.6] inspect
-        steps.add(runAbapCliStep(6, "inspect",
+        // [6.7] inspect
+        steps.add(runAbapCliStep(7, "inspect",
                 stageRoot,
                 new ArrayList<>(Arrays.asList("inspect", ivProgName, "--includes", "--pretty-json")),
                 new ArrayList<>(),
@@ -432,9 +487,9 @@ public final class MultiTabTemplateImportService {
                 transport,
                 monitor));
 
-        // [6.7] prog-xml-verify
+        // [6.8] prog-xml-verify
         if (Files.isRegularFile(mainXml)) {
-            steps.add(runAbapCliStep(7, "prog-xml-verify",
+            steps.add(runAbapCliStep(8, "prog-xml-verify",
                     stageRoot,
                     new ArrayList<>(Arrays.asList("prog-xml-verify")),
                     Arrays.asList(relToStage(stageRoot, mainXml)),
@@ -442,16 +497,42 @@ public final class MultiTabTemplateImportService {
                     transport,
                     monitor));
         } else {
-            steps.add(new StepOutcome(7, "prog-xml-verify", -1, null,
+            steps.add(new StepOutcome(8, "prog-xml-verify", -1, null,
                     "main prog.xml not found: " + mainXml));
         }
 
+        // [6.9] prog-batch-activate —— 整体激活（流程最后一步）
+        // 程序 / INCLUDE / 结构 / 表 / 表类型 / 类之间有相互依赖，逐个激活会拿着
+        // 旧状态编译并报伪错误（Field "X" is unknown.）而留在 inactive；因此
+        // 全部对象在这里合并成一次 POST /sap/bc/adt/activation，由 SAP 自行
+        // 解析依赖顺序（generationExecuted="true"）。
+        // 传 .prog.abap（主程序 + INCLUDE）、DDIC 元数据（.tabl.xml / .ttyp.xml）
+        // 与 OO 文件（.clas.* / .intf.*）——即本次导入的全部对象；
+        // 扩展内部按对象 URL 去重，并对被他人锁定的对象自动剔除后重试。
+        List<Path> activateFiles = new ArrayList<>(abapFiles);
+        activateFiles.addAll(ddicXmlFiles);
+        activateFiles.addAll(ooFiles);
+        if (activateFiles.isEmpty()) {
+            steps.add(new StepOutcome(9, "prog-batch-activate", -1, null,
+                    "no source/metadata files collected — batch activation skipped"));
+        } else {
+            steps.add(runAbapCliStep(9, "prog-batch-activate",
+                    stageRoot,
+                    new ArrayList<>(Arrays.asList("prog-batch-activate")),
+                    relToStage(stageRoot, activateFiles),
+                    stageRoot.resolve("_simple_query_handler_batch_activate_result.txt"),
+                    transport,
+                    monitor));
+        }
+
         // 整体成败判定：
-        //   • 关键步骤（prog-xml-create / ddic-xml-create / prog-source-push）非零退出
-        //     = 对象没建出来或源码没推上去 → 失败，避免返回 "Overall: OK" 却在
-        //     SE38 / SE11 里找不到对象的假象。
-        //   • 对象被其它用户或传输请求锁定（ENQUEUE）属环境副作用而非导入失败：
-        //     其余对象通常已成功，只作告警提示，不影响成败判定。
+        //   • 关键步骤（prog-xml-create / ddic-xml-create / oo-xml-create /
+        //     prog-source-push / prog-batch-activate）非零退出 = 对象没建出来、
+        //     源码没推上去或没有激活成功 → 失败，避免返回 "Overall: OK" 却在
+        //     SE38 / SE11 / SE24 里看不到对象、或对象仍是 inactive 的假象。
+        //   • 对象被其它用户或传输请求锁定（ENQUEUE）同样意味着该对象没导入成功，
+        //     因此计为失败（overall = -1）→ 结果对话框红色 FAILED、Error Log 红色。
+        //     被锁对象名由 detectLock() 写入 o.lockedObjects，供对话框/日志点名。
         int overall = 0;
         for (StepOutcome o : steps) {
             boolean locked = detectLock(o);
@@ -461,12 +542,15 @@ public final class MultiTabTemplateImportService {
                 continue;
             }
             if (locked) {
+                overall = -1;
                 continue;
             }
             if (o.exitCode != 0
                     && ("prog-xml-create".equals(o.name)
                         || "ddic-xml-create".equals(o.name)
-                        || "prog-source-push".equals(o.name))) {
+                        || "oo-xml-create".equals(o.name)
+                        || "prog-source-push".equals(o.name)
+                        || "prog-batch-activate".equals(o.name))) {
                 overall = -1;
             }
         }
@@ -479,6 +563,7 @@ public final class MultiTabTemplateImportService {
         r.steps = steps;
         r.overallRc = overall;
         r.extractedCount = extractedCount;
+        r.unhandledObjectTypes = unhandledTypes;
         return r;
         } finally {
             // 无论成功失败，都还原 ~/.abap-cli/systems.json + keychain，
@@ -761,15 +846,16 @@ public final class MultiTabTemplateImportService {
      * 读取步骤结果文件，识别 ENQUEUE 对象锁冲突。
      *
      * <p>当对象被其它用户/传输请求锁定（如"使用者 GWDEV45 当前编辑 ZTEST10"、
-     * "already locked in request S4DK906927"）时，abap-cli 扩展旧实现对
-     * pretty-json 分支不设非零退出码，导致 Java 误判"Overall: OK"而 SE38 里
-     * 找不到程序。这里主动扫描结果文件，命中即把 SE03 / SE10 释放指引写入
-     * 步骤 message，并把该步骤标记为 locked。</p>
+     * "Object R3TR PROG ZTR_SHOW_JD is already locked in request S4DK906927
+     * of user GWDEV45"）时，abap-cli 扩展旧实现对 pretty-json 分支不设非零
+     * 退出码，导致 Java 误判"Overall: OK"而 SE38 里找不到程序。这里主动扫描
+     * 结果文件，命中即把被锁对象名 + 锁持有者 + SE03/SE10 释放指引写入步骤
+     * message，并把该步骤标记为 locked。</p>
      *
-     * <p>锁冲突属环境副作用（被锁的通常只是个别对象，其余对象已成功导入），
-     * 因此只作告警，不计入整体成败判定。</p>
+     * <p>锁冲突意味着该对象本次并没有导入成功，因此由调用方计为整体失败
+     * （overall = -1，Error Log 红色）。</p>
      *
-     * @return true 表示检测到锁冲突（调用方据此把该步骤降级为告警，不判整体失败）。
+     * @return true 表示检测到锁冲突（调用方据此把该步骤判为失败并点名对象）。
      */
     private static boolean detectLock(StepOutcome o) {
         if (o.resultFile == null || !Files.isRegularFile(o.resultFile)) {
@@ -781,23 +867,151 @@ public final class MultiTabTemplateImportService {
         } catch (IOException e) {
             return false;
         }
-        for (String line : lines) {
-            String trimmed = trimToNull(line.replaceAll("\\s+", " "));
-            if (trimmed != null && containsAny(trimmed, LOCK_MARKERS)) {
-                o.message = "Object is locked by another user / transport request:\n"
-                        + "    \"" + trimmed + "\"\n"
-                        + "\n"
-                        + "Please release the object lock and re-run the import:\n"
-                        + "  • SE03 → 传输组织器 → 请求/任务 → 释放对象锁\n"
-                        + "  • or SE10 → 删除/撤销该锁定条目\n"
-                        + "  • or ask the editing user (e.g. GWDEV45) to save & release.";
-                if (o.exitCode == 0) {
-                    o.exitCode = 1;
-                }
-                return true;
+
+        List<String> names = new ArrayList<>();     // 可读对象名（如 INCLUDE ZTR_SHOW_JD）
+        List<String> details = new ArrayList<>();   // 每个被锁对象的说明块
+        for (int i = 0; i < lines.size(); i++) {
+            String trimmed = trimToNull(lines.get(i).replaceAll("\\s+", " "));
+            if (trimmed == null || !containsAny(trimmed, LOCK_MARKERS)) {
+                continue;
+            }
+            // 对象名优先取锁冲突行自身（"... ZTR_SHOW_JD is already locked ..."、
+            // "使用者 GWDEV45 当前编辑 ZTEST10"），取不到再回退到同一 JSON 块
+            // 上方最近的 "object": "..." 字段。
+            String raw = objectNameFromLockLine(trimmed);
+            if (raw == null) {
+                raw = objectNameFromBlock(lines, i);
+            }
+            String display = objectDisplayName(lines, raw);
+
+            if (!names.contains(display)) {
+                names.add(display);
+            }
+            String request = firstGroup(trimmed, LOCK_REQUEST_PATTERN);
+            String user = firstGroup(trimmed, LOCK_USER_PATTERN);
+            StringBuilder d = new StringBuilder();
+            d.append("      • ").append(display);
+            if (request != null) {
+                d.append(" — locked in request ").append(request);
+            }
+            if (user != null) {
+                d.append(request != null ? " by user " : " — locked by user ").append(user);
+            }
+            d.append('\n');
+            d.append("        \"").append(trimmed).append('"');
+            details.add(d.toString());
+        }
+        if (details.isEmpty()) {
+            return false;
+        }
+
+        o.lockedObjects.addAll(names);
+        o.message = "Object lock conflict — the following object(s) were NOT imported:\n"
+                + String.join("\n", details) + "\n"
+                + "\n"
+                + "The import FAILED. Release the object lock and re-run the import:\n"
+                + "  • SE03 → 传输组织器 → 请求/任务 → 释放对象锁\n"
+                + "  • or SE10 → 删除/撤销该锁定条目\n"
+                + "  • or ask the editing user to save & release.";
+        if (o.exitCode == 0) {
+            o.exitCode = 1;
+        }
+        return true;
+    }
+
+    /** 锁冲突行里"被锁对象名"的正则（英文句式："X is already locked / is currently being edited"）。 */
+    private static final java.util.regex.Pattern LOCK_NAME_BEFORE = java.util.regex.Pattern.compile(
+            "\\b([A-Za-z_][A-Za-z0-9_]{1,39})\\s+(?:is|was|were)\\s+(?:already\\s+|currently\\s+)?"
+            + "(?:locked|being\\s+edited)",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** 锁冲突行里"被锁对象名"的正则（中文句式："使用者 GWDEV45 当前编辑 ZTEST10"）。 */
+    private static final java.util.regex.Pattern LOCK_NAME_AFTER_EDIT = java.util.regex.Pattern.compile(
+            "(?:当前编辑|正在编辑)\\s*([A-Za-z0-9_]{2,40})");
+
+    /** 锁冲突行里的传输请求号。 */
+    private static final String LOCK_REQUEST_PATTERN = "(?:in request|request|请求)\\s*([A-Za-z0-9_]{4,20})";
+
+    /** 锁冲突行里的锁持有者用户。 */
+    private static final String LOCK_USER_PATTERN = "(?:of user|by user|使用者|用户)\\s*([A-Za-z0-9_]{2,20})";
+
+    /** 结果文件里的对象名字段（pretty-json: "object": "ZTEST40"）。 */
+    private static final java.util.regex.Pattern JSON_OBJECT_FIELD = java.util.regex.Pattern.compile(
+            "\"(?:object|name)\"\\s*:\\s*\"([A-Za-z0-9_]+)\"");
+
+    /** 从锁冲突行本身提取被锁对象名；提取不到返回 null。 */
+    private static String objectNameFromLockLine(String line) {
+        java.util.regex.Matcher m = LOCK_NAME_BEFORE.matcher(line);
+        if (m.find()) {
+            return m.group(1).toUpperCase(Locale.ROOT);
+        }
+        m = LOCK_NAME_AFTER_EDIT.matcher(line);
+        if (m.find()) {
+            return m.group(1).toUpperCase(Locale.ROOT);
+        }
+        return null;
+    }
+
+    /** 锁冲突行所在 JSON 块的对象名（向上找最近的 "object": "..." 字段）；找不到返回 null。 */
+    private static String objectNameFromBlock(List<String> lines, int lockLineIdx) {
+        for (int i = lockLineIdx; i >= 0; i--) {
+            java.util.regex.Matcher m = JSON_OBJECT_FIELD.matcher(lines.get(i));
+            if (m.find()) {
+                return m.group(1).toUpperCase(Locale.ROOT);
             }
         }
-        return false;
+        return null;
+    }
+
+    /**
+     * 被锁对象的可读名，如 {@code INCLUDE ZTR_SHOW_JD} / {@code PROGRAM ZTEST40}。
+     *
+     * <p>类型取自同一结果文件里的 {@code parsed: NAME=<对象> SUBC=<值>} 行
+     * （对应 SAP 域 PROGDIR-SUBC）。对象名或类型缺失时退化为对象名原文。</p>
+     */
+    private static String objectDisplayName(List<String> lines, String objectName) {
+        if (objectName == null) {
+            return "(unknown object)";
+        }
+        String subc = null;
+        String prefix = "NAME=" + objectName;
+        for (String line : lines) {
+            String t = line.trim();
+            int p = t.indexOf(prefix + " ");
+            if (p < 0) {
+                continue;
+            }
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("SUBC=([A-Za-z0-9]+)").matcher(t.substring(p));
+            if (m.find()) {
+                subc = m.group(1);
+                break;
+            }
+        }
+        String type = objectTypeLabel(subc);
+        return type == null ? objectName : type + " " + objectName;
+    }
+
+    /** SUBC 值 → 简短对象类型标签（用于锁冲突点名）；未知返回 null。 */
+    private static String objectTypeLabel(String subc) {
+        if (subc == null) {
+            return null;
+        }
+        switch (subc.trim().toUpperCase(Locale.ROOT)) {
+            case "1": return "PROGRAM";
+            case "I": return "INCLUDE";
+            case "M": return "MODULE POOL";
+            case "S": return "SUBROUTINE POOL";
+            case "T": return "TYPE POOL";
+            case "X": return "FLOW LOGIC";
+            default:  return null;
+        }
+    }
+
+    /** 取正则的第一个捕获组；未命中返回 null。 */
+    private static String firstGroup(String s, String regex) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(s);
+        return m.find() ? m.group(1) : null;
     }
 
     private static boolean containsAny(String s, String[] markers) {
@@ -1029,7 +1243,8 @@ public final class MultiTabTemplateImportService {
                     "Missing abap-cli extension files in stage:\n  "
                             + extDir.toString()
                             + "\n  Missing:\n    - " + String.join("\n    - ", missing)
-                            + "\n\nPlease copy the 6 prog-*.mjs / ddic-*.mjs extensions from your abapgit"
+                            + "\n\nPlease copy the " + EXTENSION_NAMES.size()
+                            + " prog-*.mjs / ddic-*.mjs extensions from your abapgit"
                             + "\nproject into the stage's extensions/ directory.");
         }
 
@@ -1176,7 +1391,7 @@ public final class MultiTabTemplateImportService {
     }
 
     /**
-     * 写 .abap.json（覆盖现有），注册 6 个 abap-cli 扩展 + 用户输入的包名。
+     * 写 .abap.json（覆盖现有），注册 7 个 abap-cli 扩展 + 用户输入的包名。
      *
      * <p><b>system 字段</b>：abap-cli 所有命令启动时都要求 .abap.json 含
      * {@code "system"}（否则 {@code CONFIG_ERROR: Missing "system" in .abap.json}）。
@@ -1231,6 +1446,39 @@ public final class MultiTabTemplateImportService {
         }
         out.sort(Comparator.comparing(p -> p.getFileName().toString()));
         return out;
+    }
+
+    /**
+     * abapGit `<object>.<type>.<xml|abap>` 里本流程已能导入的类型：
+     * prog / tabl / ttyp（prog-xml-create + ddic-xml-create）与
+     * clas / intf（oo-xml-create）。
+     */
+    private static final Set<String> HANDLED_OBJECT_TYPES = new HashSet<>(Arrays.asList(
+                "prog", "tabl", "ttyp", "clas", "intf"));
+
+    /**
+     * 扫描解压目录，返回 ZIP 里存在、但本流程不会导入的 abapGit 对象类型（去重升序）。
+     *
+     * <p>例：{@code zfoo.doma.xml} → {@code doma}。只用于在结果日志里点名提示
+     * "这些对象没有被导入"，不阻断流程——目前没有对应的 abap-cli 扩展。
+     * {@code package.devc.xml} 是包自身（由 SAP 侧已存在的包承载），不计入。</p>
+     */
+    private static List<String> findUnhandledObjectTypes(Path dir) throws IOException {
+        Set<String> out = new TreeSet<>();
+        if (!Files.isDirectory(dir)) return new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir)) {
+            for (Path p : ds) {
+                if (!Files.isRegularFile(p)) continue;
+                // 仅识别严格的 3 段名 `<object>.<type>.<ext>`：
+                // 4 段以上（如 `zfoo.clas.testclasses.abap`）属于某个已知对象的附属文件。
+                String[] parts = p.getFileName().toString().split("\\.");
+                if (parts.length != 3) continue;
+                String type = parts[1].toLowerCase(Locale.ROOT);
+                if (HANDLED_OBJECT_TYPES.contains(type) || "devc".equals(type)) continue;
+                out.add(type);
+            }
+        }
+        return new ArrayList<>(out);
     }
 
     /** 把 file 的绝对路径转成 相对 stage 的 POSIX 路径。 */
@@ -1372,12 +1620,20 @@ public final class MultiTabTemplateImportService {
         }
     }
 
-    /** 是否存在被其它用户 / 传输请求锁定的步骤。 */
-    private static boolean hasLock(ImportResult r) {
+    /**
+     * 本次导入中因对象锁冲突而未能导入的对象（可读名，如 {@code INCLUDE ZTR_SHOW_JD}），
+     * 按出现顺序去重。用于结果对话框与 Error Log 点名被锁对象。
+     */
+    private static List<String> lockedObjectNames(ImportResult r) {
+        List<String> out = new ArrayList<>();
         for (StepOutcome o : r.steps) {
-            if (o.locked) return true;
+            for (String n : o.lockedObjects) {
+                if (!out.contains(n)) {
+                    out.add(n);
+                }
+            }
         }
-        return false;
+        return out;
     }
 
     /**
@@ -1426,8 +1682,7 @@ public final class MultiTabTemplateImportService {
 
         emit(fileLines, IStatus.INFO, "  Steps:");
         for (StepOutcome o : r.steps) {
-            int sev = o.locked ? IStatus.WARNING
-                    : (o.exitCode != 0 ? IStatus.ERROR : IStatus.INFO);
+            int sev = o.exitCode != 0 ? IStatus.ERROR : IStatus.INFO;
             StringBuilder sb = new StringBuilder();
             sb.append("    [").append(o.idx).append("] ")
                     .append(padRight(o.name, 22))
@@ -1436,7 +1691,7 @@ public final class MultiTabTemplateImportService {
                 sb.append("   → ").append(o.resultFile.getFileName());
             }
             if (o.locked) {
-                sb.append("   [WARNING: object lock]");
+                sb.append("   [FAILED: object lock]");
             }
             emit(fileLines, sev, sb.toString());
         }
@@ -1444,7 +1699,14 @@ public final class MultiTabTemplateImportService {
                 ? "  Overall: OK"
                 : "  Overall: FAILED (exit=" + r.overallRc + ")");
 
-        // 对象锁（ENQUEUE）只作告警：被锁的通常只是个别对象，其余对象已成功导入。
+        // ZIP 里还有本流程不认识的对象类型：明确点名，避免"ZIP 里的对象都导进来了"的误解。
+        if (r.unhandledObjectTypes != null && !r.unhandledObjectTypes.isEmpty()) {
+            emit(fileLines, IStatus.WARNING, "  Not imported — no importer for object type(s): "
+                    + String.join(", ", r.unhandledObjectTypes)
+                    + "   (files present in the ZIP but skipped by this flow)");
+        }
+
+        // 对象锁（ENQUEUE）导致对本次导入失败：点名被锁对象，红色（ERROR）标记。
         boolean anyLock = false;
         for (StepOutcome o : r.steps) {
             if (o.locked && o.message != null && !o.message.isEmpty()) {
@@ -1453,19 +1715,17 @@ public final class MultiTabTemplateImportService {
             }
         }
         if (anyLock) {
-            emit(fileLines, IStatus.WARNING, "  Warnings (object lock — NOT counted as import failure):");
+            emit(fileLines, IStatus.ERROR, "  Failures (object lock conflict — these objects were NOT imported):");
             for (StepOutcome o : r.steps) {
                 if (o.locked && o.message != null && !o.message.isEmpty()) {
-                    emit(fileLines, IStatus.WARNING, "    • [" + o.idx + "] " + o.name + ":");
+                    emit(fileLines, IStatus.ERROR, "    • [" + o.idx + "] " + o.name + ":");
                     for (String line : o.message.split("\\R")) {
                         if (!line.trim().isEmpty()) {
-                            emit(fileLines, IStatus.WARNING, "      " + line);
+                            emit(fileLines, IStatus.ERROR, "      " + line);
                         }
                     }
                 }
             }
-            emit(fileLines, IStatus.WARNING, "  The other objects were imported; only the locked object was skipped.");
-            emit(fileLines, IStatus.WARNING, "  Release the lock, then re-run the import to update that object.");
         }
 
         if (r.overallRc != 0) {
@@ -1623,8 +1883,11 @@ public final class MultiTabTemplateImportService {
         final Path resultFile;
         String message;
 
-        /** 该步骤失败的唯一原因是对象被其它用户 / 传输请求锁定（ENQUEUE）。 */
+        /** 该步骤失败的原因是对象被其它用户 / 传输请求锁定（ENQUEUE）。 */
         boolean locked;
+
+        /** 被锁定的对象（可读名，如 "INCLUDE ZTR_SHOW_JD"），按出现顺序，供对话框/日志点名。 */
+        final List<String> lockedObjects = new ArrayList<>();
 
         StepOutcome(int idx, String name, int exitCode, Path resultFile, String message) {
             this.idx = idx;
@@ -1650,6 +1913,8 @@ public final class MultiTabTemplateImportService {
         int extractedCount;
         List<StepOutcome> steps;
         int overallRc;
+        /** ZIP 里存在但本流程未导入的 abapGit 对象类型（如 doma / dtel / fugr）。 */
+        List<String> unhandledObjectTypes;
     }
 
     /** 环境检查失败异常（不计入整体异常流）。 */

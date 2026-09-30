@@ -1,7 +1,12 @@
 package com.sap.abap.ai.completion.editor;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import org.eclipse.core.runtime.ILog;
+import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Platform;
+import org.eclipse.core.runtime.Status;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.jface.text.DocumentEvent;
@@ -10,6 +15,7 @@ import org.eclipse.jface.text.IDocumentListener;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.viewers.ISelectionProvider;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
@@ -23,7 +29,9 @@ import org.eclipse.ui.texteditor.IDocumentProvider;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import com.sap.abap.ai.completion.parser.AbapLanguageDetector;
+import com.sap.abap.ai.completion.logging.AILogger;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
+import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
 /**
  * Listens to document changes and triggers AI code completion.
@@ -36,6 +44,13 @@ import com.sap.abap.ai.completion.preferences.AIConfiguration;
  *    content hash every 800ms (works for ALL editors including ABAP)
  */
 public class AICompletionListener implements IDocumentListener, IPartListener {
+
+    private static final ILog PLATFORM_LOG = Platform.getLog(
+            Platform.getBundle("com.sap.abap.ai.completion"));
+
+    private static void plog(String msg) {
+        PLATFORM_LOG.log(new Status(IStatus.INFO, "com.sap.abap.ai.completion", msg));
+    }
 
     private ITextEditor editor;
     private IDocument document;
@@ -54,37 +69,71 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     private volatile boolean polling = false;
     private static final int POLL_INTERVAL_MS = 400;
 
+    /** 上一次补全时的光标 offset，用于去重判断 */
+    private int lastTriggerOffset = -1;
+    /** 上一次补全时的内容 hash，用于去重判断 */
+    private String lastTriggerHash = "";
+    /** 上一次补全的光标 offset + 结果（5项需求） */
+    private int lastCompletionOffset = -1;
+    /** 补全结果: 0=无,1=ESC取消,2=确认,3=其它 */
+    private int lastCompletionResult = PreferenceConstants.COMPLETION_RESULT_NONE;
+
     /**
      * Attaches this listener to the currently active editor.
      */
-    public void attachToActiveEditor() {
+    public boolean attachToActiveEditor() {
         detach();
 
         try {
             IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
-            if (window == null) return;
+            if (window == null) {
+                plog("attachToActiveEditor: no active workbench window");
+                return false;
+            }
 
             IWorkbenchPage page = window.getActivePage();
-            if (page == null) return;
+            if (page == null) {
+                plog("attachToActiveEditor: no active page");
+                return false;
+            }
 
             page.addPartListener(this);
 
             IEditorPart activeEditor = page.getActiveEditor();
+            if (activeEditor == null) {
+                plog("attachToActiveEditor: no active editor");
+                return false;
+            }
+            plog("attachToActiveEditor: active editor class="
+                    + activeEditor.getClass().getName());
             attachToEditorPart(activeEditor);
+            return true;
         } catch (Exception e) {
-            // Plugin might not be fully initialized
+            plog("attachToActiveEditor: exception " + e.getMessage());
+            return false;
         }
     }
 
     public void attachToEditorPart(IEditorPart editorPart) {
+        ITextEditor te = null;
         if (editorPart instanceof ITextEditor) {
-            ITextEditor te = (ITextEditor) editorPart;
-            // ABAP 门控: 非 ABAP 编辑器不附加监听
-            if (!isAbapEditor(te)) {
-                return;
-            }
-            attachToEditor(te);
+            te = (ITextEditor) editorPart;
+        } else if (editorPart != null) {
+            // 兜底：尝试通过 adapter 获取 ITextEditor（部分 ADT 编辑器可能不直接实现该接口）
+            te = editorPart.getAdapter(ITextEditor.class);
         }
+        if (te == null) {
+            plog("attachToEditorPart: cannot obtain ITextEditor from "
+                    + (editorPart == null ? "null" : editorPart.getClass().getName()));
+            return;
+        }
+        // ABAP 门控: 非 ABAP 编辑器不附加监听
+        if (!isAbapEditor(te)) {
+            plog("attachToEditorPart: not an ABAP editor, id=" + te.getSite().getId());
+            return;
+        }
+        plog("attachToEditorPart: ABAP editor detected, attaching");
+        attachToEditor(te);
     }
 
     /**
@@ -120,22 +169,35 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         if (textEditor == null) return;
 
         IDocumentProvider docProvider = textEditor.getDocumentProvider();
-        if (docProvider == null) return;
+        if (docProvider == null) {
+            plog("attachToEditor: documentProvider is null");
+            return;
+        }
 
         IEditorInput input = textEditor.getEditorInput();
         this.document = docProvider.getDocument(input);
-        if (this.document == null) return;
+        if (this.document == null) {
+            plog("attachToEditor: document is null, input="
+                    + (input == null ? "null" : input.getName()));
+            return;
+        }
 
-        // Get file and project
-        if (input instanceof FileEditorInput) {
-            this.currentFile = ((FileEditorInput) input).getFile();
-            if (this.currentFile != null) {
-                this.currentProject = this.currentFile.getProject();
-            }
+        // Get file and project（含 ADT 远程文件的反射适配）
+        this.currentFile = getFile(input);
+        if (this.currentFile != null) {
+            this.currentProject = this.currentFile.getProject();
         }
 
         // Try to get the text viewer
         this.viewer = textEditor.getAdapter(ITextViewer.class);
+
+        String fileName = currentFile != null ? currentFile.getName() : "unknown";
+        AILogger.logDiagnostic("AutoCompletion",
+                "attached to ABAP editor: " + fileName
+                        + ", autoCompletionEnabled=" + AIConfiguration.isAutoCompletionEnabled()
+                        + ", pluginEnabled=" + AIConfiguration.isPluginEnabled()
+                        + ", delay=" + AIConfiguration.getAutoCompleteDelay() + "ms"
+                        + ", activeTriggerChars=" + AIConfiguration.getActiveTriggerChars().size());
 
         // Record initial content hash
         try {
@@ -144,6 +206,13 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             this.lastContentHash = "";
         }
         this.lastModifiedTime = System.currentTimeMillis();
+
+        // 重置本次编辑会话的补全触发状态并绑定补全结果回调
+        lastCompletionOffset = -1;
+        lastCompletionResult = PreferenceConstants.COMPLETION_RESULT_NONE;
+        lastTriggerOffset = -1;
+        lastTriggerHash = "";
+        overlayManager.setCompletionResultListener(result -> lastCompletionResult = result);
 
         // Register document listener
         this.document.addDocumentListener(this);
@@ -162,6 +231,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             document = null;
         }
         overlayManager.hideOverlay();
+        overlayManager.setCompletionResultListener(null);
         editor = null;
         viewer = null;
         currentFile = null;
@@ -268,6 +338,8 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
                 }
 
                 // Polling auto-completion check
+                plog("poll tick: elapsed=" + (System.currentTimeMillis() - lastModifiedTime)
+                        + "ms, delay=" + AIConfiguration.getAutoCompleteDelay() + "ms");
                 performPollingCheck();
             }
         }, "ai-completion-poll");
@@ -346,10 +418,22 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     // ==================== Completion Trigger ====================
 
     private void triggerPollingCompletion() {
-        if (editor == null || document == null || currentFile == null) return;
+        // currentFile 可以为 null（SAP ADT 远程文件），AICompletionService 能处理
+        if (editor == null || document == null) return;
 
-        // Don't trigger if overlay is already showing
+        plog("triggerPollingCompletion entered, cursorOffset=" + getCursorOffset());
+
+        // 提示窗口还没关闭 -> 直接退出（不再重复发送补全）
         if (overlayManager.isOverlayVisible()) return;
+        // 规则3：上一次补全请求尚未结束 -> 本次补全不能开始。
+        // 不取消旧请求，待其结束后的下一轮轮询再评估。
+        if (currentRequest != null && !currentRequest.isDone()) {
+            debugLog("skip trigger: previous completion still in progress");
+            return;
+        }
+
+        // 有选中文本时不触发自动补全（用户正在选择代码）
+        if (hasSelection()) return;
 
         int cursorOffset = getCursorOffset();
         if (cursorOffset < 0) return;
@@ -359,14 +443,42 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             int afterStart = Math.min(cursorOffset, document.getLength());
             String textAfter = document.get(afterStart, document.getLength() - afterStart);
             String fullDocument = document.get();
+            String currentHash = computeHash(fullDocument);
 
             // Update hash to current content
-            lastContentHash = computeHash(fullDocument);
+            lastContentHash = currentHash;
 
-            // 门控: 光标所在行前后（同一行内）都有字符时，不触发 AI 代码补全
-            if (isCursorInMiddleOfLine(textBefore, textAfter)) {
+            // 触发条件判断（规则3：光标前为空/全空格触发；规则4：活动触发字符后缀匹配触发；
+            // 规则6：光标前后都有非空字符则退出）
+            if (!shouldTriggerAutoCompletion(textBefore, textAfter)) {
+                int lastNl = textBefore.lastIndexOf('\n');
+                String beforeLine = textBefore.substring(lastNl + 1);
+                debugLog("skip trigger: condition not met, linePrefix='"
+                        + beforeLine.trim() + "'");
                 return;
             }
+
+            // 用行内容（trim 后）+ offset 做去重，避免"X = "（光标在空格后）因 hash 未变而被误判为重复
+            int lastNl = textBefore.lastIndexOf('\n');
+            String lineContent = textBefore.substring(lastNl + 1);
+            String dedupKey = cursorOffset + "|" + lineContent.trim();
+
+            if (dedupKey.equals(lastTriggerHash)) {
+                debugLog("skip duplicate trigger: offset=" + cursorOffset
+                        + " lastResult=" + lastCompletionResult);
+                return;
+            }
+
+            // 记录本次补全的 offset 与触发上下文（结果由 overlay 回调更新）
+            lastTriggerOffset = cursorOffset;
+            lastTriggerHash = dedupKey;
+            lastCompletionOffset = cursorOffset;
+            lastCompletionResult = PreferenceConstants.COMPLETION_RESULT_NONE;
+
+            int newlineIdx = textBefore.lastIndexOf('\n');
+            String linePrefix = textBefore.substring(newlineIdx + 1);
+            debugLog("trigger auto-completion: offset=" + cursorOffset
+                    + " linePrefix='" + linePrefix + "'");
 
             triggerCompletion(currentFile, textBefore, textAfter, fullDocument, currentProject, cursorOffset);
         } catch (Exception e) {
@@ -375,12 +487,53 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     }
 
     /**
+     * 自动补全触发条件判断。
+     *   - 规则6: 光标位置前、后都有非空字符 -> 退出（不补全）
+     *   - 规则3: 光标前为空或全为空格 -> 触发
+     *   - 规则4: 否则遍历活动触发字符，光标前内容以某触发字符结尾时触发
+     */
+    private boolean shouldTriggerAutoCompletion(String textBefore, String textAfter) {
+        // 规则6
+        if (isCursorInMiddleOfLine(textBefore, textAfter)) {
+            debugLog("rule6 blocked: cursor in middle of line");
+            return false;
+        }
+
+        int lastNewlineBefore = textBefore.lastIndexOf('\n');
+        String beforeOnLine = textBefore.substring(lastNewlineBefore + 1);
+
+        // 规则3
+        if (beforeOnLine.trim().isEmpty()) {
+            return true;
+        }
+
+        // 规则4：trim 末尾空格后匹配触发字符，使 "X = "（光标在空格后）也能触发
+        String trimmedBefore = beforeOnLine.replaceAll("\\s+$", "");
+        List<String> active = AIConfiguration.getActiveTriggerChars();
+        plog("rule4 check: trimmedBefore='" + trimmedBefore + "', activeChars=" + active.size()
+                + ", activeList=" + active);
+        for (String ch : active) {
+            if (ch != null && !ch.isEmpty() && trimmedBefore.endsWith(ch)) {
+                plog("rule4 matched: '" + ch + "'");
+                return true;
+            }
+        }
+        if (!trimmedBefore.isEmpty()) {
+            char lastChar = trimmedBefore.charAt(trimmedBefore.length() - 1);
+            plog("rule4 last char: '" + lastChar + "' (U+" + Integer.toHexString(lastChar).toUpperCase() + ")");
+            // 硬编码兼容：= 是最常见的触发字符，确保配置缺失时也能触发
+            if (lastChar == '=') {
+                plog("rule4 hardcoded match: '='");
+                return true;
+            }
+        }
+        plog("rule4 no match: '" + trimmedBefore + "'");
+        return false;
+    }
+
+    /**
      * 判断光标是否位于一行的中间，即光标前后在同一行内都有非空白字符。
      * 若返回 true，说明光标在已有代码中间，此时不应调用 AI 代码补全。
-     *
-     * @param textBefore 光标前的全文
-     * @param textAfter  光标后的全文
-     * @return 光标前后同侧都有字符时为 true
      */
     private boolean isCursorInMiddleOfLine(String textBefore, String textAfter) {
         int lastNewlineBefore = textBefore.lastIndexOf('\n');
@@ -398,13 +551,11 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
 
     @Override
     public void partActivated(IWorkbenchPart part) {
-        if (part instanceof ITextEditor && part != editor) {
-            ITextEditor te = (ITextEditor) part;
-            // ABAP 门控: 切换到非 ABAP 编辑器时不附加监听
-            if (!isAbapEditor(te)) {
-                return;
-            }
-            attachToEditor(te);
+        if (part instanceof IEditorPart) {
+            IEditorPart ep = (IEditorPart) part;
+            plog("partActivated: editor=" + ep.getSite().getId()
+                    + " class=" + ep.getClass().getName());
+            attachToEditorPart(ep);
         }
     }
 
@@ -437,8 +588,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
 
     private void triggerCompletion(IFile file, String textBefore, String textAfter,
                                     String fullDocument, IProject project, int cursorOffset) {
-        if (file == null) return;
-
+        // file 可以为 null（SAP ADT 远程文件），AICompletionService 能处理
         cancelCurrentRequest();
 
         // 在 UI 线程捕获 IWorkbenchPage
@@ -472,6 +622,14 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         }
 
         overlayManager.showOverlay(viewer, document, completionText, cursorOffset);
+
+        // 自动补全经网络异步返回后才显示提示，期间焦点可能已离开编辑器。
+        // 必须显式把焦点交回编辑器控件，overlay 的 TAB/Enter/Esc 按键拦截器
+        // 才能收到按键事件（与手动 CTRL+ALT+. 触发路径行为一致）。
+        StyledText widget = viewer.getTextWidget();
+        if (widget != null && !widget.isDisposed()) {
+            widget.setFocus();
+        }
     }
 
     private int getCursorOffset() {
@@ -483,6 +641,25 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             return ((ITextSelection) selProvider.getSelection()).getOffset();
         }
         return 0;
+    }
+
+    /**
+     * 检查编辑器中是否有选中文本（selection length > 0）。
+     * 有选中文本时不触发自动补全。
+     */
+    private boolean hasSelection() {
+        if (editor == null) return false;
+        ISelectionProvider selProvider = editor.getSelectionProvider();
+        if (selProvider == null) return false;
+        if (selProvider.getSelection() instanceof ITextSelection) {
+            ITextSelection sel = (ITextSelection) selProvider.getSelection();
+            return sel.getLength() > 0;
+        }
+        return false;
+    }
+
+    private static void debugLog(String message) {
+        try { AILogger.logDebug("AutoCompletion", message); } catch (Exception ignored) {}
     }
 
     private void cancelCurrentRequest() {
@@ -510,5 +687,27 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             }
         }
         return Long.toHexString(h1) + Long.toHexString(h2);
+    }
+
+    /**
+     * 从 IEditorInput 获取 IFile，含 ADT 远程文件的反射适配。
+     * 与 AICompletionHandler.getFile 逻辑一致。
+     */
+    private static IFile getFile(IEditorInput input) {
+        if (input == null) return null;
+        if (input instanceof FileEditorInput) return ((FileEditorInput) input).getFile();
+        IFile file = input.getAdapter(IFile.class);
+        if (file != null) return file;
+        try {
+            java.lang.reflect.Method m = input.getClass().getMethod("getFile");
+            Object result = m.invoke(input);
+            if (result instanceof IFile) return (IFile) result;
+        } catch (Exception ignored) {}
+        try {
+            java.lang.reflect.Method m = input.getClass().getMethod("getIFile");
+            Object result = m.invoke(input);
+            if (result instanceof IFile) return (IFile) result;
+        } catch (Exception ignored) {}
+        return null;
     }
 }

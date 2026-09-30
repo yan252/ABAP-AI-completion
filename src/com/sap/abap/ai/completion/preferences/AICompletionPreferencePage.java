@@ -26,22 +26,18 @@ import com.sap.abap.ai.completion.Activator;
  * Preference page for ABAP AI Completion.
  * Manually built UI (not FieldEditorPreferencePage) to avoid parent assertion issues.
  *
- * <p>Feature, auto-completion, prompt, style and logging settings are configured here.
- * The AI connection settings live on the separate "AI Connections" child page
- * (see {@link AIConnectionPreferencePage}).</p>
+ * <p>Feature, prompt, style and logging settings are configured here.
+ * The auto-completion trigger settings live on the separate top-level
+ * "ABAP AI Auto-Completion Settings" page
+ * (see {@link AutoCompletionPreferencePage}); the AI connection settings live
+ * on the "AI Connections" child page (see {@link AIConnectionPreferencePage}).</p>
  */
 public class AICompletionPreferencePage extends PreferencePage implements IWorkbenchPreferencePage {
 
     // --- Other settings ---
     private Text txtSkillDir;
     private Button chkSkillEnabled;
-    private Text txtSystemPrompt;
-    private Text txtAutoDelay;
-    private Button chkPluginEnabled;
-    private Button chkAutoComplete;
-    private ColorSelector colorSelector;
-    private Label lblKeybinding;
-    private Button chkParentResolution;
+    private Text txtSystemPrompt;    private Button chkPluginEnabled;    private ColorSelector colorSelector;    private Button chkParentResolution;
     private Text txtSearchDepth;
     private Text txtMaxContextChars;
     private Button chkWorkspaceCodeRef;
@@ -73,7 +69,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         createVersionHeader(main);
         createFeatureGroup(main);
-        createAutoCompletionGroup(main);
         createParentProgramGroup(main);
         createContextGroup(main);
         createSkillGroup(main);
@@ -130,39 +125,6 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         chkPluginEnabled = new Button(g, SWT.CHECK);
         chkPluginEnabled.setText("Enable ABAP AI Completion plugin");
-    }
-
-    private void createAutoCompletionGroup(Composite parent) {
-        Group g = new Group(parent, SWT.NONE);
-        g.setText("Auto-Completion Settings");
-        g.setLayout(new GridLayout(2, false));
-        g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-        chkAutoComplete = new Button(g, SWT.CHECK);
-        chkAutoComplete.setText("Auto-complete while typing (Temporary)");
-        GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
-        ckGd.horizontalSpan = 2;
-        chkAutoComplete.setLayoutData(ckGd);
-
-        createLabel(g, "Delay after typing (ms):");
-        txtAutoDelay = createText(g);
-
-        Label note = new Label(g, SWT.WRAP);
-        note.setText("How long to wait after you stop typing before AI suggests code.\n"
-                + "Recommended: 1500-3000 ms. Lower values = more requests to the API.");
-        GridData nd = new GridData(GridData.FILL_HORIZONTAL);
-        nd.horizontalSpan = 2;
-        note.setLayoutData(nd);
-
-        lblKeybinding = new Label(g, SWT.WRAP);
-        lblKeybinding.setText(
-            "Manual trigger key: Ctrl+Shift+.\n"
-            + "To change this keybinding: Window > Preferences > General > Keys\n"
-            + "Search for 'ABAP AI completion'");
-        GridData kd = new GridData(GridData.FILL_HORIZONTAL);
-        kd.horizontalSpan = 2;
-        kd.horizontalIndent = 10;
-        lblKeybinding.setLayoutData(kd);
     }
 
     private void createSkillGroup(Composite parent) {
@@ -331,9 +293,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtSystemPrompt.setText(store.getString(PreferenceConstants.SYSTEM_PROMPT));
 
         chkPluginEnabled.setSelection(store.getBoolean(PreferenceConstants.PLUGIN_ENABLED));
-        chkAutoComplete.setSelection(store.getBoolean(PreferenceConstants.AUTO_COMPLETION_ENABLED));
 
-        txtAutoDelay.setText(store.getString(PreferenceConstants.AUTO_COMPLETE_DELAY));
 
         chkParentResolution.setSelection(
                 store.getBoolean(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED));
@@ -369,9 +329,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         store.setValue(PreferenceConstants.SYSTEM_PROMPT, txtSystemPrompt.getText());
 
         store.setValue(PreferenceConstants.PLUGIN_ENABLED, chkPluginEnabled.getSelection());
-        store.setValue(PreferenceConstants.AUTO_COMPLETION_ENABLED, chkAutoComplete.getSelection());
 
-        store.setValue(PreferenceConstants.AUTO_COMPLETE_DELAY, txtAutoDelay.getText());
 
         store.setValue(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED,
                 chkParentResolution.getSelection());
@@ -410,9 +368,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtSystemPrompt.setText(PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
 
         chkPluginEnabled.setSelection(PreferenceConstants.DEFAULT_PLUGIN_ENABLED);
-        chkAutoComplete.setSelection(PreferenceConstants.DEFAULT_AUTO_COMPLETION_ENABLED);
 
-        txtAutoDelay.setText(PreferenceConstants.DEFAULT_AUTO_COMPLETE_DELAY);
 
         chkParentResolution.setSelection(
                 PreferenceConstants.DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED);

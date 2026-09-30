@@ -52,6 +52,10 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         store.setDefault(PreferenceConstants.PROMPT_CACHE_ENABLED,
                 PreferenceConstants.DEFAULT_PROMPT_CACHE_ENABLED);
 
+        // === Auto Completion Trigger Characters ===
+        store.setDefault(PreferenceConstants.AUTO_COMPLETE_TRIGGER_CHARS,
+                TriggerChar.defaultsJson());
+
         // === AI Multi-Connection Settings ===
         store.setDefault(PreferenceConstants.AI_CONNECTIONS, "");
         store.setDefault(PreferenceConstants.AI_DEFAULT_CONNECTION_NAME, "");

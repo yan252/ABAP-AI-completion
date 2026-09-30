@@ -1,11 +1,12 @@
-﻿﻿﻿﻿﻿﻿﻿﻿$proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
+$proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $src = "$proj\src"
 $bin = "$proj\bin"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.1.0.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.1.23.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
-$p2Pool = "C:\Users\96000217\.p2\pool\plugins"
+$p2Pool = "D:\Users\96000217\eclipse\plugins"
+$jdkHome = "D:\jdk\jdk-21.0.12.1"
 
 $deps = @(
     "$p2Pool\org.eclipse.osgi_*.jar"
@@ -43,7 +44,7 @@ Write-Host "=== Compiling ==="
 $depPaths = ($deps | ForEach-Object { (Resolve-Path $_).Path }) -join ";"
 $srcFiles = Get-ChildItem -Path $src -Recurse -Filter "*.java" | ForEach-Object { $_.FullName }
 
-& "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\javac.exe" --release 17 `
+& "$jdkHome\bin\javac.exe" --release 17 `
     -cp "$depPaths" `
     -d "$bin" `
     $srcFiles 2>&1
@@ -80,7 +81,7 @@ if (Test-Path "$proj\templates.properties") {
 
 Write-Host "=== Creating JAR with full plugin structure ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
-$jarExe = "C:\Users\96000217\.p2\pool\plugins\org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_23.0.2.v20250131-0604\jre\bin\jar.exe"
+$jarExe = "$jdkHome\bin\jar.exe"
 Push-Location $bin
 $jarArgs = @("cfm", "$jarPath", "META-INF\MANIFEST.MF", "plugin.xml", "com\")
 if (Test-Path "$bin\icons") { $jarArgs += "icons\" }

@@ -10,7 +10,6 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
-import org.eclipse.swt.widgets.DirectoryDialog;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
@@ -23,15 +22,14 @@ import com.sap.abap.ai.completion.sap.AbapCliConnectionTester;
 import com.sap.abap.ai.completion.sap.SapConnectionManager;
 
 /**
- * “SAP 配置”偏好页：配置 abapGit（abap-cli）连接 URL —— 供 “Test Connection”
- * 与模板导入使用；下方保留遗留 JCo 字段（应用服务器号码、Client、语言、用户、密码），
- * 仅供基于 RFC 的 “Templates” 菜单使用，另可配置可选的 JCo native 库目录。
+ * “SAP 配置”偏好页：配置 abapGit（abap-cli）连接 —— 供 “Test Connection”
+ * 与模板导入使用。填写 abap-cli URL，以及连接所需的可选参数（Client、语言、用户、密码）。
  *
  * <p>保存后调用 {@link SapConnectionManager#refreshDestination()} 使新配置立即生效。</p>
  *
  * <p><b>测试连接</b>：使用页面顶部的 abap-cli URL，按 abapGit（abap-cli）方式探测
  * tls / auth / adt 等分层（见 {@link AbapCliConnectionTester}）。
- * 不涉及 JCo，也不读取 {@code ~/.abap-cli/systems.json} 中的 profile。</p>
+ * 不读取 {@code ~/.abap-cli/systems.json} 中的 profile。</p>
  */
 public class SapPreferencePage extends PreferencePage implements IWorkbenchPreferencePage {
 
@@ -41,18 +39,19 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
     private Text txtLanguage;
     private Text txtUser;
     private Text txtPassword;
-    private Text txtNativeLibDir;
     private Label lblTestResult;
 
     private IPreferenceStore store;
 
     public SapPreferencePage() {
         super("SAP Connection Config");
-        setDescription("Configure the abapGit (abap-cli) connection URL used by \"Test Connection\" "
-                + "and the template import, plus the legacy JCo fields used by the RFC-based "
-                + "\"Templates\" menu items.\n\n"
+        setDescription("Configure the abapGit (abap-cli) connection used by \"Test Connection\" "
+                + "and the template import. Provide the abap-cli URL and, if required, the "
+                + "Client / User / Password / Language used to authenticate against the ABAP "
+                + "system.\n\n"
                 + "Note: \"Test Connection\" uses the abap-cli URL at the top and probes it via the "
-                + "abapGit (abap-cli) approach -- no JCo, no ~/.abap-cli/systems.json profile involved.");
+                + "abapGit (abap-cli) approach (tls / auth / adt), without relying on "
+                + "~/.abap-cli/systems.json profile.");
     }
 
     @Override
@@ -67,7 +66,6 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         main.setLayoutData(new GridData(GridData.FILL_BOTH));
 
         createConnectionGroup(main);
-        createNativeLibGroup(main);
         createHintGroup(main);
 
         loadValues();
@@ -112,29 +110,6 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         lblTestResult.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
     }
 
-    private void createNativeLibGroup(Composite parent) {
-        Group g = new Group(parent, SWT.NONE);
-        g.setText("JCo Native Library (Optional)");
-        g.setLayout(new GridLayout(3, false));
-        g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-
-        createLabel(g, "Native library directory:");
-        txtNativeLibDir = createText(g);
-
-        Button browseBtn = new Button(g, SWT.PUSH);
-        browseBtn.setText("Browse...");
-        browseBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> browseNativeLibDir()));
-
-        Label note = new Label(g, SWT.WRAP);
-        note.setText("Configure this only when Eclipse cannot auto-load the JCo native "
-                + "library; the directory must contain sapjco3.dll (Windows) or "
-                + "libsapjco3.so (Linux/macOS).\n"
-                + "Leave empty to let the OSGi fragment (com.sap.conn.jco.win32.x86_64) load it automatically.");
-        GridData nd = new GridData(GridData.FILL_HORIZONTAL);
-        nd.horizontalSpan = 3;
-        note.setLayoutData(nd);
-    }
-
     private void createHintGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
         g.setText("Usage Hints");
@@ -142,14 +117,13 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("- Template import now uses the abapGit (abap-cli) approach from the\n"
+        note.setText("- Template import uses the abapGit (abap-cli) approach from the\n"
                 + "  stage directory (node abap-cli + prog-* extensions).\n"
                 + "- \"Test Connection\" uses the abap-cli URL at the top (e.g.\n"
-                + "  https://s4devapp.app.com.cn:1443) and probes tls / auth / adt.\n"
-                + "  It never touches JCo or ~/.abap-cli/systems.json.\n"
-                + "- The JCo fields below are only used by the legacy RFC-based \"Templates\"\n"
-                + "  menu items. The Application Server field has been removed; the abapGit\n"
-                + "  test / import no longer derives a URL from host + system number.");
+                + "  https://s4devapp.sap.com.cn:1443) and probes tls / auth / adt\n"
+                + "  without relying on ~/.abap-cli/systems.json.\n"
+                + "- Client / User / Password / Language are used for authentication against\n"
+                + "  the ABAP system when testing the abapGit (abap-cli) connection.");
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.verticalSpan = 1;
         nd.widthHint = 500;
@@ -165,7 +139,6 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         txtLanguage.setText(store.getString(PreferenceConstants.SAP_LANGUAGE));
         txtUser.setText(store.getString(PreferenceConstants.SAP_USER));
         txtPassword.setText(store.getString(PreferenceConstants.SAP_PASSWORD));
-        txtNativeLibDir.setText(store.getString(PreferenceConstants.SAP_NATIVE_LIB_DIR));
     }
 
     private void saveValues() {
@@ -175,7 +148,6 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         store.setValue(PreferenceConstants.SAP_LANGUAGE, txtLanguage.getText().trim());
         store.setValue(PreferenceConstants.SAP_USER, txtUser.getText().trim());
         store.setValue(PreferenceConstants.SAP_PASSWORD, txtPassword.getText().trim());
-        store.setValue(PreferenceConstants.SAP_NATIVE_LIB_DIR, txtNativeLibDir.getText().trim());
     }
 
     @Override
@@ -194,7 +166,6 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         txtLanguage.setText(PreferenceConstants.DEFAULT_SAP_LANGUAGE);
         txtUser.setText("");
         txtPassword.setText("");
-        txtNativeLibDir.setText("");
     }
 
     // ==================== Test Connection ====================
@@ -202,7 +173,7 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
     /**
      * abapGit（abap-cli）方式测试连接。
      *
-     * <p>使用页面顶部的 abap-cli URL（如 https://s4devapp.app.com.cn:1443），
+     * <p>使用页面顶部的 abap-cli URL（如 https://s4devapp.sap.com.cn:1443），
      * 在后台线程逐层探测 tls / auth / adt 等；tls+auth+adt 全部 ok 即视为成功。
      * 不涉及 JCo，也不使用 {@code ~/.abap-cli/systems.json} 中的 profile。</p>
      */
@@ -271,21 +242,5 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         GridData gd = new GridData(GridData.FILL_HORIZONTAL);
         txt.setLayoutData(gd);
         return txt;
-    }
-
-    private void browseNativeLibDir() {
-        DirectoryDialog dialog = new DirectoryDialog(getShell(), SWT.OPEN);
-        dialog.setText("Select JCo Native Library Directory");
-        dialog.setMessage("Please select the directory containing sapjco3.dll / libsapjco3.so:");
-
-        String current = txtNativeLibDir.getText().trim();
-        if (current != null && !current.isEmpty()) {
-            dialog.setFilterPath(current);
-        }
-
-        String selected = dialog.open();
-        if (selected != null && !selected.isEmpty()) {
-            txtNativeLibDir.setText(selected);
-        }
     }
 }

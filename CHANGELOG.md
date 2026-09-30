@@ -8,6 +8,47 @@
 
 ---
 
+## [1.1.2] - 2026-09-21
+
+### Added
+- **支持导入类（`CLAS`）与接口（`INTF`）**：模板 ZIP 中的 `*.clas.xml` / `*.clas.abap` / `*.intf.xml` / `*.intf.abap` 现在会被一并导入，不再被静默丢弃。新增 `oo-xml-create` 扩展，按 ADT OO 端点（类 `POST /sap/bc/adt/oo/classes`、接口 `POST /sap/bc/adt/oo/interfaces`）创建对象，再 `PUT <url>/source/main?lockHandle=…&corrNr=…` 写入源码。
+- **整体激活（所有对象一次性激活）**：模板导入流程新增最后一步 `prog-batch-activate`，在全部对象导入、源码写入完成之后，把**主程序（PROG/P）、文本元素（PROG/PX）、INCLUDE（PROG/I）、结构（TABL/DS）、透明表（TABL/DT）、表类型（TTYP/DA）、类（CLAS/OC）、接口（INTF/OI）合并成一次** `POST /sap/bc/adt/activation` 请求，由 SAP 自行解析对象之间的依赖顺序。文本元素由 `*.prog.xml` 的 `<I18N_TPOOL>`（含 `<ENTRY>`）判定，作为独立对象 `PROG/PX`（URI 为 `/sap/bc/adt/textelements/programs/<prog>`）加入同一批次；INCLUDE 没有文本元素，不参与。
+- **未支持的对象类型会在日志中点名**：ZIP 内出现当前没有导入器的类型（`doma` / `dtel` / `fugr` / `ddls` 等）时，导入日志会输出 `Not imported — no importer for object type(s): …`，便于排查，但不会阻断本次导入。
+
+### Fixed
+- **文本元素导入后停留在未激活状态**：`prog-xml-push`（第 6 步）推送 `textpool`（标题 / 符号 / 选择文本）后虽然激活了主程序，但**激活 `PROG/P` 不会激活文本元素**——文本元素是独立可激活对象（`adtcore:type="PROG/PX"`），必须额外给出一条指向 `/sap/bc/adt/textelements/programs/<prog>` 的引用。现在推送完成后把 `PROG/P` 与 `PROG/PX` 放在**同一次**激活请求中；若该批次被 SAP 拒绝（程序被锁、源码此时还编译不过等），再**单独激活一次 `PROG/PX`**，保证文本元素不会因为程序的激活结果而留在 inactive。
+
+### Changed
+- **导入流程由 7 步扩展为 9 步、扩展由 6 个增加为 8 个**：步骤顺序为 `prog-xml-create` → `ddic-xml-create` → `oo-xml-create` → `prog-xml-update` → `prog-source-push` → `prog-xml-push` → `prog-xml-verify` → `prog-batch-activate`（第 3 步与第 9 步为新增，`inspect` 为贯穿各步的检查）。
+- **`prog-source-push` 改为只写源码、不再自行激活**：程序 / INCLUDE / 结构 / 表 / 表类型 / 类互相引用，边写边激活会拿着尚未更新的依赖去编译（报 `Field "X" is unknown.` 之类伪错误）而留在 inactive；改为统一交由末尾的批量步骤处理。
+- **写入对象的传输号必须取「请求号」而非「任务号」**：`transportInfo()` 的 `LOCKS.HEADER.TRKORR` 才是请求号，`LOCKS.TASKS[0].TRKORR` 是其下的任务号；用任务号做 `corrNr` 建/改对象会触发 `CTS_WBO_API 020`。现在按 `LOCKS.HEADER` → `TRANSPORTS` → `TASKS` 的优先级取值，并在加锁后用 `lockResult.CORRNR`（SAP 返回的对象实际被记录的请求号）覆盖猜测值。
+- **批量激活以 `activationExecuted` 判定成功，不再以 HTTP 200 判定**：`<chkl:properties>` 是整批一个（全局）属性；`activationExecuted="false"` 表示整批未执行激活，此前会被误报为全部 `activated`。现在：
+  - `activationExecuted="false"` 时从 `<msg>` 中解析出**第一个失败对象并剔除**，对其余对象重试（被其它用户 / 请求锁定的对象返回 HTTP 403，同样剔除并重试），被拒 / 被锁对象在结果中单独点名，如 `User GWDEV45 is currently editing ZCL_TEST_01`、`Internal error occurred during runtime generation of Program ZTEST50`；
+  - 激活后**逐对象**读取 `GET <objectUrl>` 的 `adtcore:version` 复核（`active` / `inactive`），对象不存在则按 404 `ExceptionResourceNotFound` 判为未导入 —— 不再依赖 `/sap/bc/adt/activation/inactiveobjects` 列表。
+- **批量激活纳入整体失败判定**：`prog-batch-activate` 失败（含对象被锁）即判整体导入失败，结果对话框以 `FAILED` 显示并逐条列出失败对象。
+- 插件版本号提升至 `1.1.2`（插件 JAR + p2 更新站点）。
+
+---
+
+## [1.1.1] - 2026-09-20
+
+### Fixed
+- **模板导入后 INCLUDE 未被激活**：`Simple Query Handler Template` 导入时主程序（PROG）会激活，但 `ZTEST40_F01` / `ZTEST40_F02` 等 INCLUDE 虽导入成功却停留在未激活状态（需手动到 SE38 激活）。PUT 写入源码会产生新的**未激活**版本，且激活 INCLUDE 与激活主程序的方式不同：
+  - 主程序（PROG/P）必须用**字符串形式** `activate(name, url)`；数组形式（`parentUri` 指向自身）会返回 200 / `success=true` 但实际什么都不做（`activationExecuted="false"`）；
+  - INCLUDE（PROG/I）必须用**数组形式**并显式给出 `adtcore:type='PROG/I'` 与 `adtcore:parentUri=<所属主程序 uri>`，所属主程序由 `{includeUrl}/mainprograms` 解析，并优先选择本次批次中的主程序；
+  - 必须**两阶段**执行：先推完全部源码，再统一激活——若边推边激活，先激活的 INCLUDE 会因兄弟 INCLUDE 还是旧源码而报 `Field "S_MATNR" is unknown.` 等假错误并保持未激活。
+  激活后还会用 `/sap/bc/adt/activation/inactiveobjects` 复核，仍处于未激活的对象一律判定为失败（防止「`success=true` 却无效」）。该修复位于 stage 目录的 `extensions/prog-source-push.mjs`（**不在插件 JAR 内**），因此无需重装插件即可生效。
+- **`prog-xml-create` 的激活结果改为解析 ADT 真实返回**（`inactive` 列表与 `[EAX]` 消息）判定，不再无条件打印 `activate: OK`。
+
+### Changed
+- **对象被锁由警告改为失败，并点名被锁对象**：导入过程中 abap-cli 报 `Object … is already locked in request …`（例如 `INCLUDE ZTR_SHOW_JD` 被其它请求号锁定）时，结果由 `WARNING`（`PARTIALLY FAILED`）改为 `ERROR`（`FAILED`）：
+  - 结果对话框以红色 `FAILED` 显示，并逐条列出未导入的被锁对象（如 `INCLUDE ZTR_SHOW_JD`）；
+  - Eclipse Error Log 与插件日志文件中该步骤及其明细同样以 `ERROR` 级别输出，明细含对象名、锁定请求号与用户，不再只提示「SE03 释放对象锁」；
+  - 这是对 `1.0.19`「对象被锁不再判定为导入失败」策略的回改。
+- 插件版本号提升至 `1.1.1`（插件 JAR + p2 更新站点）。
+
+---
+
 ## [1.1.0] - 2026-09-20
 
 ### Added

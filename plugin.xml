@@ -13,6 +13,15 @@
             class="com.sap.abap.ai.completion.preferences.AICompletionPreferencePage"
             name="ABAP AI Completion">
       </page>
+      <!-- 自动补全设置配置页 - 作为 ABAP AI Completion 的子页面。
+           Eclipse 子页面按名称字母序排列，命名为 "ABAP AI Auto-Completion Settings"
+           以确保显示在 "AI Connections" 前面。 -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.autoCompletion"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.AutoCompletionPreferencePage"
+            name="AI Auto-Completion Settings">
+      </page>
       <!-- AI 连接管理配置页 - 作为 ABAP AI Completion 的子页面，显示在 SAP Connection Config 前面 -->
       <page
             id="com.sap.abap.ai.completion.preferencePage.aiConnections"

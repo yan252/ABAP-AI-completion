@@ -7,8 +7,6 @@ import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.FocusAdapter;
 import org.eclipse.swt.events.FocusEvent;
-import org.eclipse.swt.events.KeyAdapter;
-import org.eclipse.swt.events.KeyEvent;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
@@ -37,9 +35,20 @@ public class AIOverlayManager {
     private AICompletionOverlayBase currentOverlay;
     private ITextViewer currentViewer;
     private IDocument currentDocument;
-    private KeyAdapter overlayKeyListener;
+    private Listener keyDownFilter;
+    private Listener traverseFilter;
+    private boolean keyFilterInstalled = false;
     private Listener globalMouseFilter;
     private boolean globalFilterInstalled = false;
+    /** 补全结果回调(用户互动结果): 1=ESC取消, 2=确认, 3=其它 */
+    private java.util.function.IntConsumer resultListener;
+
+    /**
+     * 注册补全结果回调。 1=用户按 ESC 取消，2=用户确认，3=其它方式关闭。
+     */
+    public void setCompletionResultListener(java.util.function.IntConsumer listener) {
+        this.resultListener = listener;
+    }
 
     /**
      * Shows a completion suggestion in the overlay.
@@ -160,7 +169,7 @@ public class AIOverlayManager {
                 viewer,
                 currentDocument,
                 this::acceptSuggestion,
-                this::hideOverlay);
+                () -> hideOverlayWithResult(PreferenceConstants.COMPLETION_RESULT_OTHER));
 
         if (currentOverlay.getShell() == null || currentOverlay.getShell().isDisposed()) {
             currentOverlay = null;
@@ -189,6 +198,19 @@ public class AIOverlayManager {
             currentOverlay = null;
         }
         unregisterKeyInterceptor();
+    }
+
+    /** 提交补全处理结果给监听者（仅在用户互动时调用）。 */
+    private void notifyResult(int result) {
+        if (resultListener != null) {
+            try { resultListener.accept(result); } catch (Exception ignored) {}
+        }
+    }
+
+    /** 以指定结果关闭 overlay，并先提交结果回调。 */
+    private void hideOverlayWithResult(int result) {
+        notifyResult(result);
+        hideOverlay();
     }
 
     public boolean isOverlayVisible() {
@@ -225,7 +247,7 @@ public class AIOverlayManager {
                 if (isClickOnEditorWidget(event.widget)) {
                     return;
                 }
-                hideOverlay();
+                hideOverlayWithResult(PreferenceConstants.COMPLETION_RESULT_OTHER);
                 return;
             }
 
@@ -258,7 +280,7 @@ public class AIOverlayManager {
             }
 
             // Click anywhere else → dismiss overlay
-            hideOverlay();
+            hideOverlayWithResult(PreferenceConstants.COMPLETION_RESULT_OTHER);
         };
 
         Display.getDefault().addFilter(SWT.MouseDown, globalMouseFilter);
@@ -337,78 +359,132 @@ public class AIOverlayManager {
         StyledText widget = viewer.getTextWidget();
         if (widget == null || widget.isDisposed()) return;
 
-        overlayKeyListener = new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (!isOverlayVisible()) {
-                    unregisterKeyInterceptor();
+        Display display = widget.getDisplay();
+
+        // 使用 Display 过滤器（在事件到达控件之前全局捕获），而不是
+        // StyledText.addKeyListener：后者在编辑器失焦时收不到 TAB/Enter/Esc，
+        // 且 KeyDown 中 doit=false 无法取消 TAB 随后触发的 SWT.Traverse。
+        keyDownFilter = event -> {
+            if (!isOverlayVisible() || !isKeyEventForOverlay(event)) {
+                return;
+            }
+
+            // Tab = accept
+            if (event.keyCode == SWT.TAB) {
+                event.doit = false;
+                acceptSuggestion();
+                return;
+            }
+
+            // Enter = accept
+            if (event.keyCode == SWT.CR || event.keyCode == SWT.KEYPAD_CR) {
+                event.doit = false;
+                acceptSuggestion();
+                return;
+            }
+
+            // Esc = dismiss
+            if (event.keyCode == SWT.ESC) {
+                event.doit = false;
+                hideOverlayWithResult(PreferenceConstants.COMPLETION_RESULT_ESC);
+                return;
+            }
+
+            // Navigation and modifier keys = keep overlay
+            switch (event.keyCode) {
+                case SWT.SHIFT:
+                case SWT.CONTROL:
+                case SWT.ALT:
+                case SWT.COMMAND:
+                case SWT.CAPS_LOCK:
+                case SWT.NUM_LOCK:
+                case SWT.SCROLL_LOCK:
+                case SWT.ARROW_UP:
+                case SWT.ARROW_DOWN:
+                case SWT.ARROW_LEFT:
+                case SWT.ARROW_RIGHT:
+                case SWT.PAGE_UP:
+                case SWT.PAGE_DOWN:
+                case SWT.HOME:
+                case SWT.END:
                     return;
-                }
+            }
 
-                // Tab = accept
-                if (e.keyCode == SWT.TAB) {
-                    e.doit = false;
-                    acceptSuggestion();
-                    return;
-                }
+            // Any other key -> let the editor process it and dismiss
+            event.doit = true;
+            hideOverlayWithResult(PreferenceConstants.COMPLETION_RESULT_OTHER);
+        };
 
-                // Enter = accept
-                if (e.keyCode == SWT.CR || e.keyCode == SWT.KEYPAD_CR) {
-                    e.doit = false;
-                    acceptSuggestion();
-                    return;
-                }
-
-                // Esc = dismiss
-                if (e.keyCode == SWT.ESC) {
-                    e.doit = false;
-                    hideOverlay();
-                    return;
-                }
-
-                // Navigation and modifier keys = keep overlay
-                switch (e.keyCode) {
-                    case SWT.SHIFT:
-                    case SWT.CONTROL:
-                    case SWT.ALT:
-                    case SWT.COMMAND:
-                    case SWT.CAPS_LOCK:
-                    case SWT.NUM_LOCK:
-                    case SWT.SCROLL_LOCK:
-                    case SWT.ARROW_UP:
-                    case SWT.ARROW_DOWN:
-                    case SWT.ARROW_LEFT:
-                    case SWT.ARROW_RIGHT:
-                    case SWT.PAGE_UP:
-                    case SWT.PAGE_DOWN:
-                    case SWT.HOME:
-                    case SWT.END:
-                        return;
-                }
-
-                // Any other key -> dismiss
-                e.doit = true;
-                hideOverlay();
+        // TAB/Enter 除了产生 KeyDown，还会产生 SWT.Traverse（默认把焦点跳到下一个控件）。
+        // 必须拦截并取消 Traverse，否则按下 TAB 后焦点先离开编辑器，随后异步执行的
+        // document.replace 在 ABAP ADT 编辑器失焦时不会被提交（窗口关闭但代码未插入）。
+        traverseFilter = event -> {
+            if (!isOverlayVisible() || !isKeyEventForOverlay(event)) {
+                return;
+            }
+            if (event.keyCode == SWT.TAB || event.keyCode == SWT.CR
+                    || event.keyCode == SWT.KEYPAD_CR) {
+                event.doit = false;
+                event.detail = SWT.TRAVERSE_NONE;
             }
         };
 
-        widget.addKeyListener(overlayKeyListener);
+        display.addFilter(SWT.KeyDown, keyDownFilter);
+        display.addFilter(SWT.Traverse, traverseFilter);
+        keyFilterInstalled = true;
+    }
+
+    /**
+     * 判断按键事件是否属于当前补全上下文：事件发生在编辑器 StyledText 上，
+     * 或发生在对话框式 overlay 的 shell 内。避免全局过滤器误吞其他控件的按键。
+     */
+    private boolean isKeyEventForOverlay(Event event) {
+        if (currentViewer == null || event.widget == null) return false;
+
+        StyledText editorWidget = currentViewer.getTextWidget();
+        if (editorWidget != null && !editorWidget.isDisposed()
+                && event.widget == editorWidget) {
+            return true;
+        }
+
+        Shell overlayShell = currentOverlay != null ? currentOverlay.getShell() : null;
+        if (overlayShell != null && !overlayShell.isDisposed()) {
+            org.eclipse.swt.widgets.Widget w = event.widget;
+            while (w != null) {
+                if (w == overlayShell) return true;
+                if (w instanceof org.eclipse.swt.widgets.Control) {
+                    w = ((org.eclipse.swt.widgets.Control) w).getParent();
+                } else {
+                    break;
+                }
+            }
+        }
+        return false;
     }
 
     private void unregisterKeyInterceptor() {
-        if (overlayKeyListener != null && currentViewer != null) {
-            StyledText widget = currentViewer.getTextWidget();
-            if (widget != null && !widget.isDisposed()) {
-                widget.removeKeyListener(overlayKeyListener);
+        if (!keyFilterInstalled) return;
+        Display display = Display.getCurrent();
+        if (display == null) display = Display.getDefault();
+        if (!display.isDisposed()) {
+            if (keyDownFilter != null) {
+                display.removeFilter(SWT.KeyDown, keyDownFilter);
             }
-            overlayKeyListener = null;
+            if (traverseFilter != null) {
+                display.removeFilter(SWT.Traverse, traverseFilter);
+            }
         }
+        keyDownFilter = null;
+        traverseFilter = null;
+        keyFilterInstalled = false;
     }
 
     // ==================== Accept Suggestion ====================
 
     private void acceptSuggestion() {
         if (currentOverlay == null || currentDocument == null) return;
+
+        notifyResult(PreferenceConstants.COMPLETION_RESULT_CONFIRMED);
 
         String completionText = currentOverlay.getCompletionText();
         int offset = currentOverlay.getCursorOffset();
@@ -429,9 +505,18 @@ public class AIOverlayManager {
 
         Display.getDefault().asyncExec(() -> {
             try {
+                // 插入前确保焦点在编辑器上：ABAP ADT 编辑器在失焦时可能不提交
+                // 编程式的文档修改。
+                if (currentViewer != null) {
+                    StyledText editorWidget = currentViewer.getTextWidget();
+                    if (editorWidget != null && !editorWidget.isDisposed()) {
+                        editorWidget.setFocus();
+                    }
+                }
                 currentDocument.replace(insertOffset, 0, text);
             } catch (Exception ex) {
-                // ignore insert errors
+                com.sap.abap.ai.completion.logging.AILogger.logError(
+                        "Overlay", "accept suggestion insert failed: " + ex);
             }
             hideOverlay();
         });

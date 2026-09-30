@@ -1,6 +1,8 @@
 package com.sap.abap.ai.completion.preferences;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.swt.graphics.RGB;
@@ -87,6 +89,30 @@ public final class AIConfiguration {
         } catch (NumberFormatException e) {
             return Integer.parseInt(PreferenceConstants.DEFAULT_AUTO_COMPLETE_DELAY);
         }
+    }
+
+    // === Auto Completion Trigger Characters ===
+
+    /** 返回全部触发字符列表（含未激活的）。 */
+    public static java.util.List<TriggerChar> getTriggerChars() {
+        return TriggerChar.loadAll(getStore());
+    }
+
+    /** 返回所有已激活的触发字符内容列表。 */
+    public static java.util.List<String> getActiveTriggerChars() {
+        java.util.List<TriggerChar> all = getTriggerChars();
+        java.util.List<String> active = new ArrayList<>();
+        for (TriggerChar tc : all) {
+            if (tc.enabled && tc.triggerChar != null && !tc.triggerChar.trim().isEmpty()) {
+                active.add(tc.triggerChar);
+            }
+        }
+        return active;
+    }
+
+    /** 保存触发字符列表。 */
+    public static void saveTriggerChars(java.util.List<TriggerChar> list) {
+        TriggerChar.saveAll(list, getStore());
     }
 
     // === Completion Style ===
@@ -550,7 +576,7 @@ public final class AIConfiguration {
     }
 
     /**
-     * abap-cli(abapGit)连接 URL，如 "https://s4devapp.app.com.cn:1443"。
+     * abap-cli(abapGit)连接 URL，如 "https://s4devapp.sap.com.cn:1443"。
      * 可能为空字符串(表示"Test Connection"与模板导入都回退到
      * {@code ~/.abap-cli/systems.json} 里已有的 profile)。
      */

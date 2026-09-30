@@ -188,7 +188,7 @@ public final class AbapCliConnectionTester {
      * --username=... --password=... --language=... --insecure=1}，该脚本用
      * abap-adt-api 依次探测 tls / auth / adt / icf，输出与人读格式一致的行。</p>
      *
-     * @param url      abap-cli URL，如 {@code https://s4devapp.app.com.cn:1443}
+     * @param url      abap-cli URL，如 {@code https://s4devapp.sap.com.cn:1443}
      *                 （缺 scheme 时自动补 {@code https://}）
      * @param client   SAP Client，如 {@code 150}
      * @param user     SAP 用户名

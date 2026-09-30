@@ -42,27 +42,85 @@ public class AIConnectionEntry {
     }
 
     /**
+     * 内置的两个默认 AI 连接（全新工作区首次打开配置页时自动种入，
+     * 也供配置页的 "Restore Default" 按钮使用）。每次调用均返回全新实例，
+     * 调用方可安全修改 / 持久化。
+     *
+     * <ol>
+     *   <li>FREE_AI（默认 AI）：Agnes AI，模型 agnes-2.5-flash</li>
+     *   <li>deepseek：模型 deepseek-flash</li>
+     * </ol>
+     */
+    public static List<AIConnectionEntry> defaultConnections() {
+        List<AIConnectionEntry> list = new ArrayList<>();
+        list.add(new AIConnectionEntry(
+                PreferenceConstants.DEFAULT_FREE_AI_NAME,
+                PreferenceConstants.DEFAULT_FREE_AI_BASE_URL,
+                PreferenceConstants.DEFAULT_FREE_AI_MODEL,
+                PreferenceConstants.DEFAULT_FREE_AI_API_KEY,
+                PreferenceConstants.DEFAULT_MAX_TOKENS,
+                PreferenceConstants.DEFAULT_TEMPERATURE,
+                true));
+        list.add(new AIConnectionEntry(
+                PreferenceConstants.DEFAULT_DEEPSEEK_NAME,
+                PreferenceConstants.DEFAULT_DEEPSEEK_BASE_URL,
+                PreferenceConstants.DEFAULT_DEEPSEEK_MODEL,
+                PreferenceConstants.DEFAULT_DEEPSEEK_API_KEY,
+                PreferenceConstants.DEFAULT_MAX_TOKENS,
+                PreferenceConstants.DEFAULT_TEMPERATURE,
+                false));
+        return list;
+    }
+
+    /**
      * 从偏好存储中加载所有连接条目。
-     * 若无已保存列表，则返回包含一个默认空条目的列表（向后兼容）。
+     * 若无已保存列表：
+     * <ul>
+     *   <li>检测到旧版单连接字段被用户自定义过时 → 迁移为一条 "Default" 连接（向后兼容）；</li>
+     *   <li>否则（全新安装）→ 种入两个内置默认连接 FREE_AI / deepseek。</li>
+     * </ul>
      */
     public static List<AIConnectionEntry> loadAll(IPreferenceStore store) {
         String json = store.getString(PreferenceConstants.AI_CONNECTIONS);
         if (json == null || json.trim().isEmpty()) {
+            List<AIConnectionEntry> list = seedInitialConnections(store);
+            saveAll(list, store);
+            return list;
+        }
+        return parseConnections(json);
+    }
+
+    /**
+     * 无已保存连接列表时的初始化策略：
+     * 旧版单连接字段（URL / Model / API Key）相对出厂默认值有自定义内容时迁移旧配置，
+     * 否则直接返回两个内置默认连接。
+     */
+    private static List<AIConnectionEntry> seedInitialConnections(IPreferenceStore store) {
+        String legacyKey = store.getString(PreferenceConstants.API_KEY);
+        String legacyUrl = store.getString(PreferenceConstants.API_BASE_URL);
+        String legacyModel = store.getString(PreferenceConstants.API_MODEL);
+        boolean legacyCustomized =
+                (legacyKey != null && !legacyKey.trim().isEmpty())
+                || !PreferenceConstants.DEFAULT_API_BASE_URL.equals(
+                        legacyUrl == null ? "" : legacyUrl.trim())
+                || !PreferenceConstants.DEFAULT_API_MODEL.equals(
+                        legacyModel == null ? "" : legacyModel.trim());
+        if (legacyCustomized) {
             // 向后兼容：从旧的单连接字段迁移一条默认条目
             AIConnectionEntry defaultEntry = new AIConnectionEntry();
             defaultEntry.name = "Default";
-            defaultEntry.baseUrl = store.getString(PreferenceConstants.API_BASE_URL);
-            defaultEntry.model = store.getString(PreferenceConstants.API_MODEL);
-            defaultEntry.apiKey = store.getString(PreferenceConstants.API_KEY);
+            defaultEntry.baseUrl = legacyUrl;
+            defaultEntry.model = legacyModel;
+            defaultEntry.apiKey = legacyKey;
             defaultEntry.maxTokens = store.getString(PreferenceConstants.MAX_TOKENS);
             defaultEntry.temperature = store.getString(PreferenceConstants.TEMPERATURE);
             defaultEntry.isDefault = true;
             List<AIConnectionEntry> list = new ArrayList<>();
             list.add(defaultEntry);
-            saveAll(list, store);
             return list;
         }
-        return parseConnections(json);
+        // 全新安装：种入 FREE_AI（默认）+ deepseek 两个内置连接
+        return defaultConnections();
     }
 
     /**

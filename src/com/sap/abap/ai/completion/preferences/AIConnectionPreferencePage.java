@@ -24,8 +24,12 @@ import com.sap.abap.ai.completion.client.AIClientException;
  * AI 连接配置页（"ABAP AI Completion" 下的子页面，位于 "SAP Connection Config" 之前）。
  *
  * <p>左侧为 AI 连接名称列表，可选中其中任意一个；双击连接名称后在右侧显示该连接的详细信息。
- * 右侧提供 "Add" / "Remove" / "Set as Default" / "Test Connection" / "Clear" 操作。
+ * 右侧提供 "Add" / "Remove" / "Set as Default" / "Test Connection" / "Clear" 操作，
+ * 左侧提供 "Restore Default" 操作（还原 FREE_AI / deepseek 两个内置连接）。
  * 被设为默认的连接在左侧列表的名称后显示 "(Default)" 标识，插件调用 AI 时使用该默认连接。</p>
+ *
+ * <p>首次打开且无已保存连接时自动种入两个内置连接：FREE_AI（默认）与 deepseek。
+ * "Restore Default" / "Clear" / "Remove" 三个按钮执行前均会弹出确认对话框。</p>
  */
 public class AIConnectionPreferencePage extends PreferencePage implements IWorkbenchPreferencePage {
 
@@ -39,6 +43,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
 
     private Button btnAdd;
     private Button btnRemove;
+    private Button btnRestore;
     private Button btnSetDefault;
     private Button btnTest;
     private Label lblTestResult;
@@ -54,7 +59,8 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         super("AI Connections");
         setDescription("Manage multiple AI connections. Select a connection on the left "
                 + "to edit its details on the right.");
-        // 不提供 "Restore Defaults" 按钮（连接列表由用户自行维护）
+        // 隐藏 Eclipse 预置页底部的 "Restore Defaults" 按钮；
+        // 本页在列表下方提供自定义的 "Restore Default" 按钮（还原内置连接）
         noDefaultButton();
     }
 
@@ -108,6 +114,15 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         btnRemove.setText("Remove");
         btnRemove.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> removeConnection()));
 
+        // "Restore Default" 横跨两列：丢弃当前全部连接，还原 FREE_AI / deepseek 两个内置连接
+        btnRestore = new Button(listBtns, SWT.PUSH);
+        btnRestore.setText("Restore Default");
+        GridData restoreGd = new GridData(GridData.FILL_HORIZONTAL);
+        restoreGd.horizontalSpan = 2;
+        btnRestore.setLayoutData(restoreGd);
+        btnRestore.addSelectionListener(
+                SelectionListener.widgetSelectedAdapter(e -> restoreDefaults()));
+
         // ---- RIGHT PANEL: details of the selected connection ----
         Composite right = new Composite(container, SWT.NONE);
         right.setLayout(new GridLayout(2, false));
@@ -149,7 +164,8 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
 
         Button btnClear = new Button(btnRow, SWT.PUSH);
         btnClear.setText("Clear");
-        btnClear.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> clearForm()));
+        btnClear.addSelectionListener(
+                SelectionListener.widgetSelectedAdapter(e -> clearFormWithConfirm()));
 
         lblTestResult = new Label(right, SWT.NONE);
         lblTestResult.setText("");
@@ -163,6 +179,8 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
                 + "Double-click a connection name to show its details on the right.\n"
                 + "Click \"Set as Default\" to make the displayed connection the one used by the plugin; "
                 + "its name is then marked with \"(Default)\".\n"
+                + "\"Restore Default\" discards all connections and restores the built-in "
+                + "FREE_AI (default) and deepseek connections.\n"
                 + "\"Test Connection\" tests the connection currently shown on the right.");
         GridData hintGd = new GridData(GridData.FILL_HORIZONTAL);
         hintGd.horizontalSpan = 2;
@@ -266,6 +284,17 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     }
 
     /**
+     * "Clear" 按钮入口：仅清空右侧表单字段（不从列表删除连接），执行前弹出确认对话框。
+     */
+    private void clearFormWithConfirm() {
+        boolean confirm = MessageDialog.openConfirm(getShell(), "Clear Form",
+                "Clear all fields shown on the right? The connection itself is not removed, "
+                        + "but any unsaved edits will be lost.");
+        if (!confirm) return;
+        clearForm();
+    }
+
+    /**
      * 将右侧表单内容写回当前选中条目（未选中条目时不做任何操作）。
      */
     private void syncFormToEntry() {
@@ -330,6 +359,36 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         saveConnections();
         refreshConnectionList();
         lstConnections.select(Math.min(idx, connections.size() - 1));
+        onConnectionSelected();
+    }
+
+    /**
+     * 还原内置默认连接：丢弃当前全部 AI 连接，恢复为 FREE_AI（默认）与 deepseek，
+     * 立即持久化、刷新左侧列表并选中默认连接（FREE_AI）。执行前弹出确认对话框。
+     */
+    private void restoreDefaults() {
+        boolean confirm = MessageDialog.openConfirm(getShell(),
+                "Restore Default Connections",
+                "This will remove all current AI connections and restore the built-in "
+                        + "defaults:\n  - FREE_AI (set as default)\n  - deepseek\n\n"
+                        + "Do you want to continue?");
+        if (!confirm) return;
+
+        // 丢弃右侧表单中尚未保存的编辑，避免写回已被还原的旧条目
+        currentEntry = null;
+        connections = new java.util.ArrayList<>(AIConnectionEntry.defaultConnections());
+        saveConnections();
+        refreshConnectionList();
+
+        // 选中默认连接（FREE_AI）；无默认标识时回退到第一个
+        int defaultIdx = 0;
+        for (int i = 0; i < connections.size(); i++) {
+            if (connections.get(i).isDefault) {
+                defaultIdx = i;
+                break;
+            }
+        }
+        lstConnections.select(defaultIdx);
         onConnectionSelected();
     }
 
