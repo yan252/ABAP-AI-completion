@@ -49,7 +49,11 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             Platform.getBundle("com.sap.abap.ai.completion"));
 
     private static void plog(String msg) {
-        PLATFORM_LOG.log(new Status(IStatus.INFO, "com.sap.abap.ai.completion", msg));
+        try {
+            if (AIConfiguration.isInterfaceLogDebugEnabled()) {
+                PLATFORM_LOG.log(new Status(IStatus.INFO, "com.sap.abap.ai.completion", msg));
+            }
+        } catch (Exception ignored) {}
     }
 
     private ITextEditor editor;
@@ -61,6 +65,11 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     private CompletableFuture<?> currentRequest;
     private long lastModifiedTime = 0;
     private String lastContentHash = "";
+    /**
+     * 一次性触发标志：仅当文档内容真实变更（键盘输入字符、空格、退格、回车等）时置 true。
+     * 等待延迟到达后触发一次并立即复位；没有新的内容变更不会再次触发。
+     */
+    private volatile boolean completionPending = false;
 
     private final AIOverlayManager overlayManager = new AIOverlayManager();
 
@@ -206,6 +215,8 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             this.lastContentHash = "";
         }
         this.lastModifiedTime = System.currentTimeMillis();
+        // 打开编辑器时不武装：只有真实键盘输入导致内容变更后才开始等待
+        this.completionPending = false;
 
         // 重置本次编辑会话的补全触发状态并绑定补全结果回调
         lastCompletionOffset = -1;
@@ -226,6 +237,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
      */
     public void detach() {
         stopPolling();
+        completionPending = false;
         if (document != null) {
             document.removeDocumentListener(this);
             document = null;
@@ -331,15 +343,12 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
 
                 // Check if auto-complete is enabled
                 if (!AIConfiguration.isPluginEnabled() || !AIConfiguration.isAutoCompletionEnabled()) {
-                    // Even when disabled, we still need to detect re-enable
-                    // So just skip triggering but still check hash
-                    pollCheckHashOnly();
+                    // 禁用时仅静默跟踪 hash，不武装触发（避免重新启用后立刻误触发）
+                    pollCheckHashOnly(false);
                     continue;
                 }
 
-                // Polling auto-completion check
-                plog("poll tick: elapsed=" + (System.currentTimeMillis() - lastModifiedTime)
-                        + "ms, delay=" + AIConfiguration.getAutoCompleteDelay() + "ms");
+                // 一次性等待检查：内容变更后等待延迟，到达后只触发一次
                 performPollingCheck();
             }
         }, "ai-completion-poll");
@@ -357,34 +366,42 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     }
 
     /**
-     * Checks if document content has changed and triggers auto-completion
-     * after the configured delay.
+     * 一次性等待状态机：
+     *   1. 先比对 hash，检测到内容真实变更（输入字符/空格/退格/回车等）时武装等待；
+     *   2. 武装后且距变更超过配置延迟 -> 立即解除武装并触发一次补全评估；
+     *   3. 未武装（打开编辑器、纯鼠标移动光标、已触发过且无新输入）-> 什么都不做。
      */
     private void performPollingCheck() {
-        // Detect content change by comparing hash
-        String currentHash = pollCheckHashOnly();
+        // 检测内容变更；hash 变化会武装等待并重置等待起点
+        String currentHash = pollCheckHashOnly(true);
         if (currentHash == null) return; // document not available
 
-        long now = System.currentTimeMillis();
-        long elapsed = now - lastModifiedTime;
+        // 没有等待中的触发请求 -> 不做任何事，直到下一次内容变更
+        if (!completionPending) return;
 
+        long elapsed = System.currentTimeMillis() - lastModifiedTime;
         int delay = AIConfiguration.getAutoCompleteDelay();
+        if (elapsed < delay) return; // 仍在等待窗口内
 
-        // If enough time has passed since last change, trigger completion
-        if (elapsed >= delay) {
-            // Don't trigger if overlay is already showing something
-            if (overlayManager.isOverlayVisible()) {
-                return;
-            }
-            Display.getDefault().asyncExec(this::triggerPollingCompletion);
+        // 等待时间到达：先解除武装（保证只触发一次），再投递触发
+        completionPending = false;
+
+        // 提示窗口显示中 -> 本次跳过（下一次输入才会重新武装）
+        if (overlayManager.isOverlayVisible()) {
+            return;
         }
+        debugLog("wait elapsed (" + elapsed + "ms >= " + delay + "ms), fire one-shot trigger");
+        Display.getDefault().asyncExec(this::triggerPollingCompletion);
     }
 
     /**
      * Computes hash of current document content.
      * Returns the hash string, or null if document is not available.
+     *
+     * @param armPending true 时检测到内容变更会武装一次性等待（{@link #completionPending}）；
+     *                   false 时仅静默更新 hash（插件禁用期间）
      */
-    private String pollCheckHashOnly() {
+    private String pollCheckHashOnly(boolean armPending) {
         if (document == null) return null;
         try {
             String content = document.get();
@@ -395,6 +412,11 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
                 // Content changed! Update tracking
                 lastContentHash = hash;
                 lastModifiedTime = System.currentTimeMillis();
+
+                if (armPending) {
+                    // 武装一次性等待：延迟后触发一次，期间继续输入会因 hash 再变而重置等待
+                    completionPending = true;
+                }
 
                 // Hide overlay when content changes
                 if (overlayManager.isOverlayVisible()) {
@@ -412,6 +434,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
      */
     public void markContentChanged() {
         lastModifiedTime = System.currentTimeMillis();
+        completionPending = true;
         // Hash will be updated by the next poll cycle
     }
 
@@ -421,7 +444,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         // currentFile 可以为 null（SAP ADT 远程文件），AICompletionService 能处理
         if (editor == null || document == null) return;
 
-        plog("triggerPollingCompletion entered, cursorOffset=" + getCursorOffset());
+        debugLog("triggerPollingCompletion entered, cursorOffset=" + getCursorOffset());
 
         // 提示窗口还没关闭 -> 直接退出（不再重复发送补全）
         if (overlayManager.isOverlayVisible()) return;
@@ -489,7 +512,8 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     /**
      * 自动补全触发条件判断。
      *   - 规则6: 光标位置前、后都有非空字符 -> 退出（不补全）
-     *   - 规则3: 光标前为空或全为空格 -> 触发
+     *   - 规则3: 整行去除空白后为空（光标前、后均无内容）-> 触发；
+     *           光标前为空但同一行光标后还有代码 -> 不触发
      *   - 规则4: 否则遍历活动触发字符，光标前内容以某触发字符结尾时触发
      */
     private boolean shouldTriggerAutoCompletion(String textBefore, String textAfter) {
@@ -502,32 +526,37 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         int lastNewlineBefore = textBefore.lastIndexOf('\n');
         String beforeOnLine = textBefore.substring(lastNewlineBefore + 1);
 
-        // 规则3
+        int firstNewlineAfter = textAfter.indexOf('\n');
+        String afterOnLine = firstNewlineAfter >= 0
+                ? textAfter.substring(0, firstNewlineAfter)
+                : textAfter;
+
+        // 规则3：仅当整行为空（光标前、后去除空白后都没有字符）时触发
         if (beforeOnLine.trim().isEmpty()) {
-            return true;
+            if (afterOnLine.trim().isEmpty()) {
+                return true;
+            }
+            debugLog("rule3 blocked: line has content after cursor, afterOnLine='" + afterOnLine + "'");
+            return false;
         }
 
-        // 规则4：trim 末尾空格后匹配触发字符，使 "X = "（光标在空格后）也能触发
-        String trimmedBefore = beforeOnLine.replaceAll("\\s+$", "");
+        // 规则4：取光标前行内容末尾与配置触发字符等长的子串，逐一比较。
+        // 配置 "= " 需要行末尾正好是 "= " 才匹配，"=" 不匹配 "-> " 等。
         List<String> active = AIConfiguration.getActiveTriggerChars();
-        plog("rule4 check: trimmedBefore='" + trimmedBefore + "', activeChars=" + active.size()
+        debugLog("rule4 check: beforeOnLine='" + beforeOnLine + "', activeChars=" + active.size()
                 + ", activeList=" + active);
         for (String ch : active) {
-            if (ch != null && !ch.isEmpty() && trimmedBefore.endsWith(ch)) {
-                plog("rule4 matched: '" + ch + "'");
+            if (ch == null || ch.isEmpty()) continue;
+            int chLen = ch.length();
+            if (beforeOnLine.length() < chLen) continue;
+            // 取行内光标前内容末尾与触发字符等长的子串
+            String tail = beforeOnLine.substring(beforeOnLine.length() - chLen);
+            if (tail.equals(ch)) {
+                debugLog("rule4 matched: '" + ch + "' (tail='" + tail + "')");
                 return true;
             }
         }
-        if (!trimmedBefore.isEmpty()) {
-            char lastChar = trimmedBefore.charAt(trimmedBefore.length() - 1);
-            plog("rule4 last char: '" + lastChar + "' (U+" + Integer.toHexString(lastChar).toUpperCase() + ")");
-            // 硬编码兼容：= 是最常见的触发字符，确保配置缺失时也能触发
-            if (lastChar == '=') {
-                plog("rule4 hardcoded match: '='");
-                return true;
-            }
-        }
-        plog("rule4 no match: '" + trimmedBefore + "'");
+        debugLog("rule4 no match: '" + beforeOnLine + "'");
         return false;
     }
 
@@ -604,6 +633,8 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
                     Display.getDefault().asyncExec(() -> {
                         if (this.editor != null && this.document != null) {
                             showOverlay(completion, cursorOffset);
+                        } else {
+                            debugLog("completion callback: editor/document is null, skip showing overlay");
                         }
                     });
                 },
@@ -659,7 +690,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     }
 
     private static void debugLog(String message) {
-        try { AILogger.logDebug("AutoCompletion", message); } catch (Exception ignored) {}
+        try { plog(message); } catch (Exception ignored) {}
     }
 
     private void cancelCurrentRequest() {

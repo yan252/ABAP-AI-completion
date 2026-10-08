@@ -55,21 +55,21 @@ public class TriggerChar {
         list.add(new TriggerChar("[", true, "左方括号：内表索引表达式 itab[ ... ] 补全"));
         list.add(new TriggerChar(",", true, "逗号：SELECT 列表、DATA 声明或参数列表中继续输入字段"));
 
-        // 2.3 赋值与比较运算符
-        list.add(new TriggerChar("=", true, "赋值运算符：补全右侧的操作数、字面量或表达式"));
-        list.add(new TriggerChar("?=", true, "向下转型赋值运算符：补全父类引用或对象"));
-        list.add(new TriggerChar("<>", true, "不等于比较运算符"));
-        list.add(new TriggerChar("<", true, "小于比较运算符"));
-        list.add(new TriggerChar(">", true, "大于比较运算符"));
-        list.add(new TriggerChar("<=", true, "小于等于比较运算符"));
-        list.add(new TriggerChar(">=", true, "大于等于比较运算符"));
+        // 2.3 赋值与比较运算符（带空格，光标在空格后时触发）
+        list.add(new TriggerChar("= ", true, "赋值运算符：补全右侧的操作数、字面量或表达式"));
+        list.add(new TriggerChar("?= ", true, "向下转型赋值运算符：补全父类引用或对象"));
+        list.add(new TriggerChar("<> ", true, "不等于比较运算符"));
+        list.add(new TriggerChar("< ", true, "小于比较运算符"));
+        list.add(new TriggerChar("> ", true, "大于比较运算符"));
+        list.add(new TriggerChar("<= ", true, "小于等于比较运算符"));
+        list.add(new TriggerChar(">= ", true, "大于等于比较运算符"));
 
-        // 2.4 算术与字符串运算符
-        list.add(new TriggerChar("+", true, "加法算术运算符"));
-        list.add(new TriggerChar("-", true, "减法算术运算符"));
-        list.add(new TriggerChar("*", true, "乘法算术运算符"));
-        list.add(new TriggerChar("/", true, "除法算术运算符"));
-        list.add(new TriggerChar("&&", true, "字符串连接符（新语法）"));
+        // 2.4 算术与字符串运算符（带空格，光标在空格后时触发）
+        list.add(new TriggerChar("+ ", true, "加法算术运算符"));
+        list.add(new TriggerChar("- ", true, "减法算术运算符"));
+        list.add(new TriggerChar("* ", true, "乘法算术运算符"));
+        list.add(new TriggerChar("/ ", true, "除法算术运算符"));
+        list.add(new TriggerChar("&& ", true, "字符串连接符（新语法）"));
 
         // 2.5 特定上下文关键字（后需带空格的触发词）
         list.add(new TriggerChar("DATA ", true, "声明变量（需后面有空格）"));
