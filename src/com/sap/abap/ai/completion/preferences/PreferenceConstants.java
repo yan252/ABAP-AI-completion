@@ -143,8 +143,9 @@ public final class PreferenceConstants {
             + "7. Pay attention to code comments that describe what should be implemented next.\n"
             + "8. Use ABAP-specific patterns: DATA declarations, LOOPs, SELECTs, FORM routines, etc.\n"
             + "9. Maintain consistent naming conventions with the existing code.\n"
-            + "10. When SKILL files are provided, prefer their patterns over generic ABAP code suggestions.";
-
+            + "10. When SKILL files are provided, prefer their patterns over generic ABAP code suggestions.\n"
+            + "11. When returning code content, it is necessary to consider aligning the current cursor with the preceding code and the code above and below.\n"
+            + "12. The returned code should not duplicate the preceding and following code or the code above and below.";
     // === Defaults for Parent Program Resolution ===
     public static final boolean DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED = false;
     public static final String DEFAULT_ABAP_SEARCH_DEPTH = "1";

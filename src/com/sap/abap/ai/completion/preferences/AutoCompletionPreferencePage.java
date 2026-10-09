@@ -87,7 +87,7 @@ public class AutoCompletionPreferencePage extends PreferencePage
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         chkAutoComplete = new Button(g, SWT.CHECK);
-        chkAutoComplete.setText("Auto-complete while typing (Temporary)");
+        chkAutoComplete.setText("Auto-complete while typing");
         GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
         ckGd.horizontalSpan = 2;
         chkAutoComplete.setLayoutData(ckGd);
