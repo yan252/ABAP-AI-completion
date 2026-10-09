@@ -102,10 +102,7 @@ public class AICompletionInlineOverlay implements AICompletionOverlayBase {
         int lineHeight = widget.getLineHeight();
 
         String[] rawLines = completionText.split("\n", -1);
-        int lineCount = rawLines.length;
-        if (lineCount > 0 && rawLines[lineCount - 1].isEmpty()) {
-            lineCount--;
-        }
+        int lineCount = countCompletionLines(completionText);
         if (lineCount <= 0) return false;
 
         GC gc = new GC(widget);
@@ -149,11 +146,7 @@ public class AICompletionInlineOverlay implements AICompletionOverlayBase {
         }
 
         String[] lines = completionText.split("\n", -1);
-        int lineCount = lines.length;
-        // Drop a single trailing empty line coming from a trailing newline
-        if (lineCount > 0 && lines[lineCount - 1].isEmpty()) {
-            lineCount--;
-        }
+        int lineCount = countCompletionLines(completionText);
 
         int lineHeight = widget.getLineHeight();
         int x0 = caretLoc.x;
@@ -173,6 +166,22 @@ public class AICompletionInlineOverlay implements AICompletionOverlayBase {
             int y = y0 + i * lineHeight;
             e.gc.drawString(line, x, y, true);
         }
+    }
+
+    /**
+     * 计算补全代码的行数 N。
+     * 单个结尾换行（由补全文本末尾的 "\n" 产生）不计入行数。
+     * 供内联提示绘制与"为提示预留空行"逻辑共用，保证两者行数一致。
+     */
+    public static int countCompletionLines(String completionText) {
+        if (completionText == null || completionText.isEmpty()) return 0;
+        String[] lines = completionText.split("\n", -1);
+        int lineCount = lines.length;
+        // Drop a single trailing empty line coming from a trailing newline
+        if (lineCount > 0 && lines[lineCount - 1].isEmpty()) {
+            lineCount--;
+        }
+        return lineCount;
     }
 
     private static String getLeadingWhitespace(String line) {

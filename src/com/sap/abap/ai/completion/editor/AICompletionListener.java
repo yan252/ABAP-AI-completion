@@ -297,7 +297,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         }
         String fullDocument = document.get();
 
-        triggerCompletion(file, textBefore, textAfter, fullDocument, project, cursorOffset);
+        triggerCompletion(file, textBefore, textAfter, fullDocument, project, cursorOffset, false);
     }
 
     // ==================== IDocumentListener ====================
@@ -310,6 +310,12 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     @Override
     public void documentChanged(DocumentEvent event) {
         if (!AIConfiguration.isPluginEnabled() || !AIConfiguration.isAutoCompletionEnabled()) {
+            return;
+        }
+
+        // 忽略补全覆盖层为内联提示插入/删除空行引起的文档变更，
+        // 避免提示被误隐藏或误触发新的补全请求
+        if (AIOverlayManager.isSuppressingContentChange()) {
             return;
         }
 
@@ -407,6 +413,12 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             String content = document.get();
             String hash = computeHash(content);
 
+            // 补全覆盖层为内联提示插入/删除了空行：忽略该变更，保持内容基线不变，
+            // 既不武装触发，也不隐藏提示
+            if (AIOverlayManager.isSuppressingContentChange()) {
+                return hash;
+            }
+
             // Compare with last known hash
             if (!hash.equals(lastContentHash)) {
                 // Content changed! Update tracking
@@ -503,7 +515,9 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
             debugLog("trigger auto-completion: offset=" + cursorOffset
                     + " linePrefix='" + linePrefix + "'");
 
-            triggerCompletion(currentFile, textBefore, textAfter, fullDocument, currentProject, cursorOffset);
+            // 触发条件满足，开始自动代码补全
+            plog("Start auto-completion...");
+            triggerCompletion(currentFile, textBefore, textAfter, fullDocument, currentProject, cursorOffset, true);
         } catch (Exception e) {
             // ignore
         }
@@ -616,7 +630,8 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     // ==================== Completion Logic ====================
 
     private void triggerCompletion(IFile file, String textBefore, String textAfter,
-                                    String fullDocument, IProject project, int cursorOffset) {
+                                    String fullDocument, IProject project, int cursorOffset,
+                                    boolean isAutoTrigger) {
         // file 可以为 null（SAP ADT 远程文件），AICompletionService 能处理
         cancelCurrentRequest();
 
@@ -624,6 +639,11 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         IWorkbenchPage workbenchPage = null;
         if (editor != null && editor.getSite() != null) {
             workbenchPage = editor.getSite().getPage();
+        }
+
+        // 自动补全场景：调用 AI 接口前记录日志
+        if (isAutoTrigger) {
+            plog("Start auto-completion -- calling AI...");
         }
 
         currentRequest = AICompletionService.requestCompletion(

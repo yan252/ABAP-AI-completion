@@ -2,7 +2,7 @@ $proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $src = "$proj\src"
 $bin = "$proj\bin"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.1.31.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.1.32.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "D:\Users\96000217\eclipse\plugins"

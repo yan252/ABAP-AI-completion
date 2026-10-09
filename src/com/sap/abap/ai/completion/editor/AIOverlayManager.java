@@ -3,6 +3,8 @@ package com.sap.abap.ai.completion.editor;
 import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.text.ITextSelection;
+import org.eclipse.jface.text.TextSelection;
+import org.eclipse.jface.viewers.ISelectionProvider;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.FocusAdapter;
@@ -13,6 +15,7 @@ import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
 import org.eclipse.swt.widgets.Shell;
 
+import com.sap.abap.ai.completion.logging.AILogger;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
 import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
@@ -42,6 +45,32 @@ public class AIOverlayManager {
     private boolean globalFilterInstalled = false;
     /** 补全结果回调(用户互动结果): 1=ESC取消, 2=确认, 3=其它 */
     private java.util.function.IntConsumer resultListener;
+
+    // ==================== Inline hint blank lines ====================
+
+    /**
+     * 内联提示为预留垂直空间而在光标处插入的空行（换行符）信息。
+     * 关闭提示时最先删除这些空行。非内联显示或单行补全时不插入。
+     */
+    private boolean blankLinesInserted = false;
+    private IDocument blankLinesDocument;
+    private int blankLinesOffset = -1;
+    private int blankLinesCount = 0;
+
+    /**
+     * 标记补全覆盖层正在修改文档（插入/删除内联提示空行）。
+     * 该标记在整个"内联提示显示期间"保持为 true（从插入空行起，到删除空行止），
+     * 使 {@link AICompletionListener} 在轮询/文档事件中忽略由此产生的文档变更，
+     * 避免提示被误隐藏或误触发新的补全请求。使用静态字段以覆盖所有管理器实例。
+     */
+    private static volatile boolean suppressContentChange = false;
+
+    /**
+     * 补全覆盖层是否正在为内联提示修改文档（插入/删除空行）。
+     */
+    public static boolean isSuppressingContentChange() {
+        return suppressContentChange;
+    }
 
     /**
      * 注册补全结果回调。 1=用户按 ESC 取消，2=用户确认，3=其它方式关闭。
@@ -186,12 +215,117 @@ public class AIOverlayManager {
         // Register global mouse filter: click on suggestion -> accept (handled by the
         // inline overlay's own mouse listener); click anywhere else -> dismiss
         registerGlobalMouseFilter();
+
+        // 内联提示绘制在光标下方，需要足够的垂直空间。
+        // 提示显示后，在光标处插入 N-1 个空行（N = 补全代码行数）预留空间，
+        // 光标保持在原位置；提示关闭时最先删除这些空行。
+        insertInlineHintBlankLines(viewer, currentDocument, completionText, cursorOffset);
+    }
+
+    /**
+     * 内联提示显示后，在光标处插入 N-1 个空行（N = 补全代码行数）以预留垂直空间，
+     * 并保持光标在插入前的原始位置。同时置位 {@link #suppressContentChange}，
+     * 使监听器忽略该文档变更，直到空行被删除。
+     */
+    private void insertInlineHintBlankLines(ITextViewer viewer, IDocument document,
+                                            String completionText, int cursorOffset) {
+        if (viewer == null || document == null || completionText == null) return;
+
+        int extra = AICompletionInlineOverlay.countCompletionLines(completionText) - 1;
+        if (extra <= 0) return;
+
+        StringBuilder sb = new StringBuilder(extra);
+        for (int i = 0; i < extra; i++) {
+            sb.append('\n');
+        }
+        String newlines = sb.toString();
+
+        int insertAt = Math.max(0, Math.min(cursorOffset, document.getLength()));
+        StyledText widget = viewer.getTextWidget();
+        try {
+            // 确保焦点在编辑器上：ADT 编辑器失焦时可能不提交编程式文档修改
+            if (widget != null && !widget.isDisposed()) {
+                widget.setFocus();
+            }
+            // 先置位抑制标记，再插入空行，保证由此触发的文档事件被监听器忽略
+            suppressContentChange = true;
+            document.replace(insertAt, 0, newlines);
+
+            blankLinesDocument = document;
+            blankLinesOffset = insertAt;
+            blankLinesCount = extra;
+            blankLinesInserted = true;
+
+            // 光标保持在插入前的原始位置
+            keepCaretAt(viewer, insertAt);
+        } catch (Exception ex) {
+            AILogger.logError("Overlay", "insert inline hint blank lines failed: " + ex);
+            suppressContentChange = false;
+            blankLinesInserted = false;
+            blankLinesDocument = null;
+            blankLinesOffset = -1;
+            blankLinesCount = 0;
+        }
+    }
+
+    /**
+     * 删除为内联提示插入的空行。应在提示关闭时最先调用。
+     */
+    private void removeInlineHintBlankLines() {
+        if (!blankLinesInserted || blankLinesDocument == null) return;
+
+        IDocument doc = blankLinesDocument;
+        int offset = blankLinesOffset;
+        int count = blankLinesCount;
+
+        // 先复位状态，避免重入时重复删除
+        blankLinesInserted = false;
+        blankLinesDocument = null;
+        blankLinesOffset = -1;
+        blankLinesCount = 0;
+
+        try {
+            if (offset >= 0 && count > 0 && offset + count <= doc.getLength()) {
+                doc.replace(offset, count, "");
+                if (currentViewer != null) {
+                    keepCaretAt(currentViewer, offset);
+                }
+            }
+        } catch (Exception ex) {
+            AILogger.logError("Overlay", "remove inline hint blank lines failed: " + ex);
+        } finally {
+            // 空行已删除：恢复对文档变更的正常检测
+            suppressContentChange = false;
+        }
+    }
+
+    /**
+     * 将光标/选中区设置到指定 offset（长度 0），使光标保持在原位置。
+     */
+    private void keepCaretAt(ITextViewer viewer, int offset) {
+        if (viewer == null || offset < 0) return;
+        try {
+            ISelectionProvider sp = viewer.getSelectionProvider();
+            if (sp != null) {
+                sp.setSelection(new TextSelection(offset, 0));
+            }
+        } catch (Exception ignored) {
+        }
+        StyledText widget = viewer.getTextWidget();
+        if (widget != null && !widget.isDisposed()) {
+            try {
+                widget.setCaretOffset(offset);
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     /**
      * Hides and disposes the current overlay.
      */
     public void hideOverlay() {
+        // 关闭提示时，最先删除为内联提示插入的空行，再进行其它处理
+        removeInlineHintBlankLines();
         unregisterGlobalMouseFilter();
         if (currentOverlay != null) {
             currentOverlay.close();
@@ -513,6 +647,9 @@ public class AIOverlayManager {
                         editorWidget.setFocus();
                     }
                 }
+                // 插入补全代码前，先删除为内联提示预留的空行，
+                // 保证插入位置正确、不会残留多余空行
+                removeInlineHintBlankLines();
                 currentDocument.replace(insertOffset, 0, text);
             } catch (Exception ex) {
                 com.sap.abap.ai.completion.logging.AILogger.logError(
