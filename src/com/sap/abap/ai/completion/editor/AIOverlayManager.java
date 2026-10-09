@@ -651,6 +651,20 @@ public class AIOverlayManager {
                 // 保证插入位置正确、不会残留多余空行
                 removeInlineHintBlankLines();
                 currentDocument.replace(insertOffset, 0, text);
+
+                // 确认补全后，光标移动到新增代码的末尾
+                keepCaretAt(currentViewer, insertOffset + text.length());
+
+                // 补全代码超过 1 行时，编辑器向下滚动 N-1 行（N = 补全代码行数），
+                // 使新增代码完整可见并收起原提示区域
+                int lineCount = AICompletionInlineOverlay.countCompletionLines(text);
+                if (lineCount > 1) {
+                    StyledText scrollWidget = currentViewer != null
+                            ? currentViewer.getTextWidget() : null;
+                    if (scrollWidget != null && !scrollWidget.isDisposed()) {
+                        scrollWidget.setTopIndex(scrollWidget.getTopIndex() + (lineCount - 1));
+                    }
+                }
             } catch (Exception ex) {
                 com.sap.abap.ai.completion.logging.AILogger.logError(
                         "Overlay", "accept suggestion insert failed: " + ex);
