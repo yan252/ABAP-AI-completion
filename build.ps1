@@ -2,11 +2,17 @@ $proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $src = "$proj\src"
 $bin = "$proj\bin"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.1.32.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.1.39.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "D:\Users\96000217\eclipse\plugins"
 $jdkHome = "D:\jdk\jdk-21.0.12.1"
+
+# Source of the third-party abap-cli node_modules tree to embed. The project's
+# own scripts live under $proj\abap-cli; node_modules is assembled from the
+# maintained abap-cli stage checkout (override with $env:ABAP_CLI_STAGE_DIR).
+$abapStage = if ($env:ABAP_CLI_STAGE_DIR) { $env:ABAP_CLI_STAGE_DIR }
+             else { "D:\Users\96000217\Documents\trae_projects\_abap-cli-stage" }
 
 $deps = @(
     "$p2Pool\org.eclipse.osgi_*.jar"
@@ -37,6 +43,7 @@ Remove-Item -Recurse -Force "$bin\com" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$bin\META-INF" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$bin\icons" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$bin\references" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$bin\abap-cli" -ErrorAction SilentlyContinue
 Remove-Item -Force "$bin\plugin.xml" -ErrorAction SilentlyContinue
 Remove-Item -Force "$bin\templates.properties" -ErrorAction SilentlyContinue
 
@@ -79,6 +86,29 @@ if (Test-Path "$proj\templates.properties") {
     Copy-Item "$proj\templates.properties" "$bin\" -Force
 }
 
+Write-Host "=== Embedding abap-cli runtime ==="
+# The runtime shipped inside the plugin and extracted on first use (see
+# AbapCliRuntime.java): our own scripts/extensions (versioned with the project)
+# plus the third-party abap-cli node_modules tree from the stage checkout.
+$runtimeBin = "$bin\abap-cli"
+New-Item -ItemType Directory -Force -Path "$runtimeBin\extensions" | Out-Null
+Copy-Item "$proj\abap-cli\*.mjs" "$runtimeBin\" -Force
+Copy-Item "$proj\abap-cli\extensions\*.mjs" "$runtimeBin\extensions\" -Force
+
+$stageModules = "$abapStage\node_modules"
+if (-not (Test-Path $stageModules)) {
+    Write-Host "=== BUILD FAILED: node_modules not found at $stageModules ==="
+    Write-Host "    Set `$env:ABAP_CLI_STAGE_DIR to a prepared abap-cli stage checkout."
+    exit 1
+}
+Write-Host "Copying node_modules from $abapStage (this takes a moment)..."
+New-Item -ItemType Directory -Force -Path "$runtimeBin\node_modules" | Out-Null
+Get-ChildItem -Path $stageModules -Force |
+    Where-Object { $_.Name -ne ".bin" } |
+    ForEach-Object { Copy-Item $_.FullName "$runtimeBin\node_modules\" -Recurse -Force }
+$fileCount = (Get-ChildItem -Path "$runtimeBin" -Recurse -File).Count
+Write-Host "Embedded runtime files: $fileCount"
+
 Write-Host "=== Creating JAR with full plugin structure ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $jarExe = "$jdkHome\bin\jar.exe"
@@ -87,6 +117,7 @@ $jarArgs = @("cfm", "$jarPath", "META-INF\MANIFEST.MF", "plugin.xml", "com\")
 if (Test-Path "$bin\icons") { $jarArgs += "icons\" }
 if (Test-Path "$bin\references") { $jarArgs += "references\" }
 if (Test-Path "$bin\templates.properties") { $jarArgs += "templates.properties" }
+if (Test-Path "$bin\abap-cli") { $jarArgs += "abap-cli\" }
 & $jarExe $jarArgs
 Pop-Location
 
@@ -95,8 +126,12 @@ Write-Host "`n============================================"
 Write-Host "  JAR CREATED SUCCESSFULLY"
 Write-Host "============================================"
 Write-Host "  Location: $jarPath"
-Write-Host "  Size: $size KB"
+Write-Host "  Size: $([math]::Round($size / 1024, 2)) MB"
 Write-Host "============================================"
-Write-Host "`nJAR contents:"
-& $jarExe tf "$jarPath"
-Write-Host "`nDeploy to Eclipse dropins directory to install."
+Write-Host "`nJAR entry summary:"
+$entries = & $jarExe tf "$jarPath"
+Write-Host ("  total entries: {0}" -f $entries.Count)
+Write-Host ("  abap-cli entries: {0}" -f ($entries | Where-Object { $_ -like "abap-cli/*" }).Count)
+$entries | Where-Object { $_ -notlike "abap-cli/node_modules/*" } | ForEach-Object { Write-Host "  $_" }
+Write-Host "  ... (abap-cli/node_modules/* entries omitted)"
+Write-Host "`nDeploy to Eclipse dropins directory or the update site to install."

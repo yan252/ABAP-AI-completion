@@ -11,15 +11,30 @@ $PROJ = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $JAVA_HOME = "D:\jdk\jdk-21.0.12.1"
 $jar = "$JAVA_HOME\bin\jar.exe"
 
-$PLUGIN_JAR = "$PROJ\dist\com.sap.abap.ai.completion_1.1.31.jar"
+# Auto-detect the version from the newest plugin JAR in dist\ (single source
+# of truth = build.ps1 output); override with $env:PLUGIN_VERSION if needed.
+$latestJar = Get-ChildItem "$PROJ\dist\com.sap.abap.ai.completion_*.jar" -ErrorAction SilentlyContinue |
+    Sort-Object { [version]($_.BaseName -replace '^.*_', '') } -Descending |
+    Select-Object -First 1
+if ($env:PLUGIN_VERSION) {
+    $VERSION = $env:PLUGIN_VERSION
+} elseif ($latestJar) {
+    $VERSION = $latestJar.BaseName -replace '^.*_', ''
+} else {
+    Write-Host "ERROR: no com.sap.abap.ai.completion_*.jar found in $PROJ\dist - run build.ps1 first." -ForegroundColor Red
+    exit 1
+}
+Write-Host "Using plugin version: $VERSION (from $($latestJar.Name))"
+
+$PLUGIN_JAR = "$PROJ\dist\com.sap.abap.ai.completion_$VERSION.jar"
 $SITE_DIR   = "$PROJ\update-site"
 $PLUGINS_DIR = "$SITE_DIR\plugins"
 $FEATURES_DIR = "$SITE_DIR\features"
 
 $FEATURE_ID = "com.sap.abap.ai.completion.feature"
-$FEATURE_VERSION = "1.1.31"
+$FEATURE_VERSION = "$VERSION"
 $PLUGIN_ID = "com.sap.abap.ai.completion"
-$PLUGIN_VERSION = "1.1.31"
+$PLUGIN_VERSION = "$VERSION"
 
 # ---- Pre-checks ----
 if (-not (Test-Path $PLUGIN_JAR)) {
@@ -50,12 +65,12 @@ $TMP = "$PROJ\build_tmp_feature"
 Remove-Item -Recurse -Force $TMP -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path "$TMP\META-INF" | Out-Null
 
-$featureXml = @'
+$featureXml = @"
 <?xml version="1.0" encoding="UTF-8"?>
 <feature
       id="com.sap.abap.ai.completion.feature"
       label="ABAP AI Completion Feature"
-      version="1.1.31"
+      version="$VERSION"
       provider-name="SAP ABAP AI Tools">
 
    <description>
@@ -94,11 +109,11 @@ SOFTWARE.
          id="com.sap.abap.ai.completion"
          download-size="0"
          install-size="0"
-         version="1.1.31"
+         version="$VERSION"
          unpack="false"/>
 
 </feature>
-'@
+"@
 
 Set-Content -Path "$TMP\feature.xml" -Value $featureXml -Encoding UTF8
 Set-Content -Path "$TMP\META-INF\MANIFEST.MF" -Value "Manifest-Version: 1.0`r`n" -Encoding ASCII
@@ -115,12 +130,12 @@ Write-Host "  -> features/$FEATURE_ID`_$FEATURE_VERSION.jar"
 # ============================================================
 Write-Host "=== Creating site.xml ===" -ForegroundColor Cyan
 
-$siteXml = @'
+$siteXml = @"
 <?xml version="1.0" encoding="UTF-8"?>
 <site>
-   <feature url="features/com.sap.abap.ai.completion.feature_1.1.31.jar"
+   <feature url="features/com.sap.abap.ai.completion.feature_$VERSION.jar"
             id="com.sap.abap.ai.completion.feature"
-            version="1.1.31">
+            version="$VERSION">
       <category name="ABAP AI Completion"/>
    </feature>
    <category-def name="ABAP AI Completion" label="ABAP AI Completion">
@@ -129,7 +144,7 @@ $siteXml = @'
       </description>
    </category-def>
 </site>
-'@
+"@
 
 Set-Content -Path "$SITE_DIR\site.xml" -Value $siteXml -Encoding UTF8
 
@@ -140,8 +155,8 @@ Set-Content -Path "$SITE_DIR\site.xml" -Value $siteXml -Encoding UTF8
 Write-Host "=== Generating P2 metadata ===" -ForegroundColor Cyan
 
 $timeStamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-$pluginFile = Get-Item "$PLUGINS_DIR\com.sap.abap.ai.completion_1.1.31.jar"
-$featureFile = Get-Item "$FEATURES_DIR\com.sap.abap.ai.completion.feature_1.1.31.jar"
+$pluginFile = Get-Item "$PLUGINS_DIR\com.sap.abap.ai.completion_$VERSION.jar"
+$featureFile = Get-Item "$FEATURES_DIR\com.sap.abap.ai.completion.feature_$VERSION.jar"
 $pluginSize = $pluginFile.Length
 $featureSize = $featureFile.Length
 
@@ -159,9 +174,9 @@ $contentXml = @"
 
     <!-- Feature (group) IU -->
     <unit id='com.sap.abap.ai.completion.feature.feature.group'
-          version='1.1.31' singleton='false'>
+          version='$VERSION' singleton='false'>
       <update id='com.sap.abap.ai.completion.feature.feature.group'
-              range='[0.0.0,1.1.31]' severity='0'/>
+              range='[0.0.0,$VERSION]' severity='0'/>
       <properties size='4'>
         <property name='org.eclipse.equinox.p2.name'
                   value='ABAP AI Completion Feature'/>
@@ -175,22 +190,22 @@ $contentXml = @"
       <provides size='2'>
         <provided namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion.feature.feature.group'
-                  version='1.1.31'/>
+                  version='$VERSION'/>
         <provided namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion.feature.feature.jar'
-                  version='1.1.31'/>
+                  version='$VERSION'/>
       </provides>
       <requires size='1'>
         <required namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion'
-                  range='[1.1.31,1.1.31]'/>
+                  range='[$VERSION,$VERSION]'/>
       </requires>
-      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.1.31'/>
+      <touchpoint id='org.eclipse.equinox.p2.osgi' version='$VERSION'/>
       <touchpointData size='1'>
         <instructions size='1'>
           <instruction key='manifest'>
             Bundle-SymbolicName: com.sap.abap.ai.completion.feature; singleton:=true
-Bundle-Version: 1.1.31
+Bundle-Version: $VERSION
           </instruction>
         </instructions>
       </touchpointData>
@@ -198,9 +213,9 @@ Bundle-Version: 1.1.31
 
     <!-- Plugin (bundle) IU -->
     <unit id='com.sap.abap.ai.completion'
-          version='1.1.31' singleton='false'>
+          version='$VERSION' singleton='false'>
       <update id='com.sap.abap.ai.completion'
-              range='[0.0.0,1.1.31]' severity='0'/>
+              range='[0.0.0,$VERSION]' severity='0'/>
       <properties size='3'>
         <property name='org.eclipse.equinox.p2.name'
                   value='ABAP AI Completion'/>
@@ -212,7 +227,7 @@ Bundle-Version: 1.1.31
       <provides size='1'>
         <provided namespace='org.eclipse.equinox.p2.iu'
                   name='com.sap.abap.ai.completion'
-                  version='1.1.31'/>
+                  version='$VERSION'/>
       </provides>
       <requires size='9'>
         <required namespace='osgi.bundle'
@@ -234,12 +249,12 @@ Bundle-Version: 1.1.31
         <required namespace='osgi.bundle'
                   name='com.sap.conn.jco' range='0.0.0'/>
       </requires>
-      <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.1.31'/>
+      <touchpoint id='org.eclipse.equinox.p2.osgi' version='$VERSION'/>
       <touchpointData size='1'>
         <instructions size='1'>
           <instruction key='manifest'>
             Bundle-SymbolicName: com.sap.abap.ai.completion
-Bundle-Version: 1.1.31
+Bundle-Version: $VERSION
           </instruction>
         </instructions>
       </touchpointData>
@@ -268,7 +283,7 @@ $artifactsXml = @"
   <artifacts size='2'>
     <artifact classifier='osgi.bundle'
               id='com.sap.abap.ai.completion'
-              version='1.1.31'>
+              version='$VERSION'>
       <properties size='2'>
         <property name='artifact.size' value='$pluginSize'/>
         <property name='download.size' value='$pluginSize'/>
@@ -276,7 +291,7 @@ $artifactsXml = @"
     </artifact>
     <artifact classifier='org.eclipse.update.feature'
               id='com.sap.abap.ai.completion.feature'
-              version='1.1.31'>
+              version='$VERSION'>
       <properties size='2'>
         <property name='artifact.size' value='$featureSize'/>
         <property name='download.size' value='$featureSize'/>
@@ -308,7 +323,7 @@ Write-Host "  -> artifacts.jar"
 # Step 6: Create ZIP archive
 # ============================================================
 Write-Host "=== Creating ZIP archive ===" -ForegroundColor Cyan
-$zipFile = "$PROJ\dist\ABAP-AI-Completion-UpdateSite-1.1.31.zip"
+$zipFile = "$PROJ\dist\ABAP-AI-Completion-UpdateSite-$VERSION.zip"
 Remove-Item $zipFile -ErrorAction SilentlyContinue
 Compress-Archive -Path "$SITE_DIR\*" -DestinationPath $zipFile -Force
 

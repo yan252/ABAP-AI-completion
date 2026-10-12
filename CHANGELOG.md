@@ -8,6 +8,29 @@
 
 ---
 
+## [1.1.39]
+
+### Fixed
+- **全新工作区首次导入报 "Multiple abap-cli profiles configured (S4DEV, auth, adtTextpool, runtime, apiCapabilities, icf, httpService)"**：`AbapCliConnectionTester.readProfileNames()` 用扁平正则扫描 `~/.abap-cli/systems.json` 的整个 `"systems"` 子串，把 S4DEV profile 内部由 abap-cli 写回的嵌套缓存对象（`auth` / `runtime` / `apiCapabilities` / `icf` / `httpService` / `adtTextpool`）误判为独立 profile。开发机此前未触发是因为 stage 里残留的 `.abap.json` 已带 `"system"` 字段；v1.1.38 全新释放目录没有该文件才走到 systems.json 回退分支。现改为深度 + 字符串感知的扫描器，只枚举 `"systems"` 的直接子键（且值为对象），已用真实 systems.json 验证只识别出 S4DEV。
+- `generate-update-site.ps1` 版本号改为自动探测 `dist\` 下最新插件 JAR（可用 `$env:PLUGIN_VERSION` 覆盖），消除手工同步遗漏导致的"站点打包旧版 JAR"风险。
+
+---
+
+## [1.1.38]
+
+### Added
+- **abap-cli 运行时随插件自包含分发**：abap-cli 全套 `node_modules`（含 keytar 原生模块）、8 个自定义扩展（`extensions/*.mjs`）与辅助脚本（`_prefs_snapshot.mjs`、`_probe_direct.mjs`）现在打包在插件 JAR 的 `/abap-cli/` 中。首次执行模板导入 / 连接测试时，新增的 `AbapCliRuntime` 自动把运行时释放到工作区 state 目录（`.metadata/.plugins/com.sap.abap.ai.completion/abap-cli-stage/`），插件升级后按 bundle 版本自动重新释放。客户通过 Marketplace / Update Site / dropins 安装插件后**无需再单独安装 abap-cli**。
+- **Node.js 缺失引导**：客户机仍需安装 Node.js 18+ 并在 PATH 中（abap-cli 是 Node 程序）；检测不到 `node` 时，环境检查弹窗明确给出 https://nodejs.org/ 下载指引。
+- **开发覆盖（仅调试用）**：可用系统属性 `abap.cli.stage.dir` / 环境变量 `ABAP_CLI_STAGE_DIR` 指定外部 stage 目录（跳过释放），用 `abap.cli.node` / `ABAP_CLI_NODE` 指定 node 可执行文件。
+
+### Changed
+- **移除开发机硬编码路径**：删除 `AbapGitImportSupport.STAGE_DIR`（原 `D:\...\_abap-cli-stage`），`AbapGitImportSupport` 与 `AbapCliConnectionTester` 统一通过 `AbapCliRuntime.ensureStage()` 解析运行时目录、通过 `AbapCliRuntime.nodeCommand()` 调用 node；各环境错误文案改为面向客户的英文提示（重装插件 / 安装 Node.js）。
+- **插件体积**：JAR 由约 0.75 MB 增至约 5.9 MB（node_modules 压缩后；构建时从 abap-cli stage 拷贝，可用 `ABAP_CLI_STAGE_DIR` 覆盖来源，排除 `.bin/`）。
+- `generate-update-site.ps1` 版本号参数化（`$VERSION`，不再手工改十余处）；`rebuild.ps1` 改为直接委托 `build.ps1`，避免打出缺少嵌入式运行时的 JAR。
+
+---
+
+
 ## [1.1.2] - 2026-09-21
 
 ### Added

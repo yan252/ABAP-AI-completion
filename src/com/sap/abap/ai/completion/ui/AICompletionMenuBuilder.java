@@ -141,6 +141,17 @@ public final class AICompletionMenuBuilder {
             }
         });
 
+        // Batch Import Handler Templates: imports all programs (PROG) and function
+        // groups/modules (FUGR/FM) from ZTEMPLATE20.zip via abap-cli.
+        final MenuItem batchItem = new MenuItem(templateMenu, SWT.PUSH);
+        batchItem.setText("Batch Import Handler Templates");
+        batchItem.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                BatchTemplateImportService.runImport();
+            }
+        });
+
         templateItem.setMenu(templateMenu);
 
         new MenuItem(menu, SWT.SEPARATOR);

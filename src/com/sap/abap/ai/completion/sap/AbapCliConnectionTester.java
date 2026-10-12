@@ -63,10 +63,6 @@ public final class AbapCliConnectionTester {
     private static final Pattern SYSTEM_FIELD =
             Pattern.compile("\"system\"\\s*:\\s*\"([^\"]+)\"");
 
-    /** {@code systems.json} 中 profile 键的提取正则（"systems" 对象下的键）。 */
-    private static final Pattern PROFILE_KEY =
-            Pattern.compile("\"([A-Za-z0-9_\\-]+)\"\\s*:\\s*\\{");
-
     private AbapCliConnectionTester() {
     }
 
@@ -102,14 +98,13 @@ public final class AbapCliConnectionTester {
      *         与 {@link Result#detail} 表达）
      */
     public static Result testConnection() {
-        // ===== [1] 环境检查（与 MultiTabTemplateImportService.checkEnvironment 同源） =====
+        // ===== [1] 环境检查（bundled runtime 释放 + node） =====
         Path stageRoot;
         String envError = checkEnvironment();
         if (envError != null) {
             return new Result(false, "", "", envError);
         }
-        stageRoot = Paths.get(com.sap.abap.ai.completion.ui.MultiTabTemplateImportService.STAGE_DIR)
-                .toAbsolutePath().normalize();
+        stageRoot = com.sap.abap.ai.completion.ui.AbapGitImportSupport.stageRoot();
 
         // ===== [2] 确保 .abap.json 有 system 字段 =====
         final String system;
@@ -122,9 +117,9 @@ public final class AbapCliConnectionTester {
 
         // ===== [3] 运行 node abap-cli profile test <system> =====
         List<String> cmd = new ArrayList<>();
-        cmd.add("node");
+        cmd.add(com.sap.abap.ai.completion.ui.AbapCliRuntime.nodeCommand());
         cmd.add(stageRoot.resolve(
-                com.sap.abap.ai.completion.ui.MultiTabTemplateImportService.ABAP_CLI_INDEX_REL)
+                com.sap.abap.ai.completion.ui.AbapGitImportSupport.ABAP_CLI_INDEX_REL)
                 .toString());
         cmd.add("profile");
         cmd.add("test");
@@ -207,25 +202,23 @@ public final class AbapCliConnectionTester {
             return new Result(false, "", "", iae.getMessage());
         }
 
-        // ===== [2] 环境检查（stage 目录 + 探测脚本 + node） =====
-        Path stageRoot = Paths.get(
-                com.sap.abap.ai.completion.ui.MultiTabTemplateImportService.STAGE_DIR)
-                .toAbsolutePath().normalize();
+        // ===== [2] 环境检查（bundled runtime 释放 + 探测脚本 + node） =====
         String envError = checkEnvironment();
         if (envError != null) {
             return new Result(false, target, "", envError);
         }
+        Path stageRoot = com.sap.abap.ai.completion.ui.AbapGitImportSupport.stageRoot();
         Path probeScript = stageRoot.resolve(PROBE_SCRIPT_NAME);
         if (!Files.isRegularFile(probeScript)) {
             return new Result(false, target, "",
-                    "Probe script location:\n  " + probeScript
-                            + "\n\nFile not found. Please copy " + PROBE_SCRIPT_NAME
-                            + " into the abap-cli stage directory.");
+                    "Probe script not found in the plugin runtime:\n  " + probeScript
+                            + "\n\nThe plugin installation appears incomplete — please"
+                            + " reinstall the plugin from the update site.");
         }
 
         // ===== [3] 运行 node _probe_direct.mjs =====
         List<String> cmd = new ArrayList<>();
-        cmd.add("node");
+        cmd.add(com.sap.abap.ai.completion.ui.AbapCliRuntime.nodeCommand());
         cmd.add(probeScript.toString());
         cmd.add("--url=" + target);
         cmd.add("--client=" + nullToEmpty(client));
@@ -403,7 +396,17 @@ public final class AbapCliConnectionTester {
         return system;
     }
 
-    /** 读取 {@code ~/.abap-cli/systems.json} 中的 profile 名集合（键→是否存在）。 */
+    /** 读取 {@code ~/.abap-cli/systems.json} 中的 profile 名集合（键→是否存在）。
+     *
+     *  <p>只枚举 {@code "systems"} 对象的<b>直接子键</b>（且值为对象的键）。
+     *  profile 内部由 abap-cli 写回的嵌套缓存对象（{@code auth} / {@code runtime} /
+     *  {@code apiCapabilities} / {@code icf} / {@code httpService} /
+     *  {@code adtTextpool} 等）绝不能算作 profile——此前用扁平正则扫描整个
+     *  {@code "systems"} 子串会把它们误判为多 profile，导致全新 stage
+     *  （{@code .abap.json} 尚无 {@code system} 字段）下解析失败。
+     *  扫描器跟踪大括号深度与字符串字面量（含转义），避免值内
+     *  {@code "{...}"} 文本干扰深度计数。</p>
+     */
     private static Map<String, Boolean> readProfileNames() {
         Map<String, Boolean> names = new LinkedHashMap<>();
         Path systems = abapCliSystemsJsonPath();
@@ -412,34 +415,82 @@ public final class AbapCliConnectionTester {
         }
         try {
             String content = new String(Files.readAllBytes(systems), StandardCharsets.UTF_8);
-            // 只取 "systems": { ... } 对象内的键；先定位 "systems" 再截取其后
-            // 到匹配的第一个闭合大括号（简化解析，足够覆盖 systems.json 结构）。
             int idx = content.indexOf("\"systems\"");
             if (idx < 0) {
                 return names;
             }
-            int depth = 0;
+            // 定位 "systems" 值对象的开括号
             int start = -1;
-            int end = -1;
-            for (int i = idx; i < content.length(); i++) {
+            for (int i = idx + "\"systems\"".length(); i < content.length(); i++) {
                 char c = content.charAt(i);
                 if (c == '{') {
-                    if (depth == 0) {
-                        start = i;
-                    }
-                    depth++;
-                } else if (c == '}') {
-                    depth--;
-                    if (depth == 0) {
-                        end = i;
-                        break;
-                    }
+                    start = i;
+                    break;
+                }
+                if (!Character.isWhitespace(c) && c != ':') {
+                    return names; // 结构不符
                 }
             }
-            if (start >= 0 && end > start) {
-                Matcher m = PROFILE_KEY.matcher(content.substring(start + 1, end));
-                while (m.find()) {
-                    names.put(m.group(1), Boolean.TRUE);
+            if (start < 0) {
+                return names;
+            }
+
+            int depth = 0;
+            boolean inStr = false;
+            boolean esc = false;
+            StringBuilder key = null;      // 正在读取的 depth-1 键名
+            String pendingKey = null;      // 已读完、等待判定值类型的键名
+            for (int i = start; i < content.length(); i++) {
+                char c = content.charAt(i);
+                if (inStr) {
+                    if (esc) {
+                        esc = false;
+                    } else if (c == '\\') {
+                        esc = true;
+                    } else if (c == '"') {
+                        inStr = false;
+                        if (depth == 1 && key != null) {
+                            pendingKey = key.toString();
+                            key = null;
+                        }
+                    } else if (depth == 1 && key != null) {
+                        key.append(c);
+                    }
+                    continue;
+                }
+                if (c == '"') {
+                    inStr = true;
+                    // 判定该字符串是否为 depth-1 的键：前一个非空白字符须为 '{' 或 ','
+                    int p = i - 1;
+                    while (p > start && Character.isWhitespace(content.charAt(p))) {
+                        p--;
+                    }
+                    char pc = content.charAt(p);
+                    if (depth == 1 && (pc == '{' || pc == ',')) {
+                        key = new StringBuilder();
+                    } else if (depth == 1 && pc == ':' && pendingKey != null) {
+                        pendingKey = null; // 值是标量字符串，不是 profile
+                    }
+                    continue;
+                }
+                if (c == '{') {
+                    if (depth == 1 && pendingKey != null) {
+                        names.put(pendingKey, Boolean.TRUE);
+                        pendingKey = null;
+                    }
+                    depth++;
+                    continue;
+                }
+                if (c == '}') {
+                    depth--;
+                    if (depth == 0) {
+                        break; // "systems" 对象结束
+                    }
+                    continue;
+                }
+                if (depth == 1 && pendingKey != null && c != ':'
+                        && !Character.isWhitespace(c)) {
+                    pendingKey = null; // 值是数字/布尔/null 等标量，不是 profile
                 }
             }
         } catch (Exception e) {
@@ -479,26 +530,37 @@ public final class AbapCliConnectionTester {
     // ====================================================================
 
     /**
-     * 环境检查：stage 目录、abap-cli 入口、node 是否就位。
+     * 环境检查：bundled abap-cli 运行时能否释放/就位、abap-cli 入口、node 是否可用。
      *
      * @return {@code null}=环境就绪；否则为失败说明
      */
     private static String checkEnvironment() {
-        File stageFile = new File(
-                com.sap.abap.ai.completion.ui.MultiTabTemplateImportService.STAGE_DIR);
-        if (!stageFile.isDirectory()) {
-            return "Abap-cli stage directory not found:\n  " + stageFile.getAbsolutePath()
-                    + "\n\nThe abapGit-based import runs 'node abap-cli' from this directory.\n"
-                    + "Please verify it exists (see MultiTabTemplateImportService.STAGE_DIR).";
+        Path stageRoot;
+        try {
+            stageRoot = com.sap.abap.ai.completion.ui.AbapCliRuntime.ensureStage();
+        } catch (Exception e) {
+            return "The bundled abap-cli runtime could not be prepared:\n  "
+                    + e.getMessage()
+                    + "\n\nPlease restart Eclipse and retry. If the problem persists,"
+                    + " reinstall the plugin from the update site.";
         }
-        Path stageRoot = stageFile.toPath().toAbsolutePath().normalize();
 
         File indexJs = stageRoot.resolve(
-                com.sap.abap.ai.completion.ui.MultiTabTemplateImportService.ABAP_CLI_INDEX_REL)
+                com.sap.abap.ai.completion.ui.AbapGitImportSupport.ABAP_CLI_INDEX_REL)
                 .toFile();
         if (!indexJs.isFile()) {
-            return "abap-cli entry not found:\n  " + indexJs.getAbsolutePath()
-                    + "\n\nPlease run 'npm install abap-cli' in:\n  " + stageRoot;
+            return "abap-cli entry not found in the plugin runtime:\n  "
+                    + indexJs.getAbsolutePath()
+                    + "\n\nThe plugin installation appears incomplete — please reinstall"
+                    + " the plugin from the update site.";
+        }
+        if (!com.sap.abap.ai.completion.ui.AbapGitImportSupport.isNodeAvailable()) {
+            return "Node.js was not found on PATH ('node --version' failed). The abap-cli"
+                    + "\nengine is bundled with this plugin, but Node.js 18 or newer is"
+                    + "\nrequired to run it."
+                    + "\n\nPlease install the LTS build for Windows from:"
+                    + "\n  https://nodejs.org/"
+                    + "\nand make sure 'node' is on PATH, then restart Eclipse.";
         }
         return null;
     }
