@@ -87,6 +87,10 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     /** 补全结果: 0=无,1=ESC取消,2=确认,3=其它 */
     private int lastCompletionResult = PreferenceConstants.COMPLETION_RESULT_NONE;
 
+    /** 编辑器 StyledText 焦点监听：编辑器失焦时退出补全并按 ESC 关闭提示 */
+    private org.eclipse.swt.events.FocusListener editorFocusListener;
+    private StyledText focusListenWidget;
+
     /**
      * Attaches this listener to the currently active editor.
      */
@@ -228,6 +232,9 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         // Register document listener
         this.document.addDocumentListener(this);
 
+        // 编辑器失焦监听：失焦即退出补全（需求2）
+        installEditorFocusListener();
+
         // Start polling for ALL editors (catches ABAP editor which may not fire events)
         startPolling();
     }
@@ -238,6 +245,7 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     public void detach() {
         stopPolling();
         completionPending = false;
+        removeEditorFocusListener();
         if (document != null) {
             document.removeDocumentListener(this);
             document = null;
@@ -265,6 +273,72 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
         } catch (Exception e) {
             // ignore
         }
+    }
+
+    // ==================== Editor Focus Tracking ====================
+
+    /**
+     * 在编辑器 StyledText 上安装焦点监听：编辑器失去焦点即退出补全，
+     * 已显示的提示按 ESC 关闭（需求2）。
+     */
+    private void installEditorFocusListener() {
+        removeEditorFocusListener();
+        StyledText widget = viewer != null ? viewer.getTextWidget() : null;
+        if (widget == null || widget.isDisposed()) return;
+        focusListenWidget = widget;
+        editorFocusListener = new org.eclipse.swt.events.FocusAdapter() {
+            @Override
+            public void focusLost(org.eclipse.swt.events.FocusEvent e) {
+                handleEditorFocusLost();
+            }
+        };
+        widget.addFocusListener(editorFocusListener);
+    }
+
+    private void removeEditorFocusListener() {
+        if (focusListenWidget != null && editorFocusListener != null) {
+            try {
+                focusListenWidget.removeFocusListener(editorFocusListener);
+            } catch (Exception ignored) {}
+        }
+        focusListenWidget = null;
+        editorFocusListener = null;
+    }
+
+    /**
+     * 编辑器 StyledText 失焦处理：
+     *   - 焦点立即回到编辑器（对话框式提示的焦点重定向）-> 忽略；
+     *   - 焦点位于对话框式提示 shell 内（点击提示内容接受/滚动）-> 忽略；
+     *   - 其余情况视为编辑器真正失焦：取消进行中的补全请求并退出补全，
+     *     提示已出现则按 ESC 关闭。
+     */
+    private void handleEditorFocusLost() {
+        Display.getDefault().asyncExec(() -> {
+            if (viewer == null) return;
+            StyledText widget = viewer.getTextWidget();
+            if (widget != null && !widget.isDisposed() && widget.isFocusControl()) {
+                return;
+            }
+            if (overlayManager.isOverlayVisible() && overlayManager.isFocusOnOverlay()) {
+                return;
+            }
+            debugLog("editor focus lost: exit completion");
+            cancelCurrentRequest();
+            if (overlayManager.isOverlayVisible()) {
+                overlayManager.hideOverlayAsEsc();
+            }
+        });
+    }
+
+    /**
+     * 编辑器是否拥有焦点（StyledText 为焦点控件）。
+     * viewer 不可用时返回 true（无法判断时不拦截，保持旧行为）。
+     */
+    private boolean isEditorFocused() {
+        if (viewer == null) return true;
+        StyledText widget = viewer.getTextWidget();
+        if (widget == null || widget.isDisposed()) return true;
+        return widget.isFocusControl();
     }
 
     /**
@@ -618,7 +692,12 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
     @Override
     public void partDeactivated(IWorkbenchPart part) {
         if (part == editor) {
-            overlayManager.hideOverlay();
+            // 编辑器所在 part 失去激活：退出补全（取消进行中的请求），
+            // 提示已出现则按 ESC 关闭（需求2）
+            cancelCurrentRequest();
+            if (overlayManager.isOverlayVisible()) {
+                overlayManager.hideOverlayAsEsc();
+            }
         }
     }
 
@@ -652,6 +731,19 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
                 completion -> {
                     Display.getDefault().asyncExec(() -> {
                         if (this.editor != null && this.document != null) {
+                            // 需求2：编辑器失去焦点后补全退出，不再继续
+                            if (!isEditorFocused()) {
+                                debugLog("completion callback: editor lost focus, skip showing overlay");
+                                return;
+                            }
+                            // 需求1：AI 返回时再次取光标位置 B，与触发时记录的位置 A
+                            // 不一致则不显示补全，退出补全
+                            int offsetB = getCursorOffset();
+                            if (offsetB != cursorOffset) {
+                                debugLog("completion callback: cursor moved (A=" + cursorOffset
+                                        + ", B=" + offsetB + "), skip showing overlay");
+                                return;
+                            }
                             showOverlay(completion, cursorOffset);
                         } else {
                             debugLog("completion callback: editor/document is null, skip showing overlay");

@@ -10,6 +10,7 @@ import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.events.FocusAdapter;
 import org.eclipse.swt.events.FocusEvent;
 import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Listener;
@@ -349,6 +350,28 @@ public class AIOverlayManager {
 
     public boolean isOverlayVisible() {
         return currentOverlay != null && !currentOverlay.isDisposed();
+    }
+
+    /**
+     * 以 ESC 结果关闭 overlay（用于编辑器失焦等自动退出补全的场景，
+     * 效果等同于用户按了 ESC）。
+     */
+    public void hideOverlayAsEsc() {
+        hideOverlayWithResult(PreferenceConstants.COMPLETION_RESULT_ESC);
+    }
+
+    /**
+     * 焦点当前是否位于对话框式 overlay 的 shell 内。
+     * 内联提示绘制在编辑器控件内部（不产生焦点转移），始终返回 false。
+     */
+    public boolean isFocusOnOverlay() {
+        if (!(currentOverlay instanceof AICompletionOverlay)) return false;
+        Shell overlayShell = currentOverlay.getShell();
+        if (overlayShell == null || overlayShell.isDisposed()) return false;
+        Display display = Display.getCurrent() != null ? Display.getCurrent() : Display.getDefault();
+        if (display.isDisposed()) return false;
+        Control focus = display.getFocusControl();
+        return focus != null && !focus.isDisposed() && focus.getShell() == overlayShell;
     }
 
     // ==================== Global Mouse Click Detection ====================

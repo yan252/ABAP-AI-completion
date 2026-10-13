@@ -12,6 +12,7 @@ import org.eclipse.jface.text.IDocument;
 import org.eclipse.jface.text.ITextSelection;
 import org.eclipse.jface.text.ITextViewer;
 import org.eclipse.jface.viewers.ISelection;
+import org.eclipse.swt.custom.StyledText;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.ui.IEditorInput;
@@ -121,6 +122,23 @@ public class AICompletionHandler extends AbstractHandler {
                     return;
                 }
                 if (viewer != null && doc != null) {
+                    // 编辑器失去焦点后补全退出，不再继续（需求2）
+                    StyledText widget = viewer.getTextWidget();
+                    if (widget == null || widget.isDisposed() || !widget.isFocusControl()) {
+                        clearStatus(event);
+                        return;
+                    }
+                    // AI 返回时再次取光标位置 B，与触发时记录的位置 A 不一致
+                    // 则不显示补全，退出补全（需求1）
+                    int offsetB = cursorOffset;
+                    ISelection selNow = editor.getSelectionProvider().getSelection();
+                    if (selNow instanceof ITextSelection) {
+                        offsetB = ((ITextSelection) selNow).getOffset();
+                    }
+                    if (offsetB != cursorOffset) {
+                        clearStatus(event);
+                        return;
+                    }
                     AIOverlayManager.getInstance().showOverlay(viewer, doc, result, cursorOffset);
                     if (viewer.getTextWidget() != null && !viewer.getTextWidget().isDisposed()) {
                         viewer.getTextWidget().setFocus();
