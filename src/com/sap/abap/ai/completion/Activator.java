@@ -51,11 +51,9 @@ public class Activator extends AbstractUIPlugin implements IStartup {
         super.start(context);
         plugin = this;
 
-        // 强制开启自动补全与接口日志（覆盖此前保存的关闭值，确保开箱即用且可诊断）
+        // 自动补全默认值仅在首次安装时生效（PreferenceInitializer 已设默认开启）；
+        // 此后尊重用户在首选项中保存的值，不再每次启动强制覆盖。
         IPreferenceStore store = getPreferenceStore();
-        if (!store.getBoolean(PreferenceConstants.AUTO_COMPLETION_ENABLED)) {
-            store.setValue(PreferenceConstants.AUTO_COMPLETION_ENABLED, true);
-        }
         String logLevel = store.getString(PreferenceConstants.INTERFACE_LOG_LEVEL);
         if (logLevel == null || logLevel.isEmpty()
                 || Integer.parseInt(logLevel) == PreferenceConstants.LOG_LEVEL_NONE) {
