@@ -157,7 +157,8 @@ public final class PreferenceConstants {
     public static final String DEFAULT_WORKSPACE_CODE_FILE_LIMIT = "5";
 
     // === Defaults for Interface Logging ===
-    public static final String DEFAULT_INTERFACE_LOG_LEVEL = "2";
+    /** 默认 0 = no logging，仅首次安装时生效，此后尊重用户修改 */
+    public static final String DEFAULT_INTERFACE_LOG_LEVEL = "0";
 
     // === Defaults for Prompt Cache ===
     public static final boolean DEFAULT_PROMPT_CACHE_ENABLED = true;

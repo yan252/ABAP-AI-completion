@@ -630,16 +630,19 @@ public class AICompletionListener implements IDocumentListener, IPartListener {
 
         // 规则4：取光标前行内容末尾与配置触发字符等长的子串，逐一比较。
         // 配置 "= " 需要行末尾正好是 "= " 才匹配，"=" 不匹配 "-> " 等。
+        // 比较前双方均转大写（配置保存时已转大写，此处对代码字符再转一次，
+        // 兼容用户输入小写 ABAP 关键字的场景）。
         List<String> active = AIConfiguration.getActiveTriggerChars();
         debugLog("rule4 check: beforeOnLine='" + beforeOnLine + "', activeChars=" + active.size()
                 + ", activeList=" + active);
         for (String ch : active) {
             if (ch == null || ch.isEmpty()) continue;
-            int chLen = ch.length();
+            String chUpper = ch.toUpperCase();
+            int chLen = chUpper.length();
             if (beforeOnLine.length() < chLen) continue;
             // 取行内光标前内容末尾与触发字符等长的子串
             String tail = beforeOnLine.substring(beforeOnLine.length() - chLen);
-            if (tail.equals(ch)) {
+            if (tail.toUpperCase().equals(chUpper)) {
                 debugLog("rule4 matched: '" + ch + "' (tail='" + tail + "')");
                 return true;
             }

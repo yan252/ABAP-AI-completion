@@ -51,15 +51,9 @@ public class Activator extends AbstractUIPlugin implements IStartup {
         super.start(context);
         plugin = this;
 
-        // 自动补全默认值仅在首次安装时生效（PreferenceInitializer 已设默认开启）；
+        // 自动补全与接口日志级别的默认值仅在首次安装时生效（PreferenceInitializer）；
         // 此后尊重用户在首选项中保存的值，不再每次启动强制覆盖。
         IPreferenceStore store = getPreferenceStore();
-        String logLevel = store.getString(PreferenceConstants.INTERFACE_LOG_LEVEL);
-        if (logLevel == null || logLevel.isEmpty()
-                || Integer.parseInt(logLevel) == PreferenceConstants.LOG_LEVEL_NONE) {
-            store.setValue(PreferenceConstants.INTERFACE_LOG_LEVEL,
-                    String.valueOf(PreferenceConstants.LOG_LEVEL_DEBUG));
-        }
 
         // 输出启动日志到 Eclipse Error Log（不依赖插件自身日志级别）
         ILog log = Platform.getLog(getBundle());

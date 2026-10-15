@@ -300,6 +300,13 @@ public class AutoCompletionPreferencePage extends PreferencePage
         }
         store.setValue(PreferenceConstants.AUTO_COMPLETION_ENABLED, chkAutoComplete.getSelection());
         store.setValue(PreferenceConstants.AUTO_COMPLETE_DELAY, txtAutoDelay.getText().trim());
+        // 触发字符统一转为大写后保存（ABAP 关键字大小写不敏感），表格同步刷新为大写
+        for (TriggerChar data : items) {
+            if (data.triggerChar != null) {
+                data.triggerChar = data.triggerChar.toUpperCase();
+            }
+        }
+        refreshTable();
         AIConfiguration.saveTriggerChars(items);
         return super.performOk();
     }
