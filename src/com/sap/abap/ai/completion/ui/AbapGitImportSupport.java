@@ -35,6 +35,8 @@ import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.dialogs.InputDialog;
 import org.eclipse.jface.dialogs.MessageDialog;
+import org.eclipse.jface.dialogs.ProgressMonitorDialog;
+import org.eclipse.jface.operation.IRunnableWithProgress;
 import org.eclipse.jface.window.Window;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.Composite;
@@ -302,6 +304,94 @@ public final class AbapGitImportSupport {
         }
         monitor.worked(1);
         return o;
+    }
+
+    // ====================================================================
+    // 导入前 SAP 连接预检（Templates 子菜单导入共用）
+    // ====================================================================
+
+    /**
+     * Import-time SAP connection pre-check, shared by all "Templates" menu
+     * imports.
+     *
+     * <p>Runs the same direct probe as the "Test Connection" button on the
+     * "SAP Connection Config" page, using the connection values stored there
+     * (abap-cli URL / client / user / password / language). This happens
+     * before any import work so an unreachable SAP system aborts the import
+     * immediately.</p>
+     *
+     * <p>On failure (not configured or probe fails) an error dialog is shown,
+     * the "SAP Connection Config" preference page is opened, and the caller
+     * must abort the import.</p>
+     *
+     * @param title dialog title prefix, e.g. "Simple Query Handler Template"
+     * @return {@code true} if the SAP connection is usable and the import may proceed
+     */
+    static boolean checkSapConnectionBeforeImport(final String title) {
+        // ===== [1] SAP 配置页必须已填 abap-cli URL =====
+        final String url = trimToNull(AIConfiguration.getSapAbapCliUrl());
+        if (url == null) {
+            showError(title + " — SAP Connection Failed",
+                    "The SAP connection is not configured. The import was aborted.\n\n"
+                            + "Please fill in the 'abap-cli URL' (and credentials) on the\n"
+                            + "\"SAP Connection Config\" page first.\n\n"
+                            + "The \"SAP Connection Config\" page will be opened now.");
+            AICompletionMenuBuilder.openSapPreferences();
+            return false;
+        }
+        final String client = trimToNull(AIConfiguration.getSapClient());
+        final String language = trimToNull(AIConfiguration.getSapLanguage());
+        final String user = trimToNull(AIConfiguration.getSapUser());
+        final String password = AIConfiguration.getSapPassword(); // 密码不 trim（可能含特殊字符）
+
+        // ===== [2] 运行与 "Test Connection" 同款的直接探测 =====
+        final com.sap.abap.ai.completion.sap.AbapCliConnectionTester.Result[] holder =
+                new com.sap.abap.ai.completion.sap.AbapCliConnectionTester.Result[1];
+        final String[] probeError = { null };
+        ProgressMonitorDialog pmd = new ProgressMonitorDialog(getShell());
+        try {
+            pmd.run(true, false, new IRunnableWithProgress() {
+                @Override
+                public void run(IProgressMonitor monitor) {
+                    try {
+                        monitor.beginTask("Validating SAP connection...",
+                                IProgressMonitor.UNKNOWN);
+                        holder[0] = com.sap.abap.ai.completion.sap.AbapCliConnectionTester
+                                .testConnection(url, client, user, password, language);
+                    } finally {
+                        monitor.done();
+                    }
+                }
+            });
+        } catch (Exception e) {
+            probeError[0] = "Failed to run connection probe: "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage();
+        }
+
+        // ===== [3] 失败：报错 + 打开 SAP Connection Config 页 =====
+        com.sap.abap.ai.completion.sap.AbapCliConnectionTester.Result r = holder[0];
+        String detail;
+        if (probeError[0] != null) {
+            detail = probeError[0];
+        } else if (r == null) {
+            detail = "connection probe returned no result";
+        } else {
+            detail = r.detail;
+        }
+        if (probeError[0] != null || r == null || !r.success) {
+            showError(title + " — SAP Connection Failed",
+                    "Cannot connect to SAP (target '" + url + "'). The import was aborted.\n\n"
+                            + detail + "\n\n"
+                            + "The \"SAP Connection Config\" page will be opened now —\n"
+                            + "please verify the connection settings and try again.");
+            Activator.getDefault().getLog().log(new Status(IStatus.ERROR, Activator.PLUGIN_ID,
+                    "Import aborted: SAP connection pre-check failed for '" + url
+                            + "': " + detail, null));
+            AICompletionMenuBuilder.openSapPreferences();
+            return false;
+        }
+        System.out.println("[AbapCli] pre-import connection check OK (" + url + ")");
+        return true;
     }
 
     // ====================================================================

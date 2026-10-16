@@ -87,6 +87,12 @@ public final class BatchTemplateImportService {
             return;
         }
 
+        // ===== [1.5] SAP 连接预检：连不上 SAP 直接报错退出并打开配置页 =====
+        if (!AbapGitImportSupport.checkSapConnectionBeforeImport(
+                "Batch Import Handler Templates")) {
+            return;
+        }
+
         // ===== [2] 输入 PACKAGE / 新程序名 =====
         String ivPackage = AbapGitImportSupport.promptZy("Batch Import Handler Templates",
                 "Please enter the target SAP package (e.g., ZDEV_PACKAGE or $TMP).\n"
