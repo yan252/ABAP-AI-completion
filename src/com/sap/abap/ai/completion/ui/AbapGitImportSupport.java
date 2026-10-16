@@ -331,11 +331,12 @@ public final class AbapGitImportSupport {
         // ===== [1] SAP 配置页必须已填 abap-cli URL =====
         final String url = trimToNull(AIConfiguration.getSapAbapCliUrl());
         if (url == null) {
-            showError(title + " — SAP Connection Failed",
+            showErrorBlocking(title + " — SAP Connection Failed",
                     "The SAP connection is not configured. The import was aborted.\n\n"
                             + "Please fill in the 'abap-cli URL' (and credentials) on the\n"
                             + "\"SAP Connection Config\" page first.\n\n"
                             + "The \"SAP Connection Config\" page will be opened now.");
+            // 用户已确认错误框，再打开 SAP 配置页
             AICompletionMenuBuilder.openSapPreferences();
             return false;
         }
@@ -368,7 +369,7 @@ public final class AbapGitImportSupport {
                     + e.getClass().getSimpleName() + ": " + e.getMessage();
         }
 
-        // ===== [3] 失败：报错 + 打开 SAP Connection Config 页 =====
+        // ===== [3] 失败：先弹错误框，用户确认后再打开 SAP Connection Config 页 =====
         com.sap.abap.ai.completion.sap.AbapCliConnectionTester.Result r = holder[0];
         String detail;
         if (probeError[0] != null) {
@@ -379,7 +380,7 @@ public final class AbapGitImportSupport {
             detail = r.detail;
         }
         if (probeError[0] != null || r == null || !r.success) {
-            showError(title + " — SAP Connection Failed",
+            showErrorBlocking(title + " — SAP Connection Failed",
                     "Cannot connect to SAP (target '" + url + "'). The import was aborted.\n\n"
                             + detail + "\n\n"
                             + "The \"SAP Connection Config\" page will be opened now —\n"
@@ -387,11 +388,29 @@ public final class AbapGitImportSupport {
             Activator.getDefault().getLog().log(new Status(IStatus.ERROR, Activator.PLUGIN_ID,
                     "Import aborted: SAP connection pre-check failed for '" + url
                             + "': " + detail, null));
+            // 用户已确认错误框，再打开 SAP 配置页
             AICompletionMenuBuilder.openSapPreferences();
             return false;
         }
         System.out.println("[AbapCli] pre-import connection check OK (" + url + ")");
         return true;
+    }
+
+    /**
+     * 同步弹出错误框：阻塞直至用户点击确认后返回（区别于 {@link #showError} 的
+     * asyncExec 异步弹窗）。用于"先确认错误、再做下一步动作"的顺序场景，
+     * 如导入预检失败：确认错误框之后才打开 SAP Connection Config 页。
+     */
+    private static void showErrorBlocking(String title, String message) {
+        try {
+            Runnable open = () -> MessageDialog.openError(getShell(), title, message);
+            if (Display.getDefault().getThread() == Thread.currentThread()) {
+                open.run(); // 已在 UI 线程：直接阻塞等待用户确认
+            } else {
+                Display.getDefault().syncExec(open); // 非 UI 线程：同步派发
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     // ====================================================================
