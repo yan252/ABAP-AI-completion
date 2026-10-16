@@ -51,7 +51,11 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
                 + "system.\n\n"
                 + "Note: \"Test Connection\" uses the abap-cli URL at the top and probes it via the "
                 + "abapGit (abap-cli) approach (tls / auth / adt), without relying on "
-                + "~/.abap-cli/systems.json profile.");
+                + "~/.abap-cli/systems.json profile.\n\n"
+                + "Scope: the SAP connection configured on this page only applies to the "
+                + "features under the \"Templates\" menu (e.g. SAP Connection Config, "
+                + "template import). It does not affect AI code completion or any other "
+                + "plugin features.");
     }
 
     @Override
