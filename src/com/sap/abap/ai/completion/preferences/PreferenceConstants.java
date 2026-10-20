@@ -145,7 +145,10 @@ public final class PreferenceConstants {
             + "9. Maintain consistent naming conventions with the existing code.\n"
             + "10. When SKILL files are provided, prefer their patterns over generic ABAP code suggestions.\n"
             + "11. When returning code content, it is necessary to consider aligning the current cursor with the preceding code and the code above and below.\n"
-            + "12. The returned code should not duplicate the preceding and following code or the code above and below.";
+            + "12. The returned code should not duplicate the preceding and following code or the code above and below.\n"
+            + "13. The suggested code must form complete, consistent logic with the surrounding ABAP context. "
+            + "If the cursor is right after a half-width double quote (\"), the content to complete is a comment, "
+            + "not ABAP code - return only the comment text directly.";
     // === Defaults for Parent Program Resolution ===
     public static final boolean DEFAULT_PARENT_PROGRAM_RESOLUTION_ENABLED = false;
     public static final String DEFAULT_ABAP_SEARCH_DEPTH = "1";

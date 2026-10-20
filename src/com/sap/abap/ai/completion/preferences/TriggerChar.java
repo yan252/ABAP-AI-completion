@@ -45,43 +45,44 @@ public class TriggerChar {
         List<TriggerChar> list = new ArrayList<>();
 
         // 2.1 结构导航与组件访问符
-        list.add(new TriggerChar("->", true, "实例组件选择符：触发提示实例的组件或方法列表"));
-        list.add(new TriggerChar("=>", true, "静态组件选择符：访问类或接口的静态成员"));
-        list.add(new TriggerChar("~", true, "接口组件选择符：访问接口中的方法或属性"));
+        list.add(new TriggerChar("->", true, "Instance component selector: suggests attributes or methods of an instance"));
+        list.add(new TriggerChar("=>", true, "Static component selector: accesses static members of a class or interface"));
+        list.add(new TriggerChar("~", true, "Interface component selector: accesses methods or attributes of an interface"));
 
         // 2.2 语句与语法终止符
-        list.add(new TriggerChar(":", true, "链式语句起始符：WRITE:、DATA: 后触发字段列表/参数"));
-        list.add(new TriggerChar("(", true, "左括号：函数/方法调用的参数补全"));
-        list.add(new TriggerChar("[", true, "左方括号：内表索引表达式 itab[ ... ] 补全"));
-        list.add(new TriggerChar(",", true, "逗号：SELECT 列表、DATA 声明或参数列表中继续输入字段"));
+        list.add(new TriggerChar(":", true, "Chained statement colon: suggests field list/parameters after WRITE:, DATA:"));
+        list.add(new TriggerChar("(", true, "Opening parenthesis: suggests parameters of function/method calls"));
+        list.add(new TriggerChar("[", true, "Opening bracket: suggests internal table index expression itab[ ... ]"));
+        list.add(new TriggerChar(",", true, "Comma: continues field list in SELECT, DATA declaration or parameter list"));
+        list.add(new TriggerChar("\"", true, "Double quote: starts a line comment, suggests comment text"));
 
         // 2.3 赋值与比较运算符（带空格，光标在空格后时触发）
-        list.add(new TriggerChar("= ", true, "赋值运算符：补全右侧的操作数、字面量或表达式"));
-        list.add(new TriggerChar("?= ", true, "向下转型赋值运算符：补全父类引用或对象"));
-        list.add(new TriggerChar("<> ", true, "不等于比较运算符"));
-        list.add(new TriggerChar("< ", true, "小于比较运算符"));
-        list.add(new TriggerChar("> ", true, "大于比较运算符"));
-        list.add(new TriggerChar("<= ", true, "小于等于比较运算符"));
-        list.add(new TriggerChar(">= ", true, "大于等于比较运算符"));
+        list.add(new TriggerChar("= ", true, "Assignment operator: suggests right-hand operand, literal or expression"));
+        list.add(new TriggerChar("?= ", true, "Down cast assignment operator: suggests superclass reference or object"));
+        list.add(new TriggerChar("<> ", true, "Not-equal comparison operator"));
+        list.add(new TriggerChar("< ", true, "Less-than comparison operator"));
+        list.add(new TriggerChar("> ", true, "Greater-than comparison operator"));
+        list.add(new TriggerChar("<= ", true, "Less-than-or-equal comparison operator"));
+        list.add(new TriggerChar(">= ", true, "Greater-than-or-equal comparison operator"));
 
         // 2.4 算术与字符串运算符（带空格，光标在空格后时触发）
-        list.add(new TriggerChar("+ ", true, "加法算术运算符"));
-        list.add(new TriggerChar("- ", true, "减法算术运算符"));
-        list.add(new TriggerChar("* ", true, "乘法算术运算符"));
-        list.add(new TriggerChar("/ ", true, "除法算术运算符"));
-        list.add(new TriggerChar("&& ", true, "字符串连接符（新语法）"));
+        list.add(new TriggerChar("+ ", true, "Addition arithmetic operator"));
+        list.add(new TriggerChar("- ", true, "Subtraction arithmetic operator"));
+        list.add(new TriggerChar("* ", true, "Multiplication arithmetic operator"));
+        list.add(new TriggerChar("/ ", true, "Division arithmetic operator"));
+        list.add(new TriggerChar("&& ", true, "String concatenation operator (new syntax)"));
 
         // 2.5 特定上下文关键字（后需带空格的触发词）
-        list.add(new TriggerChar("DATA ", true, "声明变量（需后面有空格）"));
-        list.add(new TriggerChar("@DATA(", true, "内联声明并赋值"));
-        list.add(new TriggerChar("TYPE ", true, "指定数据类型（需后面有空格）"));
-        list.add(new TriggerChar("VALUE ", true, "值运算符：构造复杂数据结构（需后面有空格）"));
-        list.add(new TriggerChar("CORRESPONDING ", true, "对应赋值：结构体赋值（需后面有空格）"));
-        list.add(new TriggerChar("NEW ", true, "构造函数运算符：创建对象（需后面有空格）"));
-        list.add(new TriggerChar("CONV ", true, "转换运算符：类型转换（需后面有空格）"));
-        list.add(new TriggerChar("SELECT ", true, "查询选择（需后面有空格）"));
-        list.add(new TriggerChar("FROM ", true, "查询选择数据源（需后面有空格）"));
-        list.add(new TriggerChar("WHERE ", true, "查询选择条件（需后面有空格）"));
+        list.add(new TriggerChar("DATA ", true, "Declare a variable (requires trailing space)"));
+        list.add(new TriggerChar("@DATA(", true, "Inline declaration with value assignment"));
+        list.add(new TriggerChar("TYPE ", true, "Specify a data type (requires trailing space)"));
+        list.add(new TriggerChar("VALUE ", true, "VALUE operator: constructs complex data structures (requires trailing space)"));
+        list.add(new TriggerChar("CORRESPONDING ", true, "CORRESPONDING: structure assignment by component name (requires trailing space)"));
+        list.add(new TriggerChar("NEW ", true, "Constructor operator: creates an object instance (requires trailing space)"));
+        list.add(new TriggerChar("CONV ", true, "Conversion operator: type conversion (requires trailing space)"));
+        list.add(new TriggerChar("SELECT ", true, "Query selection (requires trailing space)"));
+        list.add(new TriggerChar("FROM ", true, "Data source of a query (requires trailing space)"));
+        list.add(new TriggerChar("WHERE ", true, "Query condition (requires trailing space)"));
 
         return list;
     }
@@ -252,4 +253,4 @@ public class TriggerChar {
         sb.append("\"");
         return sb.toString();
     }
-}
+}
