@@ -1,7 +1,10 @@
 package com.sap.abap.ai.completion.ui;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -12,36 +15,49 @@ import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Platform;
 import org.osgi.framework.Bundle;
 
 import com.sap.abap.ai.completion.Activator;
 
 /**
- * Self-contained abap-cli runtime provisioning.
+ * abap-cli runtime provisioning.
  *
- * <p>The plugin ships the full abap-cli runtime (its {@code node_modules} tree
- * plus the project-specific {@code extensions/*.mjs} commands and the
- * {@code _prefs_snapshot.mjs} / {@code _probe_direct.mjs} helper scripts)
- * inside the bundle under {@code /abap-cli/}. Customers therefore do not need
- * to install abap-cli themselves — only a Node.js runtime (18+) on PATH.</p>
+ * <p>Since v1.1.49 the plugin no longer ships the abap-cli runtime inside the
+ * bundle. Instead the full runtime (its {@code node_modules} tree plus the
+ * project-specific {@code extensions/*.mjs} commands and the
+ * {@code _prefs_snapshot.mjs} / {@code _probe_direct.mjs} helper scripts) is
+ * published with every plugin release as a GitHub Release asset
+ * ({@code abap-cli-runtime-<version>.zip} on tag {@code v<version>} of
+ * {@link #GITHUB_REPO_URL}; see {@link #stageZipUrl()}). On first use the
+ * plugin offers a one-click install ({@link #installFromGitHub(IProgressMonitor)})
+ * that downloads exactly that asset into the
+ * bundle's writable workspace state area
+ * ({@code .metadata/.plugins/<plugin>/abap-cli-stage/}). Only a Node.js
+ * runtime (18+) on PATH is additionally required.</p>
  *
- * <p>Node cannot execute scripts straight out of the (packed) plugin JAR, so on
- * first use the runtime is extracted once into the bundle's writable workspace
- * state area ({@code .metadata/.plugins/<plugin>/abap-cli-stage/}). The
+ * <p>Node cannot execute scripts straight out of a packed archive, so the
  * extracted directory has exactly the same layout as the old developer-only
  * {@code _abap-cli-stage} checkout; per-import data ({@code repos/},
  * {@code .abap.json}, result files) lives alongside it. A stamp file triggers
- * re-extraction after a plugin update.</p>
+ * re-installation after a plugin update (the stamp holds the plugin version,
+ * keeping the downloaded runtime aligned with the plugin release).</p>
  *
  * <p>Two optional overrides exist for development only:</p>
  * <ul>
  *   <li>{@code abap.cli.stage.dir} system property or {@code ABAP_CLI_STAGE_DIR}
- *       env var — use an existing stage checkout as-is (no extraction);</li>
+ *       env var — use an existing stage checkout as-is (no download);</li>
  *   <li>{@code abap.cli.node} system property or {@code ABAP_CLI_NODE} env var —
  *       explicit node executable (otherwise plain {@code node} from PATH).</li>
  * </ul>
+ *
+ * <p>For backward compatibility a runtime embedded under {@code /abap-cli/}
+ * in the bundle (old build style) is still extracted when present.</p>
  */
 public final class AbapCliRuntime {
 
@@ -62,7 +78,54 @@ public final class AbapCliRuntime {
     static final String OVERRIDE_NODE_PROPERTY = "abap.cli.node";
     static final String OVERRIDE_NODE_ENV = "ABAP_CLI_NODE";
 
+    /** GitHub repository hosting the downloadable abap-cli runtime. */
+    public static final String GITHUB_REPO_URL = "https://github.com/yan252/ABAP-AI-completion";
+
+    /**
+     * GitHub Releases page listing the {@code abap-cli-runtime-&lt;version&gt;.zip}
+     * assets (one per plugin release, tag {@code v<plugin version>}).
+     */
+    public static final String GITHUB_RELEASES_URL = GITHUB_REPO_URL + "/releases";
+
+    /**
+     * Build the download URL of the runtime zip: a GitHub Release asset named
+     * {@code abap-cli-runtime-<plugin version>.zip} attached to the release tag
+     * {@code v<plugin version>}. Deriving the URL from the bundle version keeps
+     * the downloaded runtime (especially the {@code extensions/*.mjs} commands)
+     * exactly in sync with the running plugin.
+     */
+    public static String stageZipUrl() {
+        return GITHUB_REPO_URL + "/releases/download/v" + expectedStamp()
+                + "/abap-cli-runtime-" + expectedStamp() + ".zip";
+    }
+
+    /** Message shown (and logged) when the runtime is not installed yet. */
+    static final String NOT_INSTALLED_MESSAGE =
+            "The abap-cli runtime is not installed yet. It is required for the SAP"
+                    + "\nconnection test and the template import and is no longer bundled"
+                    + "\nwith the plugin."
+                    + "\n\nIt is installed with one click from the plugin (SAP Connection"
+                    + "\nConfig 'Test Connection' or a Templates menu import), or manually:"
+                    + "\ndownload 'abap-cli-runtime-" + expectedStamp() + ".zip' from\n  "
+                    + GITHUB_RELEASES_URL
+                    + "\nextract it and point the system property 'abap.cli.stage.dir'"
+                    + "\n(or environment variable ABAP_CLI_STAGE_DIR) at the extracted"
+                    + "\nfolder, then restart Eclipse.";
+
     private static volatile Path cachedStage;
+
+    /**
+     * Thrown by {@link #ensureStage()} when the runtime is neither installed in
+     * the workspace state area nor embedded in the plugin bundle — the caller
+     * should offer the one-click install ({@link #installFromGitHub}).
+     */
+    public static final class NotInstalledException extends IOException {
+        private static final long serialVersionUID = 1L;
+
+        NotInstalledException(String message) {
+            super(message);
+        }
+    }
 
     private AbapCliRuntime() {
     }
@@ -105,10 +168,214 @@ public final class AbapCliRuntime {
             Files.createDirectories(target);
 
             if (!isExtracted(target, expectedStamp())) {
+                if (!hasBundledRuntime()) {
+                    // No embedded runtime (standard build since v1.1.49): the
+                    // caller should offer the one-click GitHub install.
+                    throw new NotInstalledException(NOT_INSTALLED_MESSAGE);
+                }
                 extractBundledRuntime(target);
             }
             cachedStage = target.toAbsolutePath().normalize();
             return cachedStage;
+        }
+    }
+
+    /**
+     * {@code true} when the bundle carries an embedded runtime under
+     * {@code /abap-cli/} (old build style, still supported for development).
+     */
+    private static boolean hasBundledRuntime() {
+        Bundle bundle = Platform.getBundle(Activator.PLUGIN_ID);
+        if (bundle == null) {
+            return false;
+        }
+        Enumeration<URL> entries = bundle.findEntries("/abap-cli", "*", true);
+        return entries != null && entries.hasMoreElements();
+    }
+
+    /**
+     * Non-invasive installation check: {@code true} when a usable runtime is
+     * present (external stage override, embedded bundle runtime, or an
+     * extracted stage matching the current plugin version in the workspace
+     * state area). Never downloads or extracts anything — used by the
+     * "Download abap-cli" button to decide between "already installed" and
+     * offering the one-click install.
+     */
+    public static boolean isInstalled() {
+        if (configuredOverrideStage() != null) {
+            return true;
+        }
+        if (hasBundledRuntime()) {
+            return true;
+        }
+        try {
+            Path base = Activator.getDefault().getStateLocation().toFile().toPath();
+            return isExtracted(base.resolve(STAGE_DIR_NAME), expectedStamp());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // ====================================================================
+    // One-click install from GitHub
+    // ====================================================================
+
+    /**
+     * Download the runtime zip from {@link #stageZipUrl()} (GitHub Release
+     * asset matching the plugin version) and
+     * install it into the workspace state area.
+     *
+     * <p>The managed directories ({@code node_modules}, {@code extensions}) are
+     * wiped first so removed/renamed files never linger; per-import data
+     * ({@code repos/}, {@code .abap.json}, {@code _*_result.txt}) is kept. On
+     * success the stamp file is written with the current plugin version and the
+     * internal stage cache is refreshed.</p>
+     *
+     * @param monitor progress monitor (may be {@code null}); cancelling raises
+     *                an {@code IOException} with a "cancelled" message
+     * @throws IOException on download/extraction failure or cancellation
+     */
+    public static void installFromGitHub(IProgressMonitor monitor) throws IOException {
+        IProgressMonitor pm = monitor != null ? monitor : new NullProgressMonitor();
+        Path base;
+        try {
+            base = Activator.getDefault().getStateLocation().toFile().toPath();
+        } catch (IllegalStateException e) {
+            throw new IOException(
+                    "Plugin state location unavailable; cannot install abap-cli runtime.", e);
+        }
+        Path target = base.resolve(STAGE_DIR_NAME);
+
+        synchronized (AbapCliRuntime.class) {
+            Path tmpZip;
+            try {
+                tmpZip = Files.createTempFile("abap-cli-stage-", ".zip");
+            } catch (IOException e) {
+                throw new IOException("Cannot create a temporary download file.", e);
+            }
+            try {
+                downloadStageZip(tmpZip, pm);
+                pm.subTask("Extracting abap-cli runtime...");
+                deleteManaged(target.resolve("node_modules"));
+                deleteManaged(target.resolve("extensions"));
+                Files.createDirectories(target);
+                extractStageZip(tmpZip, target, pm);
+
+                String stamp = expectedStamp();
+                Files.write(target.resolve(STAMP_FILE),
+                        stamp.getBytes(StandardCharsets.UTF_8));
+                cachedStage = target.toAbsolutePath().normalize();
+                System.out.println("[AbapCliRuntime] runtime installed from GitHub, stamp="
+                        + stamp);
+            } catch (IOException e) {
+                cachedStage = null;
+                throw e;
+            } finally {
+                try {
+                    Files.deleteIfExists(tmpZip);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    /** Download the runtime zip from {@link #stageZipUrl()} with progress reporting. */
+    private static void downloadStageZip(Path dest, IProgressMonitor pm) throws IOException {
+        String urlSpec = stageZipUrl();
+        pm.subTask("Downloading abap-cli runtime from GitHub...");
+        HttpURLConnection conn;
+        try {
+            URL url = URI.create(urlSpec).toURL();
+            conn = (HttpURLConnection) url.openConnection();
+        } catch (IOException e) {
+            throw new IOException("Cannot open " + urlSpec + ": " + e.getMessage(), e);
+        }
+        conn.setConnectTimeout(15_000);
+        conn.setReadTimeout(60_000);
+        conn.setInstanceFollowRedirects(true);
+        try {
+            int code = conn.getResponseCode();
+            if (code != HttpURLConnection.HTTP_OK) {
+                String hint = code == HttpURLConnection.HTTP_NOT_FOUND
+                        ? "\n(The runtime asset for version " + expectedStamp()
+                                + " is not published yet. Please upload"
+                                + "\n 'abap-cli-runtime-" + expectedStamp() + ".zip'"
+                                + " as an asset of the release tag 'v" + expectedStamp()
+                                + "' at\n " + GITHUB_RELEASES_URL + ")"
+                        : "";
+                throw new IOException("Download failed: HTTP " + code + " from "
+                        + urlSpec + hint);
+            }
+            long total = conn.getContentLengthLong();
+            pm.beginTask("Downloading abap-cli runtime from GitHub...",
+                    total > 0 ? (int) Math.min(total / 1024, Integer.MAX_VALUE)
+                            : IProgressMonitor.UNKNOWN);
+            try (InputStream in = conn.getInputStream();
+                    java.io.OutputStream out = Files.newOutputStream(dest)) {
+                byte[] buf = new byte[64 * 1024];
+                long done = 0;
+                int n;
+                while ((n = in.read(buf)) >= 0) {
+                    if (pm.isCanceled()) {
+                        throw new IOException("Installation cancelled by user.");
+                    }
+                    out.write(buf, 0, n);
+                    done += n;
+                    if (total > 0) {
+                        pm.worked((int) (n / 1024));
+                    }
+                }
+                System.out.println("[AbapCliRuntime] downloaded " + (done / 1024)
+                        + " KB from " + urlSpec);
+            }
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    /**
+     * Extract the runtime zip (built by build.ps1; its root already contains
+     * {@code node_modules/}, {@code extensions/} and the {@code *.mjs} scripts)
+     * directly into {@code target}. Guards against path traversal entries.
+     */
+    private static void extractStageZip(Path zip, Path target, IProgressMonitor pm)
+            throws IOException {
+        Path targetNorm = target.toAbsolutePath().normalize();
+        try (ZipInputStream zin = new ZipInputStream(
+                new BufferedInputStream(Files.newInputStream(zip), 128 * 1024),
+                StandardCharsets.UTF_8)) {
+            ZipEntry e;
+            while ((e = zin.getNextEntry()) != null) {
+                if (pm.isCanceled()) {
+                    throw new IOException("Installation cancelled by user.");
+                }
+                String name = e.getName();
+                if (name == null || name.isEmpty()) {
+                    continue;
+                }
+                // Normalize zip separators (some zip tools write backslashes).
+                name = name.replace('\\', '/');
+                Path out = targetNorm.resolve(name).normalize();
+                if (!out.startsWith(targetNorm)) {
+                    continue; // zip-slip guard
+                }
+                if (name.endsWith("/")) {
+                    Files.createDirectories(out);
+                    continue;
+                }
+                Files.createDirectories(out.getParent());
+                Files.copy(zin, out, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+        if (!Files.isRegularFile(targetNorm.resolve(
+                AbapGitImportSupport.ABAP_CLI_INDEX_REL))) {
+            throw new IOException(
+                    "The downloaded archive does not contain a valid abap-cli runtime ('"
+                            + AbapGitImportSupport.ABAP_CLI_INDEX_REL + "' missing)."
+                            + "\nPlease verify that the asset 'abap-cli-runtime-"
+                            + expectedStamp() + ".zip' of release 'v" + expectedStamp()
+                            + "' at\n  " + GITHUB_RELEASES_URL
+                            + "\nis complete.");
         }
     }
 

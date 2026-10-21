@@ -538,8 +538,12 @@ public final class AbapCliConnectionTester {
         Path stageRoot;
         try {
             stageRoot = com.sap.abap.ai.completion.ui.AbapCliRuntime.ensureStage();
+        } catch (com.sap.abap.ai.completion.ui.AbapCliRuntime.NotInstalledException e) {
+            // Runtime not installed and not bundled: message carries the
+            // one-click install / GitHub download guidance.
+            return e.getMessage();
         } catch (Exception e) {
-            return "The bundled abap-cli runtime could not be prepared:\n  "
+            return "The abap-cli runtime could not be prepared:\n  "
                     + e.getMessage()
                     + "\n\nPlease restart Eclipse and retry. If the problem persists,"
                     + " reinstall the plugin from the update site.";
@@ -556,8 +560,8 @@ public final class AbapCliConnectionTester {
         }
         if (!com.sap.abap.ai.completion.ui.AbapGitImportSupport.isNodeAvailable()) {
             return "Node.js was not found on PATH ('node --version' failed). The abap-cli"
-                    + "\nengine is bundled with this plugin, but Node.js 18 or newer is"
-                    + "\nrequired to run it."
+                    + "\nruntime is downloaded by the plugin on first use, but Node.js 18 or"
+                    + "\nnewer is required to run it."
                     + "\n\nPlease install the LTS build for Windows from:"
                     + "\n  https://nodejs.org/"
                     + "\nand make sure 'node' is on PATH, then restart Eclipse.";

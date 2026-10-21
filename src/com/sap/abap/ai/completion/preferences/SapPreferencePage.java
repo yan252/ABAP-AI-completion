@@ -20,6 +20,8 @@ import org.eclipse.ui.IWorkbenchPreferencePage;
 import com.sap.abap.ai.completion.Activator;
 import com.sap.abap.ai.completion.sap.AbapCliConnectionTester;
 import com.sap.abap.ai.completion.sap.SapConnectionManager;
+import com.sap.abap.ai.completion.ui.AbapCliInstallPrompt;
+import com.sap.abap.ai.completion.ui.AbapCliRuntime;
 
 /**
  * “SAP 配置”偏好页：配置 abapGit（abap-cli）连接 —— 供 “Test Connection”
@@ -104,6 +106,11 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         txtPassword = createText(g);
         txtPassword.setEchoChar('*');
 
+        // abap-cli 运行时下载按钮（在 Test Connection 前）
+        Button downloadBtn = new Button(g, SWT.PUSH);
+        downloadBtn.setText("Download abap-cli");
+        downloadBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> downloadAbapCli()));
+
         // 测试连接按钮与结果标签(SAP 登录信息在同一组内)
         Button testBtn = new Button(g, SWT.PUSH);
         testBtn.setText("Test Connection");
@@ -172,6 +179,29 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         txtPassword.setText("");
     }
 
+    // ==================== Download abap-cli ====================
+
+    /**
+     * "Download abap-cli" 按钮：先检查 abap-cli-stage 是否已安装——已安装则
+     * 直接提示无需下载；未安装则弹一键安装对话框（确认后从 GitHub 下载并
+     * 解压到工作区 state area，见 {@link AbapCliInstallPrompt}）。
+     */
+    private void downloadAbapCli() {
+        if (AbapCliRuntime.isInstalled()) {
+            setTestResult("abap-cli runtime: already installed", SWT.COLOR_DARK_GREEN);
+            MessageDialog.openInformation(getShell(), "abap-cli Runtime",
+                    "The abap-cli runtime is already installed in this workspace"
+                            + "\n(.metadata/plugins/com.sap.abap.ai.completion/abap-cli-stage/)"
+                            + "\n\nNo download is needed.");
+            return;
+        }
+        if (AbapCliInstallPrompt.ensureInstalledWithPrompt(getShell())) {
+            setTestResult("SUCCESS: abap-cli runtime installed", SWT.COLOR_DARK_GREEN);
+        } else {
+            setTestResult("abap-cli runtime is not installed", SWT.COLOR_RED);
+        }
+    }
+
     // ==================== Test Connection ====================
 
     /**
@@ -182,6 +212,12 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
      * 不涉及 JCo，也不使用 {@code ~/.abap-cli/systems.json} 中的 profile。</p>
      */
     private void testConnection() {
+        // ===== [0] abap-cli 运行时必须已安装（未安装则弹一键安装对话框） =====
+        if (!AbapCliInstallPrompt.ensureInstalledWithPrompt(getShell())) {
+            setTestResult("CANCELLED: abap-cli runtime is not installed", SWT.COLOR_RED);
+            return;
+        }
+
         final String url = txtAbapCliUrl.getText().trim();
         if (url.isEmpty()) {
             setTestResult("FAILED: please fill in the abap-cli URL", SWT.COLOR_RED);

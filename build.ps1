@@ -2,15 +2,16 @@ $proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $src = "$proj\src"
 $bin = "$proj\bin"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.1.48.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.1.51.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "D:\Users\96000217\eclipse\plugins"
 $jdkHome = "D:\jdk\jdk-21.0.12.1"
 
-# Source of the third-party abap-cli node_modules tree to embed. The project's
-# own scripts live under $proj\abap-cli; node_modules is assembled from the
-# maintained abap-cli stage checkout (override with $env:ABAP_CLI_STAGE_DIR).
+# Source of the third-party abap-cli node_modules tree for the abap-cli-stage
+# download source assembled below. The project's own scripts live under
+# $proj\abap-cli; node_modules is taken from the maintained abap-cli stage
+# checkout (override with $env:ABAP_CLI_STAGE_DIR).
 $abapStage = if ($env:ABAP_CLI_STAGE_DIR) { $env:ABAP_CLI_STAGE_DIR }
              else { "D:\Users\96000217\Documents\trae_projects\_abap-cli-stage" }
 
@@ -86,14 +87,13 @@ if (Test-Path "$proj\templates.properties") {
     Copy-Item "$proj\templates.properties" "$bin\" -Force
 }
 
-Write-Host "=== Embedding abap-cli runtime ==="
-# The runtime shipped inside the plugin and extracted on first use (see
-# AbapCliRuntime.java): our own scripts/extensions (versioned with the project)
-# plus the third-party abap-cli node_modules tree from the stage checkout.
-$runtimeBin = "$bin\abap-cli"
-New-Item -ItemType Directory -Force -Path "$runtimeBin\extensions" | Out-Null
-Copy-Item "$proj\abap-cli\*.mjs" "$runtimeBin\" -Force
-Copy-Item "$proj\abap-cli\extensions\*.mjs" "$runtimeBin\extensions\" -Force
+Write-Host "=== Refreshing abap-cli-stage download source (NOT embedded in JAR) ==="
+# Since v1.1.49 the plugin no longer embeds the abap-cli runtime in the JAR.
+# Instead the full runtime is maintained as <proj>\abap-cli-stage and pushed to
+# GitHub (https://github.com/yan252/ABAP-AI-completion). At runtime the plugin
+# offers a one-click install that downloads the repository archive and extracts
+# this folder into the workspace state area (see AbapCliRuntime.java).
+$stageOut = "$proj\abap-cli-stage"
 
 $stageModules = "$abapStage\node_modules"
 if (-not (Test-Path $stageModules)) {
@@ -101,13 +101,21 @@ if (-not (Test-Path $stageModules)) {
     Write-Host "    Set `$env:ABAP_CLI_STAGE_DIR to a prepared abap-cli stage checkout."
     exit 1
 }
+
+Remove-Item -Recurse -Force "$stageOut\node_modules" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$stageOut\extensions" -ErrorAction SilentlyContinue
+Remove-Item -Force "$stageOut\*.mjs" -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path "$stageOut\extensions" | Out-Null
+Copy-Item "$proj\abap-cli\*.mjs" "$stageOut\" -Force
+Copy-Item "$proj\abap-cli\extensions\*.mjs" "$stageOut\extensions\" -Force
+
 Write-Host "Copying node_modules from $abapStage (this takes a moment)..."
-New-Item -ItemType Directory -Force -Path "$runtimeBin\node_modules" | Out-Null
+New-Item -ItemType Directory -Force -Path "$stageOut\node_modules" | Out-Null
 Get-ChildItem -Path $stageModules -Force |
     Where-Object { $_.Name -ne ".bin" } |
-    ForEach-Object { Copy-Item $_.FullName "$runtimeBin\node_modules\" -Recurse -Force }
-$fileCount = (Get-ChildItem -Path "$runtimeBin" -Recurse -File).Count
-Write-Host "Embedded runtime files: $fileCount"
+    ForEach-Object { Copy-Item $_.FullName "$stageOut\node_modules\" -Recurse -Force }
+$stageFileCount = (Get-ChildItem -Path $stageOut -Recurse -File).Count
+Write-Host "abap-cli-stage files (download source): $stageFileCount"
 
 Write-Host "=== Creating JAR with full plugin structure ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
@@ -117,7 +125,6 @@ $jarArgs = @("cfm", "$jarPath", "META-INF\MANIFEST.MF", "plugin.xml", "com\")
 if (Test-Path "$bin\icons") { $jarArgs += "icons\" }
 if (Test-Path "$bin\references") { $jarArgs += "references\" }
 if (Test-Path "$bin\templates.properties") { $jarArgs += "templates.properties" }
-if (Test-Path "$bin\abap-cli") { $jarArgs += "abap-cli\" }
 & $jarExe $jarArgs
 Pop-Location
 
@@ -128,10 +135,26 @@ Write-Host "============================================"
 Write-Host "  Location: $jarPath"
 Write-Host "  Size: $([math]::Round($size / 1024, 2)) MB"
 Write-Host "============================================"
+$ver = "1.1.51"
+$runtimeZip = "$dist\abap-cli-runtime-$ver.zip"
+Write-Host "`n=== Packaging abap-cli runtime zip (GitHub Release asset) ==="
+# One-click install source for customers: the plugin downloads
+# releases/download/v$ver/abap-cli-runtime-$ver.zip (see AbapCliRuntime.stageZipUrl).
+# jar.exe keeps forward-slash entry names (Compress-Archive on PS 5.1 writes
+# backslashes, which breaks java.util.zip on the extractor side).
+if (Test-Path $runtimeZip) { Remove-Item $runtimeZip -Force }
+& $jarExe cfM "$runtimeZip" -C "$stageOut" .
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "=== BUILD FAILED: could not create $runtimeZip ==="
+    exit 1
+}
+$zipKB = [math]::Round((Get-Item $runtimeZip).Length / 1KB)
+Write-Host "Runtime zip: $runtimeZip ($zipKB KB)"
+Write-Host ">> Remember to upload it as asset of GitHub release tag 'v$ver' <<"
+Write-Host ">> https://github.com/yan252/ABAP-AI-completion/releases            <<"
+
 Write-Host "`nJAR entry summary:"
 $entries = & $jarExe tf "$jarPath"
 Write-Host ("  total entries: {0}" -f $entries.Count)
-Write-Host ("  abap-cli entries: {0}" -f ($entries | Where-Object { $_ -like "abap-cli/*" }).Count)
-$entries | Where-Object { $_ -notlike "abap-cli/node_modules/*" } | ForEach-Object { Write-Host "  $_" }
-Write-Host "  ... (abap-cli/node_modules/* entries omitted)"
+$entries | ForEach-Object { Write-Host "  $_" }
 Write-Host "`nDeploy to Eclipse dropins directory or the update site to install."

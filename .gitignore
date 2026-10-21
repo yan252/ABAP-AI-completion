@@ -21,3 +21,7 @@ bin_backup_*/
 compile_args.txt
 tools/
 VerifyTruncator.java
+
+# abap-cli runtime assembled by build.ps1 (build output; published as a
+# GitHub Release asset, not tracked in the repository)
+abap-cli-stage/

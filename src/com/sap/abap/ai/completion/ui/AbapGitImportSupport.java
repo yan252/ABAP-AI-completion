@@ -190,9 +190,13 @@ public final class AbapGitImportSupport {
         Path stageRoot;
         try {
             stageRoot = AbapCliRuntime.ensureStage();
+        } catch (AbapCliRuntime.NotInstalledException e) {
+            // Runtime not installed and not bundled: message carries the
+            // one-click install / GitHub download guidance.
+            throw new EnvironmentException(e.getMessage());
         } catch (IOException e) {
             throw new EnvironmentException(
-                    "The bundled abap-cli runtime could not be prepared:\n  "
+                    "The abap-cli runtime could not be prepared:\n  "
                             + e.getMessage()
                             + "\n\nPlease restart Eclipse and retry. If the problem persists,"
                             + "\nreinstall the plugin from the update site.");
@@ -224,8 +228,8 @@ public final class AbapGitImportSupport {
         if (!isNodeInPath()) {
             throw new EnvironmentException(
                     "Node.js was not found on PATH ('node --version' failed). The abap-cli"
-                            + "\nengine is bundled with this plugin, but Node.js 18 or newer is"
-                            + "\nrequired to run it."
+                            + "\nruntime is downloaded by the plugin on first use, but Node.js 18 or"
+                            + "\nnewer is required to run it."
                             + "\n\nPlease install the LTS build for Windows from:"
                             + "\n  https://nodejs.org/"
                             + "\nand make sure 'node' is on PATH, then restart Eclipse.");
@@ -328,6 +332,11 @@ public final class AbapGitImportSupport {
      * @return {@code true} if the SAP connection is usable and the import may proceed
      */
     static boolean checkSapConnectionBeforeImport(final String title) {
+        // ===== [0] abap-cli 运行时必须已安装（未安装则弹一键安装对话框） =====
+        if (!AbapCliInstallPrompt.ensureInstalledWithPrompt(getShell())) {
+            return false;
+        }
+
         // ===== [1] SAP 配置页必须已填 abap-cli URL =====
         final String url = trimToNull(AIConfiguration.getSapAbapCliUrl());
         if (url == null) {
