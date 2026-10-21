@@ -106,9 +106,11 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         txtPassword = createText(g);
         txtPassword.setEchoChar('*');
 
-        // abap-cli 运行时下载按钮（在 Test Connection 前）
+        // abap-cli 运行时下载按钮（在 Test Connection 前，与输入框同列）
+        new Label(g, SWT.NONE); // 占位：标签列留空，按钮落到输入框列
         Button downloadBtn = new Button(g, SWT.PUSH);
         downloadBtn.setText("Download abap-cli");
+        downloadBtn.setLayoutData(new GridData(SWT.BEGINNING, SWT.CENTER, false, false));
         downloadBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> downloadAbapCli()));
 
         // 测试连接按钮与结果标签(SAP 登录信息在同一组内)
