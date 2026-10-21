@@ -2,7 +2,7 @@ $proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $src = "$proj\src"
 $bin = "$proj\bin"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.1.54.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.1.55.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "D:\Users\96000217\eclipse\plugins"
@@ -135,11 +135,15 @@ Write-Host "============================================"
 Write-Host "  Location: $jarPath"
 Write-Host "  Size: $([math]::Round($size / 1024, 2)) MB"
 Write-Host "============================================"
-$ver = "1.1.54"
-$runtimeZip = "$dist\abap-cli-runtime-$ver.zip"
-Write-Host "`n=== Packaging abap-cli runtime zip (GitHub Release asset) ==="
-# One-click install source for customers: the plugin downloads
-# releases/download/v$ver/abap-cli-runtime-$ver.zip (see AbapCliRuntime.stageZipUrl).
+# Runtime zip: FIXED name, hosted on the dedicated GitHub release tag
+# 'abap-cli-runtime'. The plugin downloads
+#   releases/download/abap-cli-runtime/abap-cli-runtime.zip
+# (AbapCliRuntime.RUNTIME_ZIP_URL) - no plugin version involved. Re-upload
+# the asset ONLY when abap-cli/extensions changed, and bump $runtimeVersion.
+$runtimeVersion = "1.0.0"
+$runtimeZip = "$dist\abap-cli-runtime.zip"
+Write-Host "`n=== Packaging abap-cli runtime zip (fixed-name GitHub Release asset) ==="
+Set-Content -Path "$stageOut\RUNTIME_VERSION" -Value $runtimeVersion -NoNewline -Encoding Ascii
 # jar.exe keeps forward-slash entry names (Compress-Archive on PS 5.1 writes
 # backslashes, which breaks java.util.zip on the extractor side).
 if (Test-Path $runtimeZip) { Remove-Item $runtimeZip -Force }
@@ -149,9 +153,10 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 $zipKB = [math]::Round((Get-Item $runtimeZip).Length / 1KB)
-Write-Host "Runtime zip: $runtimeZip ($zipKB KB)"
-Write-Host ">> Remember to upload it as asset of GitHub release tag 'v$ver' <<"
-Write-Host ">> https://github.com/yan252/ABAP-AI-completion/releases            <<"
+Write-Host "Runtime zip: $runtimeZip ($zipKB KB, version $runtimeVersion)"
+Write-Host ">> Upload/replace asset 'abap-cli-runtime.zip' of release tag 'abap-cli-runtime'"
+Write-Host ">> ONLY when abap-cli changed (delete old asset, upload this one):          <<"
+Write-Host ">> https://github.com/yan252/ABAP-AI-completion/releases/tag/abap-cli-runtime <<"
 
 Write-Host "`nJAR entry summary:"
 $entries = & $jarExe tf "$jarPath"

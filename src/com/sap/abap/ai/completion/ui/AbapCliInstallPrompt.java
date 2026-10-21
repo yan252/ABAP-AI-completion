@@ -58,15 +58,29 @@ public final class AbapCliInstallPrompt {
                 "The abap-cli runtime is not installed yet.\n\n"
                         + "It is required for the SAP connection test and the template import\n"
                         + "and is no longer bundled with the plugin. It will be downloaded once\n"
-                        + "(about 17 MB) from the plugin's GitHub Releases page:\n"
-                        + AbapCliRuntime.GITHUB_RELEASES_URL + "\n\n"
+                        + "(about 6 MB) from\n"
+                        + AbapCliRuntime.RUNTIME_ZIP_URL + "\n\n"
                         + "Download and install it now?\n"
                         + "(Node.js 18+ must already be available on PATH)",
                 MessageDialog.QUESTION, new String[] { "Install Now", "Cancel" }, 0);
         if (dialog.open() != 0) {
             return false;
         }
+        return installWithProgress(shell);
+    }
 
+    /**
+     * Download and install the runtime unconditionally, showing a progress
+     * dialog. The caller is responsible for any prior confirmation (e.g. the
+     * "Download abap-cli" button asks whether to re-install an already present
+     * runtime).
+     *
+     * @param shell parent shell for the dialogs (may be {@code null}; the
+     *              active shell is used as fallback)
+     * @return {@code true} on success, {@code false} on failure/cancel
+     */
+    public static boolean installWithProgress(Shell shell) {
+        Shell sh = shellOrActive(shell);
         ProgressMonitorDialog pmd = new ProgressMonitorDialog(sh);
         try {
             pmd.run(true, true, new IRunnableWithProgress() {
@@ -91,7 +105,7 @@ public final class AbapCliInstallPrompt {
                     "abap-cli Runtime Installation Failed",
                     "Could not download or install the abap-cli runtime:\n\n" + msg
                             + "\n\nPlease download the runtime zip manually from:\n"
-                            + AbapCliRuntime.GITHUB_RELEASES_URL
+                            + AbapCliRuntime.RUNTIME_ZIP_URL
                             + "\n\nExtract it, point the system property 'abap.cli.stage.dir'"
                             + "\n(or environment variable ABAP_CLI_STAGE_DIR) at the extracted"
                             + " folder,\nand restart Eclipse.");

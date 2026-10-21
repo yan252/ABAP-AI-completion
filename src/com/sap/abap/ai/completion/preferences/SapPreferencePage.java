@@ -187,16 +187,27 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
 
     /**
      * "Download abap-cli" 按钮：先检查 abap-cli-stage 是否已安装——已安装则
-     * 直接提示无需下载；未安装则弹一键安装对话框（确认后从 GitHub 下载并
-     * 解压到工作区 state area，见 {@link AbapCliInstallPrompt}）。
+     * 询问是否重新下载安装（runtime zip 在 GitHub 上更新后可借此刷新），
+     * 取消则提示无需下载；未安装则弹一键安装对话框（确认后从 GitHub 下载
+     * 并解压到工作区 state area，见 {@link AbapCliInstallPrompt}）。
      */
     private void downloadAbapCli() {
         if (AbapCliRuntime.isInstalled()) {
-            setTestResult("abap-cli runtime: already installed", SWT.COLOR_DARK_GREEN);
-            MessageDialog.openInformation(getShell(), "abap-cli Runtime",
+            boolean reinstall = MessageDialog.openQuestion(getShell(), "abap-cli Runtime",
                     "The abap-cli runtime is already installed in this workspace"
-                            + "\n(.metadata/plugins/com.sap.abap.ai.completion/abap-cli-stage/)"
-                            + "\n\nNo download is needed.");
+                            + "\n(.metadata/.plugins/com.sap.abap.ai.completion/abap-cli-stage/)."
+                            + "\n\nRe-download and re-install it anyway?"
+                            + "\n(Use this after the runtime zip on GitHub was updated.)");
+            if (!reinstall) {
+                setTestResult("abap-cli runtime: already installed", SWT.COLOR_DARK_GREEN);
+                return;
+            }
+            if (AbapCliInstallPrompt.installWithProgress(getShell())) {
+                setTestResult("SUCCESS: abap-cli runtime re-installed", SWT.COLOR_DARK_GREEN);
+            } else {
+                setTestResult("abap-cli runtime re-install failed or was cancelled",
+                        SWT.COLOR_RED);
+            }
             return;
         }
         if (AbapCliInstallPrompt.ensureInstalledWithPrompt(getShell())) {
