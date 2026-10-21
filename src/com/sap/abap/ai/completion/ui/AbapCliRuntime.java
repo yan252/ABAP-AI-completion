@@ -279,9 +279,110 @@ public final class AbapCliRuntime {
         }
     }
 
-    /** Download the runtime zip from {@link #stageZipUrl()} with progress reporting. */
+    /** Ensures the OS proxy configuration is used at most once per JVM. */
+    private static volatile boolean systemProxiesEnabled;
+
+    /**
+     * Ask the JDK to read the Windows proxy configuration (registry /
+     * auto-config). Must happen before the first use of the default proxy
+     * selector, hence the reset via {@code setDefault(null)}.
+     */
+    private static void enableSystemProxies() {
+        if (systemProxiesEnabled) {
+            return;
+        }
+        synchronized (AbapCliRuntime.class) {
+            if (systemProxiesEnabled) {
+                return;
+            }
+            try {
+                if (System.getProperty("java.net.useSystemProxies") == null) {
+                    System.setProperty("java.net.useSystemProxies", "true");
+                }
+                java.net.ProxySelector.setDefault(null); // force re-initialization
+                java.net.ProxySelector.getDefault();
+            } catch (Throwable t) {
+                System.out.println("[AbapCliRuntime] could not enable system proxies: " + t);
+            }
+            systemProxiesEnabled = true;
+        }
+    }
+
+    /**
+     * Download the runtime zip with progress reporting. Strategy:
+     * <ol>
+     *   <li>plain Java HTTPS (system proxies enabled);</li>
+     *   <li>on any failure — typically HTTP 407 from a corporate proxy that
+     *       demands the Windows login credentials, which the JDK cannot supply
+     *       transparently — retry via PowerShell WebClient using the system
+     *       proxy with the current user's default credentials (same behavior
+     *       as the web browser);</li>
+     *   <li>finally, retry via Windows BITS
+     *       ({@code Start-BitsTransfer}).</li>
+     * </ol>
+     * Only when all three fail the combined error is thrown.
+     */
     private static void downloadStageZip(Path dest, IProgressMonitor pm) throws IOException {
         String urlSpec = stageZipUrl();
+
+        IOException javaFailure;
+        try {
+            downloadViaJava(urlSpec, dest, pm);
+            return;
+        } catch (IOException e) {
+            javaFailure = e;
+        }
+        System.out.println("[AbapCliRuntime] direct Java download failed ("
+                + javaFailure.getMessage().replace('\n', ' ')
+                + ") - trying Windows fallback with system proxy/login credentials");
+        pm.subTask("Direct download blocked (corporate proxy?) -"
+                + " retrying via Windows system proxy...");
+
+        IOException psFailure;
+        try {
+            downloadViaPowerShell(urlSpec, dest, 300);
+            System.out.println("[AbapCliRuntime] downloaded via PowerShell WebClient"
+                    + " (system proxy + default credentials)");
+            return;
+        } catch (IOException e) {
+            psFailure = e;
+        }
+        System.out.println("[AbapCliRuntime] PowerShell download failed ("
+                + psFailure.getMessage().replace('\n', ' ') + ") - trying BITS");
+
+        IOException bitsFailure;
+        try {
+            downloadViaPowerShell(urlSpec, dest, 600, true);
+            System.out.println("[AbapCliRuntime] downloaded via BITS");
+            return;
+        } catch (IOException e) {
+            bitsFailure = e;
+        }
+
+        throw new IOException("Download failed from " + urlSpec
+                + "\n\nDirect (Java): " + firstLine(javaFailure.getMessage())
+                + "\nPowerShell (system proxy): " + firstLine(psFailure.getMessage())
+                + "\nBITS: " + firstLine(bitsFailure.getMessage())
+                + "\n\nHint: HTTP 407 means a corporate proxy requires your Windows"
+                + " login credentials. The fallbacks above use them - if all failed,"
+                + "\nyour proxy may block non-browser downloads entirely. In that case"
+                + " download the zip manually in the browser from\n  "
+                + GITHUB_RELEASES_URL, javaFailure);
+    }
+
+    /** First line of a (possibly multi-line) exception message. */
+    private static String firstLine(String msg) {
+        if (msg == null) {
+            return "(no message)";
+        }
+        int i = msg.indexOf('\n');
+        return i >= 0 ? msg.substring(0, i) : msg;
+    }
+
+    /** Plain Java HTTPS download (also handles the 404 asset hint). */
+    private static void downloadViaJava(String urlSpec, Path dest, IProgressMonitor pm)
+            throws IOException {
+        enableSystemProxies();
         pm.subTask("Downloading abap-cli runtime from GitHub...");
         HttpURLConnection conn;
         try {
@@ -296,13 +397,17 @@ public final class AbapCliRuntime {
         try {
             int code = conn.getResponseCode();
             if (code != HttpURLConnection.HTTP_OK) {
-                String hint = code == HttpURLConnection.HTTP_NOT_FOUND
-                        ? "\n(The runtime asset for version " + expectedStamp()
-                                + " is not published yet. Please upload"
-                                + "\n 'abap-cli-runtime-" + expectedStamp() + ".zip'"
-                                + " as an asset of the release tag 'v" + expectedStamp()
-                                + "' at\n " + GITHUB_RELEASES_URL + ")"
-                        : "";
+                String hint = "";
+                if (code == HttpURLConnection.HTTP_NOT_FOUND) {
+                    hint = "\n(The runtime asset for version " + expectedStamp()
+                            + " is not published yet. Please upload"
+                            + "\n 'abap-cli-runtime-" + expectedStamp() + ".zip'"
+                            + " as an asset of the release tag 'v" + expectedStamp()
+                            + "' at\n " + GITHUB_RELEASES_URL + ")";
+                } else if (code == HttpURLConnection.HTTP_PROXY_AUTH) {
+                    hint = "\n(HTTP 407 Proxy Authentication Required - corporate"
+                            + " proxy detected)";
+                }
                 throw new IOException("Download failed: HTTP " + code + " from "
                         + urlSpec + hint);
             }
@@ -330,6 +435,88 @@ public final class AbapCliRuntime {
             }
         } finally {
             conn.disconnect();
+        }
+        verifyZipFile(dest);
+    }
+
+    /** PowerShell WebClient download (system proxy + default credentials). */
+    private static void downloadViaPowerShell(String urlSpec, Path dest, int timeoutSec)
+            throws IOException {
+        downloadViaPowerShell(urlSpec, dest, timeoutSec, false);
+    }
+
+    /**
+     * Windows-native download via PowerShell. Uses {@code System.Net.WebClient}
+     * which reads the Windows proxy configuration (including auto-config) and,
+     * with {@code CredentialCache.DefaultCredentials}, authenticates with the
+     * logged-in domain user - the same way the web browser does. With
+     * {@code useBits} the newer {@code Start-BitsTransfer} cmdlet is used
+     * instead (robust, resumable, proxy-SSO aware).
+     */
+    private static void downloadViaPowerShell(String urlSpec, Path dest, int timeoutSec,
+            boolean useBits) throws IOException {
+        try {
+            Files.deleteIfExists(dest);
+        } catch (IOException ignored) {
+        }
+        String psScript = useBits
+                ? "Start-BitsTransfer -Source '" + urlSpec + "' -Destination '"
+                        + dest.toString().replace("'", "''") + "'"
+                : "$ProgressPreference='SilentlyContinue';"
+                        + "$wc=New-Object System.Net.WebClient;"
+                        + "$wc.Proxy.Credentials=[System.Net.CredentialCache]::DefaultCredentials;"
+                        + "$wc.DownloadFile('" + urlSpec + "','"
+                        + dest.toString().replace("'", "''") + "')";
+        ProcessBuilder pb = new ProcessBuilder(
+                "powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
+                "Bypass", "-Command", psScript);
+        pb.redirectErrorStream(true);
+        Process proc;
+        try {
+            proc = pb.start();
+        } catch (IOException e) {
+            throw new IOException("Cannot start powershell: " + e.getMessage(), e);
+        }
+        StringBuilder output = new StringBuilder();
+        try (InputStream in = proc.getInputStream()) {
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                output.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+            }
+        }
+        try {
+            if (!proc.waitFor(timeoutSec, java.util.concurrent.TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+                throw new IOException("powershell timed out after " + timeoutSec + " s");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Download interrupted.", e);
+        }
+        if (proc.exitValue() != 0) {
+            String out = output.toString().trim();
+            throw new IOException("powershell exit code " + proc.exitValue()
+                    + (out.isEmpty() ? "" : ": " + firstLine(out)));
+        }
+        verifyZipFile(dest);
+    }
+
+    /** {@code true} when the file exists, is not trivially small and starts with the ZIP magic. */
+    private static void verifyZipFile(Path file) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("Downloaded file is missing: " + file);
+        }
+        long size = Files.size(file);
+        if (size < 1024) {
+            throw new IOException("Downloaded file is too small (" + size + " bytes).");
+        }
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] magic = new byte[2];
+            if (in.read(magic) != 2 || magic[0] != 'P' || magic[1] != 'K') {
+                throw new IOException("Downloaded file is not a zip archive"
+                        + " (a proxy error page?).");
+            }
         }
     }
 
