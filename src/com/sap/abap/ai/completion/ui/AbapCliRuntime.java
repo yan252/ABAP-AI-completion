@@ -143,11 +143,11 @@ public final class AbapCliRuntime {
      */
     public static Path ensureStage() throws IOException {
         Path stage = cachedStage;
-        if (stage != null && Files.isDirectory(stage)) {
+        if (stage != null && isCompleteStage(stage)) {
             return stage;
         }
         synchronized (AbapCliRuntime.class) {
-            if (cachedStage != null && Files.isDirectory(cachedStage)) {
+            if (cachedStage != null && isCompleteStage(cachedStage)) {
                 return cachedStage;
             }
 
@@ -165,19 +165,38 @@ public final class AbapCliRuntime {
                         "Plugin state location unavailable; cannot provision abap-cli runtime.", e);
             }
             Path target = base.resolve(STAGE_DIR_NAME);
-            Files.createDirectories(target);
 
             if (!isExtracted(target)) {
                 if (!hasBundledRuntime()) {
                     // No embedded runtime (standard build since v1.1.49): the
-                    // caller should offer the one-click GitHub install.
+                    // caller should offer the one-click GitHub install. Never
+                    // create the stage directory here — a cancelled install
+                    // must not leave an empty abap-cli-stage folder behind.
                     throw new NotInstalledException(NOT_INSTALLED_MESSAGE);
                 }
+                // Only now create the directory: the bundled runtime is about
+                // to be extracted into it.
+                Files.createDirectories(target);
                 extractBundledRuntime(target);
             }
             cachedStage = target.toAbsolutePath().normalize();
             return cachedStage;
         }
+    }
+
+    /**
+     * {@code true} when {@code stage} is a directory containing the abap-cli
+     * entry script, i.e. a stage that can actually be executed. Used for the
+     * cache fast paths so an incomplete stage (partial install, manual
+     * deletion) never masquerades as a working one — the caller then falls
+     * through to the regular checks and gets a {@link NotInstalledException},
+     * which triggers the install prompt instead of a confusing
+     * "entry not found" error later.
+     */
+    private static boolean isCompleteStage(Path stage) {
+        return Files.isDirectory(stage)
+                && Files.isRegularFile(stage.resolve(
+                        AbapGitImportSupport.ABAP_CLI_INDEX_REL));
     }
 
     /**
