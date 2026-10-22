@@ -87,6 +87,10 @@ public final class MultiTabTemplateImportService {
      */
     public static void runImport() {
         // ===== [1] 环境检查 =====
+        // ABAP CLI runtime 未安装时先弹询问框：确定→直接下载安装，取消→退出导入
+        if (!AbapCliInstallPrompt.ensureInstalledWithPrompt(null)) {
+            return;
+        }
         Path stageRoot;
         try {
             stageRoot = AbapGitImportSupport.checkEnvironment(
