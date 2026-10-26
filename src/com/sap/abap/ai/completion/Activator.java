@@ -1,5 +1,7 @@
 package com.sap.abap.ai.completion;
 
+import java.util.Locale;
+
 import org.eclipse.core.runtime.ILog;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Platform;
@@ -54,6 +56,17 @@ public class Activator extends AbstractUIPlugin implements IStartup {
         // 自动补全与接口日志级别的默认值仅在首次安装时生效（PreferenceInitializer）；
         // 此后尊重用户在首选项中保存的值，不再每次启动强制覆盖。
         IPreferenceStore store = getPreferenceStore();
+
+        // Align the JVM default locale with the plugin UI language preference so
+        // that lazily-resolved texts (e.g. plugin.xml page labels via
+        // Bundle-Localization) follow the selected language after a restart,
+        // even when the OS language differs.
+        String uiLang = store.getString(PreferenceConstants.PLUGIN_LANGUAGE);
+        if (PreferenceConstants.LANG_ZH.equals(uiLang)) {
+            Locale.setDefault(Locale.SIMPLIFIED_CHINESE);
+        } else if (PreferenceConstants.LANG_EN.equals(uiLang)) {
+            Locale.setDefault(Locale.ENGLISH);
+        }
 
         // 输出启动日志到 Eclipse Error Log（不依赖插件自身日志级别）
         ILog log = Platform.getLog(getBundle());

@@ -196,18 +196,14 @@ public final class AbapGitImportSupport {
             throw new EnvironmentException(e.getMessage());
         } catch (IOException e) {
             throw new EnvironmentException(
-                    "The abap-cli runtime could not be prepared:\n  "
-                            + e.getMessage()
-                            + "\n\nPlease restart Eclipse and retry. If the problem persists,"
-                            + "\nreinstall the plugin from the update site.");
+                    ImportMessages.format("importSupport.env.runtimeNotPrepared", e.getMessage()));
         }
 
         File indexJs = stageRoot.resolve(ABAP_CLI_INDEX_REL).toFile();
         if (!indexJs.isFile()) {
             throw new EnvironmentException(
-                    "abap-cli entry not found in the plugin runtime:\n  " + indexJs.getAbsolutePath()
-                            + "\n\nThe plugin installation appears incomplete — please reinstall"
-                            + "\nthe plugin from the update site.");
+                    ImportMessages.format("importSupport.env.entryNotFound",
+                            indexJs.getAbsolutePath()));
         }
 
         Path extDir = stageRoot.resolve(EXTENSIONS_DIR_REL);
@@ -218,21 +214,13 @@ public final class AbapGitImportSupport {
         }
         if (!missing.isEmpty()) {
             throw new EnvironmentException(
-                    "Missing abap-cli extension files in the plugin runtime:\n  "
-                            + extDir.toString()
-                            + "\n  Missing:\n    - " + String.join("\n    - ", missing)
-                            + "\n\nThe plugin installation appears incomplete — please reinstall"
-                            + "\nthe plugin from the update site.");
+                    ImportMessages.format("importSupport.env.missingExtensions",
+                            extDir.toString(), String.join("\n    - ", missing)));
         }
 
         if (!isNodeInPath()) {
             throw new EnvironmentException(
-                    "Node.js was not found on PATH ('node --version' failed). The abap-cli"
-                            + "\nruntime is downloaded by the plugin on first use, but Node.js 18 or"
-                            + "\nnewer is required to run it."
-                            + "\n\nPlease install the LTS build for Windows from:"
-                            + "\n  https://nodejs.org/"
-                            + "\nand make sure 'node' is on PATH, then restart Eclipse.");
+                    ImportMessages.get("importSupport.env.nodeNotFound"));
         }
         return stageRoot;
     }
@@ -267,7 +255,7 @@ public final class AbapGitImportSupport {
         System.out.println("[AbapCli] $ " + String.join(" ", cmd));
 
         if (!isNodeInPath()) {
-            o.message = "node not found in PATH. Please install Node.js and ensure 'node' is on PATH.";
+            o.message = ImportMessages.get("importSupport.step.nodeNotFound");
             return o;
         }
         try {
@@ -340,11 +328,8 @@ public final class AbapGitImportSupport {
         // ===== [1] SAP 配置页必须已填 abap-cli URL =====
         final String url = trimToNull(AIConfiguration.getSapAbapCliUrl());
         if (url == null) {
-            showErrorBlocking(title + " — SAP Connection Failed",
-                    "The SAP connection is not configured. The import was aborted.\n\n"
-                            + "Please fill in the 'abap-cli URL' (and credentials) on the\n"
-                            + "\"SAP Connection Config\" page first.\n\n"
-                            + "The \"SAP Connection Config\" page will be opened now.");
+            showErrorBlocking(title + ImportMessages.get("importSupport.sap.titleSuffix"),
+                    ImportMessages.get("importSupport.sap.notConfigured"));
             // 用户已确认错误框，再打开 SAP 配置页
             AICompletionMenuBuilder.openSapPreferences();
             return false;
@@ -364,7 +349,7 @@ public final class AbapGitImportSupport {
                 @Override
                 public void run(IProgressMonitor monitor) {
                     try {
-                        monitor.beginTask("Validating SAP connection...",
+                        monitor.beginTask(ImportMessages.get("importSupport.sap.validating"),
                                 IProgressMonitor.UNKNOWN);
                         holder[0] = com.sap.abap.ai.completion.sap.AbapCliConnectionTester
                                 .testConnection(url, client, user, password, language);
@@ -374,8 +359,8 @@ public final class AbapGitImportSupport {
                 }
             });
         } catch (Exception e) {
-            probeError[0] = "Failed to run connection probe: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage();
+            probeError[0] = ImportMessages.format("importSupport.sap.probeFailed",
+                    e.getClass().getSimpleName() + ": " + e.getMessage());
         }
 
         // ===== [3] 失败：先弹错误框，用户确认后再打开 SAP Connection Config 页 =====
@@ -384,16 +369,13 @@ public final class AbapGitImportSupport {
         if (probeError[0] != null) {
             detail = probeError[0];
         } else if (r == null) {
-            detail = "connection probe returned no result";
+            detail = ImportMessages.get("importSupport.sap.probeNoResult");
         } else {
             detail = r.detail;
         }
         if (probeError[0] != null || r == null || !r.success) {
-            showErrorBlocking(title + " — SAP Connection Failed",
-                    "Cannot connect to SAP (target '" + url + "'). The import was aborted.\n\n"
-                            + detail + "\n\n"
-                            + "The \"SAP Connection Config\" page will be opened now —\n"
-                            + "please verify the connection settings and try again.");
+            showErrorBlocking(title + ImportMessages.get("importSupport.sap.titleSuffix"),
+                    ImportMessages.format("importSupport.sap.cannotConnect", url, detail));
             Activator.getDefault().getLog().log(new Status(IStatus.ERROR, Activator.PLUGIN_ID,
                     "Import aborted: SAP connection pre-check failed for '" + url
                             + "': " + detail, null));
@@ -454,8 +436,7 @@ public final class AbapGitImportSupport {
                     .resolveSystemName(stageRoot);
         } catch (IllegalStateException e) {
             throw new IllegalStateException(
-                    "Cannot apply SAP Preferences connection: no abap-cli profile to patch.\n\n"
-                            + e.getMessage(), e);
+                    ImportMessages.format("importSupport.prefs.noProfile", e.getMessage()), e);
         }
         System.out.println("[AbapCli]   prefs: patching profile '" + systemName + "'"
                 + "  url=" + url
@@ -463,15 +444,16 @@ public final class AbapGitImportSupport {
                 + "  user=" + (user == null ? "" : user)
                 + "  language=" + (language == null ? "" : language));
 
-        monitor.subTask("Applying SAP Preferences connection...");
+        monitor.subTask(ImportMessages.get("importSupport.prefs.applying"));
 
         String snapJson = runPrefsScript(stageRoot, "snapshot", Arrays.asList(systemName));
         if (snapJson == null || snapJson.isEmpty()) {
-            throw new IOException("prefs snapshot returned nothing for profile '" + systemName + "'");
+            throw new IOException(ImportMessages.format("importSupport.prefs.snapshotEmpty",
+                    systemName));
         }
         if (!snapJson.startsWith("{")) {
-            throw new IOException("prefs snapshot output not a JSON object for profile '"
-                    + systemName + "': " + snapJson);
+            throw new IOException(ImportMessages.format("importSupport.prefs.snapshotNotJson",
+                    systemName, snapJson));
         }
         Path snap = Files.createTempFile("abapgit-prefs-", ".json");
         Files.write(snap, snapJson.getBytes(StandardCharsets.UTF_8));
@@ -492,8 +474,8 @@ public final class AbapGitImportSupport {
             } catch (Exception e2) {
                 System.err.println("[AbapCli]   prefs rollback failed: " + e2.getMessage());
             }
-            throw new IOException("prefs apply failed for profile '" + systemName
-                    + "' (output: " + (applied == null ? "<null>" : applied) + ")");
+            throw new IOException(ImportMessages.format("importSupport.prefs.applyFailed",
+                    systemName, applied == null ? "<null>" : applied));
         }
         System.out.println("[AbapCli]   prefs applied: " + applied.trim());
         return snapshotFile;
@@ -623,7 +605,7 @@ public final class AbapGitImportSupport {
                 "--package", ivPackage, "--yes", "--pretty-json"));
 
         System.out.println("[AbapCli] $ " + String.join(" ", cmd));
-        monitor.subTask("transport create: auto-creating workbench request...");
+        monitor.subTask(ImportMessages.get("importSupport.transport.creating"));
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(stageRoot.toRealPath().toFile());
@@ -680,7 +662,8 @@ public final class AbapGitImportSupport {
                 if (System.currentTimeMillis() > deadline) {
                     p.destroyForcibly();
                     reader.interrupt();
-                    throw new IOException("abap-cli step timed out after " + timeoutSec + "s");
+                    throw new IOException(ImportMessages.format("importSupport.step.timeout",
+                            timeoutSec));
                 }
                 Thread.sleep(100);
             }
@@ -938,7 +921,9 @@ public final class AbapGitImportSupport {
             systemName = com.sap.abap.ai.completion.sap.AbapCliConnectionTester
                     .resolveSystemName(target.getParent());
         } catch (Exception e) {
-            throw new IOException("Cannot resolve abap-cli system profile: " + e.getMessage(), e);
+            throw new IOException(
+                    ImportMessages.format("importSupport.abapJson.cannotResolveSystem",
+                            e.getMessage()), e);
         }
 
         StringBuilder sb = new StringBuilder();
@@ -1051,10 +1036,13 @@ public final class AbapGitImportSupport {
             StringBuilder d = new StringBuilder();
             d.append("      • ").append(display);
             if (request != null) {
-                d.append(" — locked in request ").append(request);
+                d.append(' ').append(ImportMessages.get("importSupport.lock.detail.inRequest"))
+                        .append(' ').append(request);
             }
             if (user != null) {
-                d.append(request != null ? " by user " : " — locked by user ").append(user);
+                d.append(' ').append(ImportMessages.get(request != null
+                        ? "importSupport.lock.detail.byUser"
+                        : "importSupport.lock.detail.byUserFirst")).append(' ').append(user);
             }
             d.append('\n');
             d.append("        \"").append(trimmed).append('"');
@@ -1065,13 +1053,8 @@ public final class AbapGitImportSupport {
         }
 
         o.lockedObjects.addAll(names);
-        o.message = "Object lock conflict — the following object(s) were NOT imported:\n"
-                + String.join("\n", details) + "\n"
-                + "\n"
-                + "The import FAILED. Release the object lock and re-run the import:\n"
-                + "  • SE03 → 传输组织器 → 请求/任务 → 释放对象锁\n"
-                + "  • or SE10 → 删除/撤销该锁定条目\n"
-                + "  • or ask the editing user to save & release.";
+        o.message = ImportMessages.format("importSupport.lock.conflictMessage",
+                String.join("\n", details));
         if (o.exitCode == 0) {
             o.exitCode = 1;
         }
@@ -1108,7 +1091,7 @@ public final class AbapGitImportSupport {
      */
     private static String objectDisplayName(List<String> lines, String objectName) {
         if (objectName == null) {
-            return "(unknown object)";
+            return ImportMessages.get("importSupport.lock.unknownObject");
         }
         String subc = null;
         String prefix = "NAME=" + objectName;
@@ -1214,19 +1197,19 @@ public final class AbapGitImportSupport {
                     String v = dlg.getValue();
                     if (v == null || v.trim().isEmpty()) {
                         MessageDialog.openWarning(shell, title,
-                                "Input cannot be empty. Please enter a value.");
+                                ImportMessages.get("importSupport.prompt.empty"));
                         continue;
                     }
                     String norm = v.trim().toUpperCase(Locale.ROOT);
                     char first = norm.charAt(0);
                     if (first != 'Z' && first != 'Y') {
                         MessageDialog.openWarning(shell, title,
-                                "The name must start with Z or Y (customer namespace).");
+                                ImportMessages.get("importSupport.prompt.mustStartZY"));
                         continue;
                     }
                     if (norm.length() > 30) {
                         MessageDialog.openWarning(shell, title,
-                                "The name is too long (max 30 chars). Please re-enter.");
+                                ImportMessages.get("importSupport.prompt.tooLong"));
                         continue;
                     }
                     holder[0] = norm;
@@ -1404,10 +1387,14 @@ public final class AbapGitImportSupport {
 
     static byte[] readBundleResource(String resourcePath) throws IOException {
         if (Activator.getDefault() == null) {
-            throw new IOException("Plugin is not initialized; cannot read resource: " + resourcePath);
+            throw new IOException(ImportMessages.format("importSupport.bundle.pluginNotInit",
+                    resourcePath));
         }
         java.net.URL url = Activator.getDefault().getBundle().getEntry(resourcePath);
-        if (url == null) throw new IOException("Resource not found in bundle: " + resourcePath);
+        if (url == null) {
+            throw new IOException(ImportMessages.format("importSupport.bundle.resourceNotFound",
+                    resourcePath));
+        }
         try (InputStream in = url.openStream()) {
             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
             byte[] buf = new byte[8192];

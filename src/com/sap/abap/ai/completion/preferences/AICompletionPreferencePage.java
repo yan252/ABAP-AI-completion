@@ -1,8 +1,16 @@
 package com.sap.abap.ai.completion.preferences;
 
+import java.io.File;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.preference.ColorSelector;
 import org.eclipse.jface.preference.IPreferenceStore;
 import org.eclipse.jface.preference.PreferencePage;
+import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.RGB;
@@ -13,12 +21,14 @@ import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.DirectoryDialog;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Spinner;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPreferencePage;
+import org.osgi.framework.Bundle;
 
 import com.sap.abap.ai.completion.Activator;
 
@@ -38,6 +48,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Text txtSkillDir;
     private Button chkSkillEnabled;
     private Text txtSystemPrompt;    private Button chkPluginEnabled;    private ColorSelector colorSelector;    private Button chkParentResolution;
+    private Combo cmbLanguage;
     private Text txtSearchDepth;
     private Text txtMaxContextChars;
     private Button chkWorkspaceCodeRef;
@@ -48,16 +59,18 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Combo cmbDisplayType;
 
     private IPreferenceStore store;
+    private IWorkbench workbench;
+    /** 打开页面时已保存的语言偏好值，用于检测用户是否修改了插件语言 */
+    private String loadedLanguage;
 
     public AICompletionPreferencePage() {
-        super("ABAP AI Completion");
-        setDescription("Configure AI-powered ABAP code completion.\n"
-                + "The AI suggests code in a floating overlay (like Copilot).\n"
-                + "Press TAB to accept, any other key to dismiss.");
+        super(Messages.get("mainPage.title"));
+        setDescription(Messages.get("mainPage.description"));
     }
 
     @Override
     public void init(IWorkbench workbench) {
+        this.workbench = workbench;
         store = Activator.getDefault().getPreferenceStore();
     }
 
@@ -89,14 +102,14 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private void createVersionHeader(Composite parent) {
         Label version = new Label(parent, SWT.NONE);
         String v = getPluginVersion();
-        version.setText("ABAP AI Completion  v" + v);
+        version.setText(Messages.format("mainPage.versionHeader", v));
         version.setFont(new org.eclipse.swt.graphics.Font(parent.getDisplay(),
                 version.getFont().getFontData()[0].getName(), 11, SWT.BOLD));
         GridData gd = new GridData(GridData.FILL_HORIZONTAL);
         version.setLayoutData(gd);
 
         Label hint = new Label(parent, SWT.WRAP);
-        hint.setText("Configure AI-powered ABAP code completion in the sections below.");
+        hint.setText(Messages.get("mainPage.headerHint"));
         GridData hd = new GridData(GridData.FILL_HORIZONTAL);
         hint.setLayoutData(hd);
 
@@ -119,38 +132,49 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     private void createFeatureGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Feature Settings");
+        g.setText(Messages.get("mainPage.group.feature"));
         g.setLayout(new GridLayout(1, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         chkPluginEnabled = new Button(g, SWT.CHECK);
-        chkPluginEnabled.setText("Enable ABAP AI Completion plugin");
+        chkPluginEnabled.setText(Messages.get("mainPage.checkbox.enablePlugin"));
+
+        Composite langRow = new Composite(g, SWT.NONE);
+        langRow.setLayout(new GridLayout(2, false));
+        langRow.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+
+        createLabel(langRow, Messages.get("mainPage.label.pluginLanguage"));
+        cmbLanguage = new Combo(langRow, SWT.DROP_DOWN | SWT.READ_ONLY);
+        cmbLanguage.add(Messages.get("mainPage.lang.zh"));
+        cmbLanguage.add(Messages.get("mainPage.lang.en"));
+
+        Label langNote = new Label(g, SWT.WRAP);
+        langNote.setText(Messages.get("mainPage.note.language"));
+        GridData lnGd = new GridData(GridData.FILL_HORIZONTAL);
+        langNote.setLayoutData(lnGd);
     }
 
     private void createSkillGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Skill Directory");
+        g.setText(Messages.get("mainPage.group.skill"));
         g.setLayout(new GridLayout(3, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         chkSkillEnabled = new Button(g, SWT.CHECK);
-        chkSkillEnabled.setText("Enable Skill reference for AI completion");
+        chkSkillEnabled.setText(Messages.get("mainPage.checkbox.enableSkill"));
         GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
         ckGd.horizontalSpan = 3;
         chkSkillEnabled.setLayoutData(ckGd);
 
-        createLabel(g, "Skill directory:");
+        createLabel(g, Messages.get("mainPage.label.skillDir"));
         txtSkillDir = createText(g);
 
         Button browseBtn = new Button(g, SWT.PUSH);
-        browseBtn.setText("Browse...");
+        browseBtn.setText(Messages.get("mainPage.button.browse"));
         browseBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> browseSkillDir()));
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("This directory contains skill subdirectories.\n"
-                + "Each subdirectory is a skill with SKILL.md and reference files (.abap, .txt, .md, etc).\n"
-                + "Skill files are filtered by code type (ABAP/CDS).\n"
-                + "Leave empty to use default: <workspace>/.metadata/.plugins/com.sap.abap.ai.completion/skills");
+        note.setText(Messages.get("mainPage.note.skill"));
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 3;
         note.setLayoutData(nd);
@@ -158,25 +182,24 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     private void createParentProgramGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Parent Program Resolution");
+        g.setText(Messages.get("mainPage.group.parent"));
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         chkParentResolution = new Button(g, SWT.CHECK);
-        chkParentResolution.setText("Enable parent program reverse lookup");
+        chkParentResolution.setText(Messages.get("mainPage.checkbox.enableParentResolution"));
         GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
         ckGd.horizontalSpan = 2;
         chkParentResolution.setLayoutData(ckGd);
 
-        createLabel(g, "ABAP search depth (levels):");
+        createLabel(g, Messages.get("mainPage.label.searchDepth"));
         txtSearchDepth = createText(g);
 
-        createLabel(g, "Max context chars per parent:");
+        createLabel(g, Messages.get("mainPage.label.maxContextChars"));
         txtMaxContextChars = createText(g);
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("Parent lookup searches ABAP files containing INCLUDE <current file>.\n"
-                + "Search depth 0 = disable parent lookup, only current file code is sent.");
+        note.setText(Messages.get("mainPage.note.parent"));
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
@@ -184,24 +207,24 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     private void createContextGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Workspace Code Reference Set");
+        g.setText(Messages.get("mainPage.group.workspace"));
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         chkWorkspaceCodeRef = new Button(g, SWT.CHECK);
-        chkWorkspaceCodeRef.setText("Use workspace ABAP code as AI reference");
+        chkWorkspaceCodeRef.setText(Messages.get("mainPage.checkbox.useWorkspace"));
         GridData wsGd = new GridData(GridData.FILL_HORIZONTAL);
         wsGd.horizontalSpan = 2;
         chkWorkspaceCodeRef.setLayoutData(wsGd);
 
-        createLabel(g, "Max workspace chars:");
+        createLabel(g, Messages.get("mainPage.label.maxWorkspaceChars"));
         txtMaxWorkspaceChars = createText(g);
 
-        createLabel(g, "Max workspace files:");
+        createLabel(g, Messages.get("mainPage.label.maxWorkspaceFiles"));
         txtWorkspaceFileLimit = createText(g);
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("Workspace code reference sends other ABAP files from your workspace as AI context.");
+        note.setText(Messages.get("mainPage.note.workspace"));
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
@@ -209,24 +232,21 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     private void createLoggingGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Interface Logging");
+        g.setText(Messages.get("mainPage.group.logging"));
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-        createLabel(g, "Log level:");
+        createLabel(g, Messages.get("mainPage.label.logLevel"));
         cmbLogLevel = new Combo(g, SWT.DROP_DOWN | SWT.READ_ONLY);
-        cmbLogLevel.add("0 - No logging");
-        cmbLogLevel.add("1 - Normal logging (interface request/response)");
-        cmbLogLevel.add("2 - DEBUG logging");
+        cmbLogLevel.add(Messages.get("mainPage.combo.logLevel0"));
+        cmbLogLevel.add(Messages.get("mainPage.combo.logLevel1"));
+        cmbLogLevel.add(Messages.get("mainPage.combo.logLevel2"));
         cmbLogLevel.select(PreferenceConstants.LOG_LEVEL_NONE);
         GridData cgGd = new GridData(GridData.FILL_HORIZONTAL);
         cmbLogLevel.setLayoutData(cgGd);
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("0 = No logging; 1 = Record interface request/response logs; "
-                + "2 = Additionally record DEBUG logs (parser, context collection, etc.).\n"
-                + "Logs are written to the plugin state area, not the Eclipse error log.\n"
-                + "See AILogger for the exact path under <workspace>/.metadata/.plugins/.");
+        note.setText(Messages.get("mainPage.note.logging"));
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
@@ -234,7 +254,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     private void createPromptGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Custom System Prompt");
+        g.setText(Messages.get("mainPage.group.prompt"));
         g.setLayout(new GridLayout(1, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
@@ -247,30 +267,27 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     private void createStyleGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Overlay Style");
+        g.setText(Messages.get("mainPage.group.style"));
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-        createLabel(g, "Completion text color:");
+        createLabel(g, Messages.get("mainPage.label.color"));
         colorSelector = new ColorSelector(g);
 
-        createLabel(g, "Completion display type:");
+        createLabel(g, Messages.get("mainPage.label.displayType"));
         cmbDisplayType = new Combo(g, SWT.DROP_DOWN | SWT.READ_ONLY);
-        cmbDisplayType.add("1 - Dialog display (show in popup window)");
-        cmbDisplayType.add("2 - Inline display (show at cursor, like Copilot)");
+        cmbDisplayType.add(Messages.get("mainPage.combo.displayType1"));
+        cmbDisplayType.add(Messages.get("mainPage.combo.displayType2"));
         GridData cdtGd = new GridData(GridData.FILL_HORIZONTAL);
         cmbDisplayType.setLayoutData(cdtGd);
 
         Label displayNote = new Label(g, SWT.WRAP);
-        displayNote.setText("How AI completion code is shown.\n"
-                + "1 - Dialog display: shows the code in a floating popup window (default).\n"
-                + "2 - Inline display: shows ghost text at the cursor position without inserting; "
-                + "press TAB or Enter to accept, any other key cancels.");
+        displayNote.setText(Messages.get("mainPage.note.displayType"));
         GridData dn = new GridData(GridData.FILL_HORIZONTAL);
         dn.horizontalSpan = 2;
         displayNote.setLayoutData(dn);
 
-        createLabel(g, "Overlay opacity (%):");
+        createLabel(g, Messages.get("mainPage.label.opacity"));
         spinnerOpacity = new Spinner(g, SWT.BORDER);
         spinnerOpacity.setMinimum(10);
         spinnerOpacity.setMaximum(100);
@@ -278,8 +295,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         spinnerOpacity.setPageIncrement(20);
 
         Label opacityNote = new Label(g, SWT.WRAP);
-        opacityNote.setText("Opacity of the AI completion overlay window.\n"
-                + "Lower values = more transparent. Range: 10-100%.");
+        opacityNote.setText(Messages.get("mainPage.note.opacity"));
         GridData ond = new GridData(GridData.FILL_HORIZONTAL);
         ond.horizontalSpan = 2;
         opacityNote.setLayoutData(ond);
@@ -293,6 +309,9 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtSystemPrompt.setText(store.getString(PreferenceConstants.SYSTEM_PROMPT));
 
         chkPluginEnabled.setSelection(store.getBoolean(PreferenceConstants.PLUGIN_ENABLED));
+        cmbLanguage.select(PreferenceConstants.LANG_ZH.equals(
+                store.getString(PreferenceConstants.PLUGIN_LANGUAGE)) ? 0 : 1);
+        loadedLanguage = store.getString(PreferenceConstants.PLUGIN_LANGUAGE);
 
 
         chkParentResolution.setSelection(
@@ -329,6 +348,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         store.setValue(PreferenceConstants.SYSTEM_PROMPT, txtSystemPrompt.getText());
 
         store.setValue(PreferenceConstants.PLUGIN_ENABLED, chkPluginEnabled.getSelection());
+        store.setValue(PreferenceConstants.PLUGIN_LANGUAGE, cmbLanguage.getSelectionIndex() == 0
+                ? PreferenceConstants.LANG_ZH : PreferenceConstants.LANG_EN);
 
 
         store.setValue(PreferenceConstants.PARENT_PROGRAM_RESOLUTION_ENABLED,
@@ -357,8 +378,119 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     @Override
     public boolean performOk() {
+        String newLanguage = cmbLanguage.getSelectionIndex() == 0
+                ? PreferenceConstants.LANG_ZH : PreferenceConstants.LANG_EN;
+        boolean languageChanged = loadedLanguage != null
+                && !newLanguage.equals(loadedLanguage);
         saveValues();
+        if (languageChanged) {
+            // 先对齐 Locale + 清缓存 → 让 TriggerChar.defaults() 返回新语言描述
+            Locale locale = newLanguage.equals(PreferenceConstants.LANG_ZH)
+                    ? Locale.SIMPLIFIED_CHINESE : Locale.ENGLISH;
+            Locale.setDefault(locale);
+            Messages.clearCache();
+            com.sap.abap.ai.completion.ui.Messages.clearCache();
+            com.sap.abap.ai.completion.ui.ImportMessages.clearCache();
+            com.sap.abap.ai.completion.editor.Messages.clearCache();
+            com.sap.abap.ai.completion.client.Messages.clearCache();
+            com.sap.abap.ai.completion.sap.Messages.clearCache();
+            // trigger char 的 description 持久化在偏好 JSON 里，语言切换后需要
+            // 按新语言的 defaults() 重新覆盖——否则 .prefs 里存的还是旧语言字符串。
+            // 必须在 Messages.clearCache() 之后调，确保 defaults() 返回新语言描述。
+            List<TriggerChar> currentChars = TriggerChar.loadAll(store);
+            TriggerChar.refreshDefaultDescriptions(currentChars);
+            TriggerChar.saveAll(currentChars, store);
+
+            // 硬重启（ProcessBuilder + System.exit）必须在退出前把所有偏好 flush 到磁盘，
+            // 否则 JVM 被杀掉后内存里的新值（含 trigger char 新描述、pluginLanguage）
+            // 就丢了——新进程启动时读磁盘上的旧值等于没改。
+            try {
+                org.eclipse.core.runtime.preferences.InstanceScope.INSTANCE
+                        .getNode(Activator.PLUGIN_ID).flush();
+            } catch (org.osgi.service.prefs.BackingStoreException e) {
+                // ignore - hard restart below means loss is acceptable
+            }
+            promptRestartForLanguageChange();
+        }
         return true;
+    }
+
+    /**
+     * 插件语言被修改并保存后，询问用户是否立即重启 Eclipse。
+     * 重启时传递 -nl 命令行参数强制 Eclipse 在 OSGi 初始化之前就设置好 Locale，
+     * 这样 Equinox 翻译 plugin.xml（含三个子配置页的树形节点名称）时就能用正确语言。
+     * 直接 workbench.restart() 虽然会启动新 JVM，但新进程的 Locale 来自 OS 语言，
+     * Activator.start() 里 Locale.setDefault() 执行时 Equinox 注册表早已缓存好翻译，
+     * plugin.xml 名称无法切换。
+     */
+    private void promptRestartForLanguageChange() {
+        boolean restart = MessageDialog.openQuestion(getShell(),
+                Messages.get("mainPage.restart.title"),
+                Messages.get("mainPage.restart.question"));
+        if (!restart || workbench == null) {
+            return;
+        }
+        // 等偏好对话框完全关闭后再执行重启
+        Display.getDefault().asyncExec(() -> {
+            try {
+                restartEclipseWithLocale();
+            } catch (Exception e) {
+                // 硬重启失败则回退 workbench.restart()
+                workbench.restart();
+            }
+        });
+    }
+
+    /**
+     * 用指定语言的 -nl 参数启动新的 Eclipse 进程并退出当前 JVM。
+     * -nl 参数在 Eclipse 启动最早期（OSGi 初始化之前）被解析，
+     * 此时 Locale 就被设置好，Equinox 后续翻译 plugin.xml 时用正确语言。
+     */
+    private void restartEclipseWithLocale() throws Exception {
+        // 目标语言：zh→zh_CN, en→en
+        String nlCode = Locale.getDefault().getLanguage().equals("zh")
+                ? "zh_CN" : "en";
+
+        // 1) 找 Eclipse 可执行文件
+        String launcher = System.getProperty("eclipse.launcher");
+        if (launcher == null || launcher.isEmpty()) {
+            String installArea = System.getProperty("osgi.install.area");
+            if (installArea != null) {
+                URI uri = new URI(installArea);
+                File dir = new File(uri);
+                String exeName = System.getProperty("os.name", "")
+                        .toLowerCase().contains("win") ? "eclipse.exe" : "eclipse";
+                launcher = new File(dir, exeName).getAbsolutePath();
+            }
+        }
+        if (launcher == null || launcher.isEmpty() || !new File(launcher).exists()) {
+            throw new IllegalStateException(
+                    "Cannot locate Eclipse launcher (tried eclipse.launcher and osgi.install.area)");
+        }
+
+        // 2) 取当前命令行参数，替换（或追加）-nl 为目标语言
+        List<String> cmd = new ArrayList<>();
+        cmd.add(launcher);
+        String[] currentArgs = Platform.getCommandLineArgs();
+        boolean replacedNl = false;
+        for (int i = 0; i < currentArgs.length; i++) {
+            if ("-nl".equals(currentArgs[i]) && i + 1 < currentArgs.length) {
+                cmd.add("-nl");
+                cmd.add(nlCode);
+                replacedNl = true;
+                i++; // 跳过旧的 -nl 值
+            } else {
+                cmd.add(currentArgs[i]);
+            }
+        }
+        if (!replacedNl) {
+            cmd.add("-nl");
+            cmd.add(nlCode);
+        }
+
+        // 3) 启动新进程并退出
+        new ProcessBuilder(cmd).start();
+        System.exit(0);
     }
 
     @Override
@@ -368,6 +500,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtSystemPrompt.setText(PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
 
         chkPluginEnabled.setSelection(PreferenceConstants.DEFAULT_PLUGIN_ENABLED);
+        cmbLanguage.select(PreferenceConstants.LANG_ZH.equals(
+                PreferenceConstants.DEFAULT_PLUGIN_LANGUAGE) ? 0 : 1);
 
 
         chkParentResolution.setSelection(
@@ -419,8 +553,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
     private void browseSkillDir() {
         DirectoryDialog dialog = new DirectoryDialog(getShell(), SWT.OPEN);
-        dialog.setText("Select Skill Directory");
-        dialog.setMessage("Select a directory containing .abap, .txt or .skill files:");
+        dialog.setText(Messages.get("mainPage.dialog.selectSkillDir.title"));
+        dialog.setMessage(Messages.get("mainPage.dialog.selectSkillDir.message"));
         String currentPath = txtSkillDir.getText().trim();
         if (currentPath != null && !currentPath.isEmpty()) {
             dialog.setFilterPath(currentPath);

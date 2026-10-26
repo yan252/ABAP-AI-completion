@@ -49,7 +49,7 @@ public class AICompletionEditorMenuContribution extends ContributionItem {
 
         try {
             MenuItem subMenuItem = new MenuItem(menu, SWT.CASCADE, index);
-            subMenuItem.setText("ABAP AI Completion");
+            subMenuItem.setText(Messages.get("menu.brand"));
 
             // 在菜单项前显示 SAP Logo 图标(与状态栏一致的插件图标)
             Image icon = createIcon();

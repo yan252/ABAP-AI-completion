@@ -132,7 +132,7 @@ public class AICompletionService {
             } catch (AIClientException e) {
                 throw new RuntimeException(e.getMessage(), e);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to get completion: " + e.getMessage(), e);
+                throw new RuntimeException(Messages.format("service.error.failed", e.getMessage()), e);
             }
         });
 
@@ -185,7 +185,7 @@ public class AICompletionService {
             } catch (AIClientException e) {
                 throw new RuntimeException(e.getMessage(), e);
             } catch (Exception e) {
-                throw new RuntimeException("Failed to get completion: " + e.getMessage(), e);
+                throw new RuntimeException(Messages.format("service.error.failed", e.getMessage()), e);
             }
         });
 

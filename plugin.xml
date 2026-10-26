@@ -11,7 +11,7 @@
       <page
             id="com.sap.abap.ai.completion.preferencePage"
             class="com.sap.abap.ai.completion.preferences.AICompletionPreferencePage"
-            name="ABAP AI Completion">
+            name="%prefpage.main">
       </page>
       <!-- 自动补全设置配置页 - 作为 ABAP AI Completion 的子页面。
            Eclipse 子页面按名称字母序排列，命名为 "ABAP AI Auto-Completion Settings"
@@ -20,21 +20,21 @@
             id="com.sap.abap.ai.completion.preferencePage.autoCompletion"
             category="com.sap.abap.ai.completion.preferencePage"
             class="com.sap.abap.ai.completion.preferences.AutoCompletionPreferencePage"
-            name="AI Auto-Completion Settings">
+            name="%prefpage.auto">
       </page>
       <!-- AI 连接管理配置页 - 作为 ABAP AI Completion 的子页面，显示在 SAP Connection Config 前面 -->
       <page
             id="com.sap.abap.ai.completion.preferencePage.aiConnections"
             category="com.sap.abap.ai.completion.preferencePage"
             class="com.sap.abap.ai.completion.preferences.AIConnectionPreferencePage"
-            name="AI Connections">
+            name="%prefpage.connections">
       </page>
       <!-- SAP 连接信息配置页(JCo), 从"模板"菜单的 "SAP Connection Config..." 打开 -->
       <page
             id="com.sap.abap.ai.completion.preferencePage.sap"
             category="com.sap.abap.ai.completion.preferencePage"
             class="com.sap.abap.ai.completion.preferences.SapPreferencePage"
-            name="SAP Connection Config">
+            name="%prefpage.sap">
       </page>
    </extension>
 
@@ -45,12 +45,12 @@
    <extension point="org.eclipse.ui.commands">
       <category
             id="com.sap.abap.ai.completion.category"
-            name="ABAP AI Completion">
+            name="%category.name">
       </category>
       <command
             id="com.sap.abap.ai.completion.completeCommand"
             categoryId="com.sap.abap.ai.completion.category"
-            name="ABAP AI completion"
+            name="%command.complete.name"
             defaultHandler="com.sap.abap.ai.completion.editor.AICompletionHandler">
       </command>
    </extension>

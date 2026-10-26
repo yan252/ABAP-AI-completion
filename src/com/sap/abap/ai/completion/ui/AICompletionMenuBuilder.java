@@ -47,7 +47,7 @@ public final class AICompletionMenuBuilder {
         if (menu == null || menu.isDisposed()) return;
 
         MenuItem prefsItem = new MenuItem(menu, SWT.PUSH);
-        prefsItem.setText("Preferences...");
+        prefsItem.setText(Messages.get("menu.preferences"));
         prefsItem.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -58,7 +58,7 @@ public final class AICompletionMenuBuilder {
         new MenuItem(menu, SWT.SEPARATOR);
 
         final MenuItem enableItem = new MenuItem(menu, SWT.CHECK);
-        enableItem.setText("Enable");
+        enableItem.setText(Messages.get("menu.enable"));
         enableItem.setSelection(isPluginEnabled());
         enableItem.addSelectionListener(new SelectionAdapter() {
             @Override
@@ -68,7 +68,7 @@ public final class AICompletionMenuBuilder {
         });
 
         final MenuItem autoCompleteItem = new MenuItem(menu, SWT.CHECK);
-        autoCompleteItem.setText("Auto-complete while typing");
+        autoCompleteItem.setText(Messages.get("menu.autoComplete"));
         autoCompleteItem.setSelection(isAutoCompletionEnabled());
         autoCompleteItem.addSelectionListener(new SelectionAdapter() {
             @Override
@@ -80,7 +80,7 @@ public final class AICompletionMenuBuilder {
         new MenuItem(menu, SWT.SEPARATOR);
 
         final MenuItem skillItem = new MenuItem(menu, SWT.CHECK);
-        skillItem.setText("Enable Skill Reference");
+        skillItem.setText(Messages.get("menu.enableSkill"));
         skillItem.setSelection(isSkillEnabled());
         skillItem.addSelectionListener(new SelectionAdapter() {
             @Override
@@ -90,7 +90,7 @@ public final class AICompletionMenuBuilder {
         });
 
         final MenuItem parentLookupItem = new MenuItem(menu, SWT.CHECK);
-        parentLookupItem.setText("Enable Parent Program Lookup");
+        parentLookupItem.setText(Messages.get("menu.enableParentLookup"));
         parentLookupItem.setSelection(isParentProgramResolutionEnabled());
         parentLookupItem.addSelectionListener(new SelectionAdapter() {
             @Override
@@ -100,7 +100,7 @@ public final class AICompletionMenuBuilder {
         });
 
         final MenuItem workspaceCodeItem = new MenuItem(menu, SWT.CHECK);
-        workspaceCodeItem.setText("AI Reference Workspace Code");
+        workspaceCodeItem.setText(Messages.get("menu.referenceWorkspaceCode"));
         workspaceCodeItem.setSelection(isWorkspaceCodeReferenceEnabled());
         workspaceCodeItem.addSelectionListener(new SelectionAdapter() {
             @Override
@@ -115,12 +115,12 @@ public final class AICompletionMenuBuilder {
         // The "SAP Connection Config..." entry is placed at the top of this
         // submenu; template import is driven by ABAP Git (abap-cli).
         MenuItem templateItem = new MenuItem(menu, SWT.CASCADE);
-        templateItem.setText("Templates");
+        templateItem.setText(Messages.get("menu.templates"));
         Menu templateMenu = new Menu(templateItem);
 
         // SAP Connection Config as the first (top) child of the Templates submenu
         MenuItem sapPrefsItem = new MenuItem(templateMenu, SWT.PUSH);
-        sapPrefsItem.setText("SAP Connection Config...");
+        sapPrefsItem.setText(Messages.get("menu.sapConnectionConfig"));
         sapPrefsItem.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -133,7 +133,7 @@ public final class AICompletionMenuBuilder {
         // Simple Query Handler Template: imports ZTEMPLATE10.zip via abap-cli
         // (stage directory + node), renaming ztemplate10 to the user-entered name.
         final MenuItem multiTabItem = new MenuItem(templateMenu, SWT.PUSH);
-        multiTabItem.setText("Simple Query Handler Template");
+        multiTabItem.setText(Messages.get("menu.simpleQueryTemplate"));
         multiTabItem.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -144,7 +144,7 @@ public final class AICompletionMenuBuilder {
         // Batch Import Handler Templates: imports all programs (PROG) and function
         // groups/modules (FUGR/FM) from ZTEMPLATE20.zip via abap-cli.
         final MenuItem batchItem = new MenuItem(templateMenu, SWT.PUSH);
-        batchItem.setText("Batch Import Handler Templates");
+        batchItem.setText(Messages.get("menu.batchImportTemplates"));
         batchItem.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -157,7 +157,7 @@ public final class AICompletionMenuBuilder {
         new MenuItem(menu, SWT.SEPARATOR);
 
         MenuItem completeItem = new MenuItem(menu, SWT.PUSH);
-        completeItem.setText("Code Completion\tCtrl+Shift+.");
+        completeItem.setText(Messages.get("menu.codeCompletion"));
         completeItem.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -168,7 +168,7 @@ public final class AICompletionMenuBuilder {
         new MenuItem(menu, SWT.SEPARATOR);
 
         MenuItem helpItem = new MenuItem(menu, SWT.PUSH);
-        helpItem.setText("Help");
+        helpItem.setText(Messages.get("menu.help"));
         helpItem.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {

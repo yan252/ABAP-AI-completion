@@ -1,5 +1,7 @@
 package com.sap.abap.ai.completion.preferences;
 
+import java.util.Locale;
+
 import org.eclipse.swt.graphics.RGB;
 
 /**
@@ -26,6 +28,15 @@ public final class PreferenceConstants {
     // === Feature Switches ===
     public static final String PLUGIN_ENABLED = "pluginEnabled";
     public static final String AUTO_COMPLETION_ENABLED = "autoCompletionEnabled";
+
+    // === Plugin UI Language ===
+    /** 插件界面语言: zh-中文, en-英文。默认按操作系统语言推导（仅未保存过配置时生效）。 */
+    public static final String PLUGIN_LANGUAGE = "pluginLanguage";
+    public static final String LANG_ZH = "zh";
+    public static final String LANG_EN = "en";
+    public static final String DEFAULT_PLUGIN_LANGUAGE =
+            Locale.getDefault().getLanguage().toLowerCase(Locale.ROOT).startsWith("zh")
+                    ? LANG_ZH : LANG_EN;
 
     // === Auto Completion Settings ===
     public static final String AUTO_COMPLETE_DELAY = "autoCompleteDelay";

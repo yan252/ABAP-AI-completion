@@ -108,7 +108,7 @@ public class AIConnectionEntry {
         if (legacyCustomized) {
             // 向后兼容：从旧的单连接字段迁移一条默认条目
             AIConnectionEntry defaultEntry = new AIConnectionEntry();
-            defaultEntry.name = "Default";
+            defaultEntry.name = Messages.get("connPage.defaultConnectionName");
             defaultEntry.baseUrl = legacyUrl;
             defaultEntry.model = legacyModel;
             defaultEntry.apiKey = legacyKey;

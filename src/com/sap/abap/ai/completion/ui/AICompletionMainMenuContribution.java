@@ -31,7 +31,7 @@ public class AICompletionMainMenuContribution extends ContributionItem {
     public void fill(Menu menu, int index) {
         try {
             MenuItem subMenuItem = new MenuItem(menu, SWT.CASCADE, index);
-            subMenuItem.setText("ABAP AI Completion");
+            subMenuItem.setText(Messages.get("menu.brand"));
 
             Menu subMenu = new Menu(subMenuItem);
             AICompletionMenuBuilder.populateMenu(subMenu);

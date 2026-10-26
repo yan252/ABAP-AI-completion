@@ -55,7 +55,7 @@ public class AICompletionOverlay implements AICompletionOverlayBase {
 
         // Header label - shows scroll hint if content exceeds visible area
         headerLabel = new Label(shell, SWT.NONE);
-        headerLabel.setText("AI Completion");
+        headerLabel.setText(Messages.get("overlay.header"));
         headerLabel.setFont(new Font(Display.getDefault(), new FontData("Segoe UI", 8, SWT.NORMAL)));
 
         // StyledText with vertical scrollbar - contains FULL completion text
@@ -88,7 +88,7 @@ public class AICompletionOverlay implements AICompletionOverlayBase {
 
         // Footer with hint
         footerLabel = new Label(shell, SWT.NONE);
-        footerLabel.setText("Tab = accept  |  Enter = accept  |  Esc = dismiss  |  Scrollbar to view full code");
+        footerLabel.setText(Messages.get("overlay.footer.hint"));
         footerLabel.setFont(new Font(Display.getDefault(), new FontData("Segoe UI", 8, SWT.NORMAL)));
         footerLabel.setForeground(new Color(Display.getDefault(), 100, 100, 100));
 
@@ -106,7 +106,7 @@ public class AICompletionOverlay implements AICompletionOverlayBase {
         int totalLines = styledText.getLineCount();
         hasMoreContent = totalLines > VISIBLE_LINES;
         if (hasMoreContent) {
-            headerLabel.setText("AI Completion  (scroll down for more)");
+            headerLabel.setText(Messages.get("overlay.header.more"));
         }
 
         // Border

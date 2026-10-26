@@ -96,38 +96,34 @@ public final class MultiTabTemplateImportService {
             stageRoot = AbapGitImportSupport.checkEnvironment(
                     AbapGitImportSupport.STANDARD_EXTENSIONS);
         } catch (EnvironmentException ee) {
-            AbapGitImportSupport.showError("Simple Query Handler — 环境检查失败", ee.getMessage());
+            AbapGitImportSupport.showError(ImportMessages.get("multiTab.envFailedTitle"),
+                    ee.getMessage());
             return;
         }
 
         // ===== [1.5] SAP 连接预检：连不上 SAP 直接报错退出并打开配置页 =====
         if (!AbapGitImportSupport.checkSapConnectionBeforeImport(
-                "Simple Query Handler Template")) {
+                ImportMessages.get("multiTab.dialog.title"))) {
             return;
         }
 
         // ===== [2] 输入 PACKAGE / 程序名 =====
-        String ivPackage = AbapGitImportSupport.promptZy("Simple Query Handler Template",
-                "Please enter the target SAP package (e.g., ZDEV_PACKAGE or $TMP).\n"
-                        + "Must start with Z or Y; '/' and '$' allowed; auto-uppercase.",
+        String ivPackage = AbapGitImportSupport.promptZy(
+                ImportMessages.get("multiTab.dialog.title"),
+                ImportMessages.get("multiTab.prompt.package"),
                 true);
         if (ivPackage == null) return;
 
-        String ivProgName = AbapGitImportSupport.promptZy("Simple Query Handler Template",
-                "Please enter the new program name (e.g., ZMY_MT_QUERY).\n"
-                        + "Must start with Z or Y; English letters / digits / '_' only; "
-                        + "max 30 chars; auto-uppercase.\n"
-                        + "The placeholder " + PLACEHOLDER_UPPER
-                        + " will be renamed to this name in the uploaded objects.",
+        String ivProgName = AbapGitImportSupport.promptZy(
+                ImportMessages.get("multiTab.dialog.title"),
+                ImportMessages.format("multiTab.prompt.program", PLACEHOLDER_UPPER),
                 false);
         if (ivProgName == null) return;
 
         // [2.5] 传输请求（可选）。留空 = 自动创建新请求。
-        String ivTransport = AbapGitImportSupport.prompt("Simple Query Handler Template",
-                "SAP transport request number (optional).\n"
-                        + "Leave EMPTY to let the plugin AUTO-CREATE a new workbench request\n"
-                        + "inside the target package (recommended; S4DEV requires corrNr).\n"
-                        + "Or enter an existing open request, e.g. S4DK910369.");
+        String ivTransport = AbapGitImportSupport.prompt(
+                ImportMessages.get("multiTab.dialog.title"),
+                ImportMessages.get("multiTab.prompt.transport"));
         if (ivTransport == null) return; // 用户取消
         final String transportInputFinal = ivTransport.trim().isEmpty() ? null : ivTransport.trim();
 
@@ -157,9 +153,9 @@ public final class MultiTabTemplateImportService {
         }
 
         if (errorHolder[0] != null) {
-            AbapGitImportSupport.showError("Simple Query Handler — Failed",
-                    "Unexpected error during import:\n\n"
-                            + AbapGitImportSupport.stackTrace(errorHolder[0]));
+            AbapGitImportSupport.showError(ImportMessages.get("multiTab.failedTitle"),
+                    ImportMessages.format("importSupport.error.unexpected",
+                            AbapGitImportSupport.stackTrace(errorHolder[0])));
             return;
         }
 
@@ -171,39 +167,45 @@ public final class MultiTabTemplateImportService {
         final String title;
         final int overallSev;
         if (r.overallRc != 0) {
-            status = "FAILED";
-            title = "Import Failed";
+            status = ImportMessages.get("importSupport.result.statusFailed");
+            title = ImportMessages.get("importSupport.result.titleFailed");
             overallSev = IStatus.ERROR;
         } else {
-            status = "SUCCESS";
-            title = "Import Succeeded";
+            status = ImportMessages.get("importSupport.result.statusSuccess");
+            title = ImportMessages.get("importSupport.result.titleSucceeded");
             overallSev = IStatus.INFO;
         }
 
         Path importLogFile = logImportDetails(r, stageFinal, pkgFinal, progFinal, overallSev);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("Simple Query Handler Template → SAP\n\n");
-        sb.append("  Result    : ").append(status).append('\n');
-        sb.append("  Package   : ").append(pkgFinal).append('\n');
-        sb.append("  Program   : ").append(progFinal).append('\n');
-        sb.append("  Transport : ").append(r.transportRequest != null
-                ? r.transportRequest : "(none / skipped)").append('\n');
+        sb.append(ImportMessages.get("multiTab.result.header"));
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelResult"))
+                .append(' ').append(status).append('\n');
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelPackage"))
+                .append(' ').append(pkgFinal).append('\n');
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelProgram"))
+                .append(' ').append(progFinal).append('\n');
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelTransport"))
+                .append(' ').append(r.transportRequest != null
+                ? r.transportRequest : ImportMessages.get("importSupport.result.transportNone"))
+                .append('\n');
         if (!lockedNames.isEmpty()) {
-            sb.append("\n  Failed — object(s) locked in another transport request,\n");
-            sb.append("  so they could NOT be imported:\n");
+            sb.append(ImportMessages.get("importSupport.result.lockedIntro"));
             for (String n : lockedNames) {
                 sb.append("    • ").append(n).append('\n');
             }
-            sb.append("  Release the lock (SE03 → 传输组织器 → 请求/任务 → 释放对象锁)\n");
-            sb.append("  and re-run the import.\n");
+            sb.append(ImportMessages.get("importSupport.result.lockedRelease"));
         }
-        sb.append("\n  Details were written to:\n");
-        sb.append("    • Eclipse Error Log : Window → Show View → Error Log\n");
+        sb.append(ImportMessages.get("importSupport.result.detailsWrittenTo"));
+        sb.append(ImportMessages.get("importSupport.result.errorLogLine"));
         if (importLogFile != null) {
-            sb.append("    • Import log file   : ").append(importLogFile);
+            sb.append("    • ").append(ImportMessages.get("importSupport.result.logFileLabel"))
+                    .append(' ').append(importLogFile);
         } else {
-            sb.append("    • Import log file   : (unavailable)");
+            sb.append("    • ").append(ImportMessages.get("importSupport.result.logFileLabel"))
+                    .append(' ')
+                    .append(ImportMessages.get("importSupport.result.logFileUnavailable"));
         }
 
         if (overallSev == IStatus.ERROR) {
@@ -227,9 +229,8 @@ public final class MultiTabTemplateImportService {
      */
     private static ImportResult executeAll(Path stageRoot, String ivPackage, String ivProgName,
                                           String transportInput, IProgressMonitor monitor) throws Exception {
-        monitor.beginTask("Importing Simple Query Handler Template\n"
-                        + "Package: " + ivPackage + "   Program: " + ivProgName
-                        + "   Stage: " + stageRoot,
+        monitor.beginTask(ImportMessages.format("multiTab.progress.begin",
+                        ivPackage, ivProgName, stageRoot),
                 IProgressMonitor.UNKNOWN);
 
         // [2.4] 应用 SAP 配置页连接信息（临时改写 ~/.abap-cli/systems.json + keychain）。
@@ -239,7 +240,7 @@ public final class MultiTabTemplateImportService {
         try {
 
         // [2.5] 解析传输请求（用户输入 or 自动创建）
-        monitor.subTask("[2.5] Resolving transport request...");
+        monitor.subTask(ImportMessages.get("multiTab.progress.resolvingTransport"));
         String transport = AbapGitImportSupport.resolveTransport(stageRoot, ivPackage,
                 "Simple Query Handler import " + ivProgName + " " + ivPackage + " (auto)",
                 transportInput, monitor);
@@ -247,7 +248,7 @@ public final class MultiTabTemplateImportService {
         System.out.println("[MultiTab]   → transport=" + transport);
 
         // [3] 解压 ZIP
-        monitor.subTask("[3] Extracting ZTEMPLATE10.zip to " + REPO_SRC_REL);
+        monitor.subTask(ImportMessages.format("multiTab.progress.extracting", REPO_SRC_REL));
         Path dstDir = stageRoot.resolve(REPO_SRC_REL);
         byte[] zipBytes = AbapGitImportSupport.readBundleResource(ZIP_RESOURCE_PATH);
         AbapGitImportSupport.deleteRecursively(dstDir);
@@ -256,15 +257,16 @@ public final class MultiTabTemplateImportService {
         monitor.worked(1);
 
         // [4] 改名（文件名 + 文件内容）
-        monitor.subTask("[4] Renaming placeholder " + PLACEHOLDER_UPPER
-                + " → " + ivProgName);
+        monitor.subTask(ImportMessages.format("multiTab.progress.renaming",
+                PLACEHOLDER_UPPER, ivProgName));
         AbapGitImportSupport.RenameStats stats = AbapGitImportSupport.renameInDir(dstDir,
                 PLACEHOLDER_LOWER, PLACEHOLDER_UPPER,
                 ivProgName.toLowerCase(Locale.ROOT), ivProgName.toUpperCase(Locale.ROOT));
         monitor.worked(1);
 
         // [5] 写 .abap.json
-        monitor.subTask("[5] Writing .abap.json (package=" + ivPackage + ")");
+        monitor.subTask(ImportMessages.format("multiTab.progress.writingAbapJson",
+                ivPackage));
         AbapGitImportSupport.writeAbapJson(stageRoot.resolve(".abap.json"), ivPackage,
                 REPO_SRC_REL, AbapGitImportSupport.STANDARD_EXTENSIONS);
         monitor.worked(1);
@@ -307,7 +309,7 @@ public final class MultiTabTemplateImportService {
         // [6.2] ddic-xml-create（结构 / 透明表 / 表类型）
         if (ddicXmlFiles.isEmpty()) {
             steps.add(new StepOutcome(2, "ddic-xml-create", 0, null,
-                    "no *.tabl.xml / *.ttyp.xml in src — DDIC step skipped"));
+                    ImportMessages.get("multiTab.step.noDdic")));
         } else {
             steps.add(AbapGitImportSupport.runAbapCliStep(2, "ddic-xml-create",
                     stageRoot,
@@ -321,7 +323,7 @@ public final class MultiTabTemplateImportService {
         // [6.3] oo-xml-create（类 CLAS/OC / 接口 INTF/OI）
         if (ooFiles.isEmpty()) {
             steps.add(new StepOutcome(3, "oo-xml-create", 0, null,
-                    "no *.clas.* / *.intf.* in src — OO step skipped"));
+                    ImportMessages.get("multiTab.step.noOo")));
         } else {
             steps.add(AbapGitImportSupport.runAbapCliStep(3, "oo-xml-create",
                     stageRoot,
@@ -363,7 +365,7 @@ public final class MultiTabTemplateImportService {
                     monitor));
         } else {
             steps.add(new StepOutcome(6, "prog-xml-push", -1, null,
-                    "main prog.xml not found: " + mainXml));
+                    ImportMessages.format("multiTab.step.mainXmlNotFound", mainXml)));
         }
 
         // [6.7] inspect
@@ -386,7 +388,7 @@ public final class MultiTabTemplateImportService {
                     monitor));
         } else {
             steps.add(new StepOutcome(8, "prog-xml-verify", -1, null,
-                    "main prog.xml not found: " + mainXml));
+                    ImportMessages.format("multiTab.step.mainXmlNotFound", mainXml)));
         }
 
         // [6.9] prog-batch-activate —— 整体激活（流程最后一步）
@@ -396,7 +398,7 @@ public final class MultiTabTemplateImportService {
         boolean batchActivateRan = false;
         if (activateFiles.isEmpty()) {
             steps.add(new StepOutcome(9, "prog-batch-activate", -1, null,
-                    "no source/metadata files collected — batch activation skipped"));
+                    ImportMessages.get("multiTab.step.noSource")));
         } else {
             batchActivateRan = true;
             steps.add(AbapGitImportSupport.runAbapCliStep(9, "prog-batch-activate",
@@ -428,7 +430,8 @@ public final class MultiTabTemplateImportService {
         } else {
             // 未执行统一激活（无对象可激活）：退回关键步骤逐个判定。
             for (StepOutcome o : steps) {
-                if (o.message != null && o.message.contains("not found")) {
+                if (o.message != null
+                        && o.message.contains(ImportMessages.get("importSupport.marker.notFound"))) {
                     overall = -1;
                     continue;
                 }

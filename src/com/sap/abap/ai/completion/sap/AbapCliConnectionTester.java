@@ -111,8 +111,8 @@ public final class AbapCliConnectionTester {
         try {
             system = ensureSystemInAbapJson(stageRoot);
         } catch (Exception e) {
-            return new Result(false, "", "", "Cannot resolve abap-cli system profile:\n"
-                    + e.getMessage());
+            return new Result(false, "", "", Messages.format(
+                    "sapTester.error.resolveSystem", e.getMessage()));
         }
 
         // ===== [3] 运行 node abap-cli profile test <system> =====
@@ -142,8 +142,8 @@ public final class AbapCliConnectionTester {
             exitCode = p.exitValue();
         } catch (Exception e) {
             return new Result(false, system, "",
-                    "Failed to run abap-cli profile test:\n"
-                            + e.getClass().getSimpleName() + ": " + e.getMessage());
+                    Messages.format("sapTester.error.runFailed",
+                            e.getClass().getSimpleName(), e.getMessage()));
         }
 
         // ===== [4] 解析各层结果 =====
@@ -151,8 +151,8 @@ public final class AbapCliConnectionTester {
         if (layers.isEmpty()) {
             // 未出现 "xxx: ok/error" 格式的层结果 —— 命令本身失败（配置错误等）
             return new Result(false, system, "",
-                    "abap-cli profile test '" + system + "' did not run (exit=" + exitCode
-                            + ").\n\nOutput:\n" + tailLines(output, 15));
+                    Messages.format("sapTester.error.notRun", system, exitCode,
+                            tailLines(output, 15)));
         }
 
         StringBuilder summary = new StringBuilder();
@@ -171,8 +171,8 @@ public final class AbapCliConnectionTester {
         }
 
         return new Result(ok, system, summary.toString(),
-                "abap-cli profile test '" + system + "' (exit=" + exitCode + ")\n\n"
-                        + tailLines(output, 20));
+                Messages.format("sapTester.detail.profileTest", system, exitCode,
+                        tailLines(output, 20)));
     }
 
     /**
@@ -211,9 +211,7 @@ public final class AbapCliConnectionTester {
         Path probeScript = stageRoot.resolve(PROBE_SCRIPT_NAME);
         if (!Files.isRegularFile(probeScript)) {
             return new Result(false, target, "",
-                    "Probe script not found in the plugin runtime:\n  " + probeScript
-                            + "\n\nThe plugin installation appears incomplete — please"
-                            + " reinstall the plugin from the update site.");
+                    Messages.format("sapTester.error.probeMissing", probeScript));
         }
 
         // ===== [3] 运行 node _probe_direct.mjs =====
@@ -244,16 +242,16 @@ public final class AbapCliConnectionTester {
             exitCode = p.exitValue();
         } catch (Exception e) {
             return new Result(false, target, "",
-                    "Failed to run " + PROBE_SCRIPT_NAME + ":\n"
-                            + e.getClass().getSimpleName() + ": " + e.getMessage());
+                    Messages.format("sapTester.error.probeRunFailed", PROBE_SCRIPT_NAME,
+                            e.getClass().getSimpleName(), e.getMessage()));
         }
 
         // ===== [4] 解析各层结果 =====
         Map<String, String> layers = parseLayers(output);
         if (layers.isEmpty()) {
             return new Result(false, target, "",
-                    PROBE_SCRIPT_NAME + " did not run (exit=" + exitCode
-                            + ").\n\nOutput:\n" + tailLines(output, 15));
+                    Messages.format("sapTester.error.probeNotRun", PROBE_SCRIPT_NAME,
+                            exitCode, tailLines(output, 15)));
         }
 
         boolean ok = true;
@@ -271,8 +269,8 @@ public final class AbapCliConnectionTester {
         }
 
         return new Result(ok, target, summary.toString(),
-                " Connection probe '" + target + "' (exit=" + exitCode + ")\n\n"
-                        + tailLines(output, 20));
+                Messages.format("sapTester.detail.probe", target, exitCode,
+                        tailLines(output, 20)));
     }
 
     /**
@@ -281,8 +279,7 @@ public final class AbapCliConnectionTester {
      */
     private static String normalizeRequiredUrl(String url) {
         if (url == null || url.trim().isEmpty()) {
-            throw new IllegalArgumentException("No abap-cli URL given.\n"
-                    + "Please fill in the 'abap-cli URL' field before testing the connection.");
+            throw new IllegalArgumentException(Messages.get("sapTester.error.noUrl"));
         }
         String u = url.trim();
         if (!u.matches("(?i)^https?://.*")) {
@@ -333,18 +330,12 @@ public final class AbapCliConnectionTester {
         }
         if (profiles.isEmpty()) {
             throw new IllegalStateException(
-                    "No abap-cli connection profile found in\n  "
-                            + abapCliSystemsJsonPath()
-                            + "\n\nPlease run 'node <abap-cli> init --profile <name>' "
-                            + "(or 'profile add') to create one.");
+                    Messages.format("sapTester.error.noProfile", abapCliSystemsJsonPath()));
         }
         throw new IllegalStateException(
-                "Multiple abap-cli profiles configured ("
-                        + String.join(", ", profiles.keySet())
-                        + ") and .abap.json has no \"system\" field.\n\n"
-                        + "Please set \"system\" in\n  "
-                        + stageRoot.resolve(".abap.json")
-                        + "\nto one of them.");
+                Messages.format("sapTester.error.multipleProfiles",
+                        String.join(", ", profiles.keySet()),
+                        stageRoot.resolve(".abap.json")));
     }
 
     /**
@@ -390,7 +381,7 @@ public final class AbapCliConnectionTester {
                 logInfo("Auto-added missing \"system\": \"" + system + "\" to " + cfg);
             } catch (Exception e) {
                 throw new IllegalStateException(
-                        "Cannot write \"system\" into " + cfg + ": " + e.getMessage(), e);
+                        Messages.format("sapTester.error.writeSystem", cfg, e.getMessage()), e);
             }
         }
         return system;
@@ -543,28 +534,18 @@ public final class AbapCliConnectionTester {
             // one-click install / GitHub download guidance.
             return e.getMessage();
         } catch (Exception e) {
-            return "The abap-cli runtime could not be prepared:\n  "
-                    + e.getMessage()
-                    + "\n\nPlease restart Eclipse and retry. If the problem persists,"
-                    + " reinstall the plugin from the update site.";
+            return Messages.format("sapTester.error.runtimePrep", e.getMessage());
         }
 
         File indexJs = stageRoot.resolve(
                 com.sap.abap.ai.completion.ui.AbapGitImportSupport.ABAP_CLI_INDEX_REL)
                 .toFile();
         if (!indexJs.isFile()) {
-            return "abap-cli entry not found in the plugin runtime:\n  "
-                    + indexJs.getAbsolutePath()
-                    + "\n\nThe plugin installation appears incomplete — please reinstall"
-                    + " the plugin from the update site.";
+            return Messages.format("sapTester.error.cliEntryMissing",
+                    indexJs.getAbsolutePath());
         }
         if (!com.sap.abap.ai.completion.ui.AbapGitImportSupport.isNodeAvailable()) {
-            return "Node.js was not found on PATH ('node --version' failed). The abap-cli"
-                    + "\nruntime is downloaded by the plugin on first use, but Node.js 18 or"
-                    + "\nnewer is required to run it."
-                    + "\n\nPlease install the LTS build for Windows from:"
-                    + "\n  https://nodejs.org/"
-                    + "\nand make sure 'node' is on PATH, then restart Eclipse.";
+            return Messages.get("sapTester.error.nodeMissing");
         }
         return null;
     }
@@ -596,7 +577,7 @@ public final class AbapCliConnectionTester {
                     p.destroyForcibly();
                     reader.interrupt();
                     throw new IllegalStateException(
-                            "abap-cli profile test timed out after " + timeoutSec + "s");
+                            Messages.format("sapTester.error.timeout", timeoutSec));
                 }
                 Thread.sleep(100);
             }

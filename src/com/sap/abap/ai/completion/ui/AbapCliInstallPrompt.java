@@ -48,21 +48,18 @@ public final class AbapCliInstallPrompt {
             // fall through: offer the one-click install below
         } catch (IOException e) {
             logError("Failed to prepare the abap-cli runtime", e);
-            MessageDialog.openError(shellOrActive(shell), "abap-cli Runtime",
-                    "Failed to prepare the abap-cli runtime:\n\n" + e.getMessage());
+            MessageDialog.openError(shellOrActive(shell), Messages.get("installPrompt.runtimeTitle"),
+                    Messages.format("installPrompt.prepareFailed", e.getMessage()));
             return false;
         }
 
         Shell sh = shellOrActive(shell);
-        MessageDialog dialog = new MessageDialog(sh, "abap-cli Runtime Required", null,
-                "The abap-cli runtime is not installed yet.\n\n"
-                        + "It is required for the SAP connection test and the template import\n"
-                        + "and is no longer bundled with the plugin. It will be downloaded once\n"
-                        + "(about 6 MB) from\n"
-                        + AbapCliRuntime.RUNTIME_ZIP_URL + "\n\n"
-                        + "Download and install it now?\n"
-                        + "(Node.js 18+ must already be available on PATH)",
-                MessageDialog.QUESTION, new String[] { "Install Now", "Cancel" }, 0);
+        MessageDialog dialog = new MessageDialog(sh, Messages.get("installPrompt.title"), null,
+                Messages.format("installPrompt.message", AbapCliRuntime.RUNTIME_ZIP_URL),
+                MessageDialog.QUESTION,
+                new String[] { Messages.get("installPrompt.installNow"),
+                        Messages.get("installPrompt.cancel") },
+                0);
         if (dialog.open() != 0) {
             return false;
         }
@@ -97,26 +94,23 @@ public final class AbapCliInstallPrompt {
         } catch (InvocationTargetException e) {
             Throwable t = e.getCause() != null ? e.getCause() : e;
             String msg = t.getMessage() != null ? t.getMessage() : t.toString();
-            if (msg.contains("cancelled")) {
+            if (msg.contains("cancelled") || msg.contains(Messages.get("runtime.cancelled"))) {
                 return false; // cancelled in the progress dialog — no error popup
             }
             logError("abap-cli runtime installation failed", t);
             MessageDialog.openError(shellOrActive(shell),
-                    "abap-cli Runtime Installation Failed",
-                    "Could not download or install the abap-cli runtime:\n\n" + msg
-                            + "\n\nPlease download the runtime zip manually from:\n"
-                            + AbapCliRuntime.RUNTIME_ZIP_URL
-                            + "\n\nExtract it, point the system property 'abap.cli.stage.dir'"
-                            + "\n(or environment variable ABAP_CLI_STAGE_DIR) at the extracted"
-                            + " folder,\nand restart Eclipse.");
+                    Messages.get("installPrompt.failedTitle"),
+                    Messages.format("installPrompt.failedMessage", msg,
+                            AbapCliRuntime.RUNTIME_ZIP_URL));
             return false;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;
         }
 
-        MessageDialog.openInformation(shellOrActive(shell), "abap-cli Runtime",
-                "The abap-cli runtime has been installed successfully.");
+        MessageDialog.openInformation(shellOrActive(shell),
+                Messages.get("installPrompt.runtimeTitle"),
+                Messages.get("installPrompt.successMessage"));
         return true;
     }
 

@@ -2,7 +2,7 @@ $proj = "D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion"
 $src = "$proj\src"
 $bin = "$proj\bin"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.1.57.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.1.67.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "D:\Users\96000217\eclipse\plugins"
@@ -30,6 +30,7 @@ $deps = @(
     "$p2Pool\org.eclipse.ui.forms_*.jar"
     "$p2Pool\org.eclipse.swt.win32.win32.x86_64_*.jar"
     "$p2Pool\org.eclipse.equinox.preferences_*.jar"
+    "$p2Pool\org.osgi.service.prefs_*.jar"
     "$p2Pool\org.eclipse.core.commands_*.jar"
     "$p2Pool\org.eclipse.core.variables_*.jar"
     "$p2Pool\org.eclipse.core.expressions_*.jar"
@@ -46,6 +47,8 @@ Remove-Item -Recurse -Force "$bin\icons" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$bin\references" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$bin\abap-cli" -ErrorAction SilentlyContinue
 Remove-Item -Force "$bin\plugin.xml" -ErrorAction SilentlyContinue
+Remove-Item -Force "$bin\plugin.properties" -ErrorAction SilentlyContinue
+Remove-Item -Force "$bin\plugin_zh.properties" -ErrorAction SilentlyContinue
 Remove-Item -Force "$bin\templates.properties" -ErrorAction SilentlyContinue
 
 Write-Host "=== Compiling ==="
@@ -71,6 +74,18 @@ Copy-Item "$proj\META-INF\MANIFEST.MF" "$bin\META-INF\" -Force
 
 # Copy plugin.xml
 Copy-Item "$proj\plugin.xml" "$bin\" -Force
+
+# Copy bundle localization files (plugin.xml %keys -> plugin.properties / plugin_zh.properties)
+Copy-Item "$proj\plugin.properties" "$bin\" -Force
+Copy-Item "$proj\plugin_zh.properties" "$bin\" -Force
+
+# Copy i18n message bundles (messages*.properties next to their packages under src)
+Get-ChildItem -Path $src -Recurse -Filter "messages*.properties" | ForEach-Object {
+    $rel = $_.FullName.Substring($src.Length + 1)
+    $dest = Join-Path $bin $rel
+    New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+    Copy-Item $_.FullName $dest -Force
+}
 
 # Copy icons if exists
 if (Test-Path "$proj\icons") {
@@ -121,7 +136,7 @@ Write-Host "=== Creating JAR with full plugin structure ==="
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $jarExe = "$jdkHome\bin\jar.exe"
 Push-Location $bin
-$jarArgs = @("cfm", "$jarPath", "META-INF\MANIFEST.MF", "plugin.xml", "com\")
+$jarArgs = @("cfm", "$jarPath", "META-INF\MANIFEST.MF", "plugin.xml", "plugin.properties", "plugin_zh.properties", "com\")
 if (Test-Path "$bin\icons") { $jarArgs += "icons\" }
 if (Test-Path "$bin\references") { $jarArgs += "references\" }
 if (Test-Path "$bin\templates.properties") { $jarArgs += "templates.properties" }

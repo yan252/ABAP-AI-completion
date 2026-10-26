@@ -87,39 +87,34 @@ public final class BatchTemplateImportService {
             stageRoot = AbapGitImportSupport.checkEnvironment(
                     AbapGitImportSupport.STANDARD_EXTENSIONS);
         } catch (EnvironmentException ee) {
-            AbapGitImportSupport.showError("Batch Import Handler — 环境检查失败", ee.getMessage());
+            AbapGitImportSupport.showError(ImportMessages.get("batchImport.envFailedTitle"),
+                    ee.getMessage());
             return;
         }
 
         // ===== [1.5] SAP 连接预检：连不上 SAP 直接报错退出并打开配置页 =====
         if (!AbapGitImportSupport.checkSapConnectionBeforeImport(
-                "Batch Import Handler Templates")) {
+                ImportMessages.get("batchImport.dialog.title"))) {
             return;
         }
 
         // ===== [2] 输入 PACKAGE / 新程序名 =====
-        String ivPackage = AbapGitImportSupport.promptZy("Batch Import Handler Templates",
-                "Please enter the target SAP package (e.g., ZDEV_PACKAGE or $TMP).\n"
-                        + "Must start with Z or Y; '/' and '$' allowed; auto-uppercase.",
+        String ivPackage = AbapGitImportSupport.promptZy(
+                ImportMessages.get("batchImport.dialog.title"),
+                ImportMessages.get("batchImport.prompt.package"),
                 true);
         if (ivPackage == null) return;
 
-        String ivProgName = AbapGitImportSupport.promptZy("Batch Import Handler Templates",
-                "Please enter the new program name (e.g., ZMY_BATCH_HANDLER).\n"
-                        + "Must start with Z or Y; English letters / digits / '_' only; "
-                        + "max 30 chars; auto-uppercase.\n"
-                        + "The placeholder " + PLACEHOLDER_UPPER
-                        + " (and its includes " + PLACEHOLDER_UPPER + "_F01..)"
-                        + " will be renamed to this name in the uploaded objects.",
+        String ivProgName = AbapGitImportSupport.promptZy(
+                ImportMessages.get("batchImport.dialog.title"),
+                ImportMessages.format("batchImport.prompt.program", PLACEHOLDER_UPPER),
                 false);
         if (ivProgName == null) return;
 
         // [2.5] 传输请求（可选）。留空 = 自动创建新请求。
-        String ivTransport = AbapGitImportSupport.prompt("Batch Import Handler Templates",
-                "SAP transport request number (optional).\n"
-                        + "Leave EMPTY to let the plugin AUTO-CREATE a new workbench request\n"
-                        + "inside the target package (recommended; S4DEV requires corrNr).\n"
-                        + "Or enter an existing open request, e.g., S4DK910369.");
+        String ivTransport = AbapGitImportSupport.prompt(
+                ImportMessages.get("batchImport.dialog.title"),
+                ImportMessages.get("batchImport.prompt.transport"));
         if (ivTransport == null) return; // 用户取消
         final String transportInputFinal = ivTransport.trim().isEmpty() ? null : ivTransport.trim();
 
@@ -150,9 +145,9 @@ public final class BatchTemplateImportService {
         }
 
         if (errorHolder[0] != null) {
-            AbapGitImportSupport.showError("Batch Import Handler — Failed",
-                    "Unexpected error during import:\n\n"
-                            + AbapGitImportSupport.stackTrace(errorHolder[0]));
+            AbapGitImportSupport.showError(ImportMessages.get("batchImport.failedTitle"),
+                    ImportMessages.format("importSupport.error.unexpected",
+                            AbapGitImportSupport.stackTrace(errorHolder[0])));
             return;
         }
 
@@ -164,39 +159,45 @@ public final class BatchTemplateImportService {
         final String title;
         final int overallSev;
         if (r.overallRc != 0) {
-            status = "FAILED";
-            title = "Import Failed";
+            status = ImportMessages.get("importSupport.result.statusFailed");
+            title = ImportMessages.get("importSupport.result.titleFailed");
             overallSev = IStatus.ERROR;
         } else {
-            status = "SUCCESS";
-            title = "Import Succeeded";
+            status = ImportMessages.get("importSupport.result.statusSuccess");
+            title = ImportMessages.get("importSupport.result.titleSucceeded");
             overallSev = IStatus.INFO;
         }
 
         Path importLogFile = logImportDetails(r, stageFinal, pkgFinal, progFinal, overallSev);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("Batch Import Handler Templates → SAP\n\n");
-        sb.append("  Result    : ").append(status).append('\n');
-        sb.append("  Package   : ").append(pkgFinal).append('\n');
-        sb.append("  Program   : ").append(progFinal).append('\n');
-        sb.append("  Transport : ").append(r.transportRequest != null
-                ? r.transportRequest : "(none / skipped)").append('\n');
+        sb.append(ImportMessages.get("batchImport.result.header"));
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelResult"))
+                .append(' ').append(status).append('\n');
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelPackage"))
+                .append(' ').append(pkgFinal).append('\n');
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelProgram"))
+                .append(' ').append(progFinal).append('\n');
+        sb.append("  ").append(ImportMessages.get("importSupport.result.labelTransport"))
+                .append(' ').append(r.transportRequest != null
+                ? r.transportRequest : ImportMessages.get("importSupport.result.transportNone"))
+                .append('\n');
         if (!lockedNames.isEmpty()) {
-            sb.append("\n  Failed — object(s) locked in another transport request,\n");
-            sb.append("  so they could NOT be imported:\n");
+            sb.append(ImportMessages.get("importSupport.result.lockedIntro"));
             for (String n : lockedNames) {
                 sb.append("    • ").append(n).append('\n');
             }
-            sb.append("  Release the lock (SE03 → 传输组织器 → 请求/任务 → 释放对象锁)\n");
-            sb.append("  and re-run the import.\n");
+            sb.append(ImportMessages.get("importSupport.result.lockedRelease"));
         }
-        sb.append("\n  Details were written to:\n");
-        sb.append("    • Eclipse Error Log : Window → Show View → Error Log\n");
+        sb.append(ImportMessages.get("importSupport.result.detailsWrittenTo"));
+        sb.append(ImportMessages.get("importSupport.result.errorLogLine"));
         if (importLogFile != null) {
-            sb.append("    • Import log file   : ").append(importLogFile);
+            sb.append("    • ").append(ImportMessages.get("importSupport.result.logFileLabel"))
+                    .append(' ').append(importLogFile);
         } else {
-            sb.append("    • Import log file   : (unavailable)");
+            sb.append("    • ").append(ImportMessages.get("importSupport.result.logFileLabel"))
+                    .append(' ')
+                    .append(ImportMessages.get("importSupport.result.logFileUnavailable"));
         }
 
         if (overallSev == IStatus.ERROR) {
@@ -221,9 +222,8 @@ public final class BatchTemplateImportService {
      */
     private static ImportResult executeAll(Path stageRoot, String ivPackage, String ivProgName,
                                           String transportInput, IProgressMonitor monitor) throws Exception {
-        monitor.beginTask("Importing Batch Handler Templates\n"
-                        + "Package: " + ivPackage + "   Program: " + ivProgName
-                        + "   Stage: " + stageRoot,
+        monitor.beginTask(ImportMessages.format("batchImport.progress.begin",
+                        ivPackage, ivProgName, stageRoot),
                 IProgressMonitor.UNKNOWN);
 
         // 应用 SAP 配置页连接信息（临时改写 ~/.abap-cli/systems.json + keychain）。
@@ -233,7 +233,7 @@ public final class BatchTemplateImportService {
         try {
 
         // [1] 解析传输请求（用户输入 or 自动创建）
-        monitor.subTask("[1] Resolving transport request...");
+        monitor.subTask(ImportMessages.get("batchImport.progress.resolvingTransport"));
         String transport = AbapGitImportSupport.resolveTransport(stageRoot, ivPackage,
                 "Batch Handler import " + ivProgName + " " + ivPackage + " (auto)",
                 transportInput, monitor);
@@ -241,7 +241,7 @@ public final class BatchTemplateImportService {
         System.out.println("[Batch]   → transport=" + transport);
 
         // [2] 解压 ZIP
-        monitor.subTask("[2] Extracting ZTEMPLATE20.zip to " + REPO_SRC_REL);
+        monitor.subTask(ImportMessages.format("batchImport.progress.extracting", REPO_SRC_REL));
         Path dstDir = stageRoot.resolve(REPO_SRC_REL);
         byte[] zipBytes = AbapGitImportSupport.readBundleResource(ZIP_RESOURCE_PATH);
         AbapGitImportSupport.deleteRecursively(dstDir);
@@ -250,15 +250,15 @@ public final class BatchTemplateImportService {
         monitor.worked(1);
 
         // [3] 占位符改名（文件名 + 文件内容）：ztemplate20 → 新程序名
-        monitor.subTask("[3] Renaming placeholder " + PLACEHOLDER_UPPER
-                + " → " + ivProgName);
+        monitor.subTask(ImportMessages.format("batchImport.progress.renaming",
+                PLACEHOLDER_UPPER, ivProgName));
         AbapGitImportSupport.RenameStats stats = AbapGitImportSupport.renameInDir(dstDir,
                 PLACEHOLDER_LOWER, PLACEHOLDER_UPPER,
                 ivProgName.toLowerCase(Locale.ROOT), ivProgName.toUpperCase(Locale.ROOT));
         monitor.worked(1);
 
         // [4] FUGR 布局重命名：abapGit → abap-cli 内置命令期望的 .reps / .func
-        monitor.subTask("[4] Renaming FUGR file layout for abap-cli");
+        monitor.subTask(ImportMessages.get("batchImport.progress.renamingFugr"));
         List<String> groups = AbapGitImportSupport.discoverFugrGroups(dstDir);
         int fugrRenamed = 0;
         for (String g : groups) {
@@ -268,7 +268,8 @@ public final class BatchTemplateImportService {
         System.out.println("[Batch]   → FUGR groups=" + groups + ", layoutRenamed=" + fugrRenamed);
 
         // [5] 写 .abap.json
-        monitor.subTask("[5] Writing .abap.json (package=" + ivPackage + ")");
+        monitor.subTask(ImportMessages.format("batchImport.progress.writingAbapJson",
+                ivPackage));
         AbapGitImportSupport.writeAbapJson(stageRoot.resolve(".abap.json"), ivPackage,
                 REPO_SRC_REL, AbapGitImportSupport.STANDARD_EXTENSIONS);
         monitor.worked(1);
@@ -418,7 +419,7 @@ public final class BatchTemplateImportService {
         } else {
             idx++;
             steps.add(new StepOutcome(idx, "prog-xml-push", -1, null,
-                    "main prog.xml not found: " + mainXml));
+                    ImportMessages.format("batchImport.step.mainXmlNotFound", mainXml)));
         }
 
         // inspect（核对主程序及其 includes；信息性步骤，失败不阻断整体）
@@ -442,7 +443,7 @@ public final class BatchTemplateImportService {
         } else {
             idx++;
             steps.add(new StepOutcome(idx, "prog-xml-verify", -1, null,
-                    "main prog.xml not found: " + mainXml));
+                    ImportMessages.format("batchImport.step.mainXmlNotFound", mainXml)));
         }
 
         // prog-batch-activate —— 全部对象（程序 + 函数组 + 函数模块）统一激活
@@ -460,7 +461,7 @@ public final class BatchTemplateImportService {
         } else {
             idx++;
             steps.add(new StepOutcome(idx, "prog-batch-activate", -1, null,
-                    "no activatable source collected — batch activation skipped"));
+                    ImportMessages.get("batchImport.step.noActivatableSource")));
         }
 
         // 整体成败判定：以流程最后一步「统一激活」(prog-batch-activate) 为准。
@@ -484,7 +485,8 @@ public final class BatchTemplateImportService {
         } else {
             // 未执行统一激活（无对象可激活）：退回关键步骤逐个判定。
             for (StepOutcome o : steps) {
-                if (o.message != null && o.message.contains("not found")) {
+                if (o.message != null
+                        && o.message.contains(ImportMessages.get("importSupport.marker.notFound"))) {
                     overall = -1;
                     continue;
                 }

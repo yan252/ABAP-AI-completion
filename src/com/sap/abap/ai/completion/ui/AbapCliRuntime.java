@@ -102,15 +102,7 @@ public final class AbapCliRuntime {
 
     /** Message shown (and logged) when the runtime is not installed yet. */
     static final String NOT_INSTALLED_MESSAGE =
-            "The abap-cli runtime is not installed yet. It is required for the SAP"
-                    + "\nconnection test and the template import and is no longer bundled"
-                    + "\nwith the plugin."
-                    + "\n\nIt is installed with one click from the plugin (SAP Connection"
-                    + "\nConfig 'Test Connection' or a Templates menu import), or manually:"
-                    + "\ndownload 'abap-cli-runtime.zip' from\n  " + RUNTIME_ZIP_URL
-                    + "\nextract it and point the system property 'abap.cli.stage.dir'"
-                    + "\n(or environment variable ABAP_CLI_STAGE_DIR) at the extracted"
-                    + "\nfolder, then restart Eclipse.";
+            Messages.format("runtime.notInstalled", RUNTIME_ZIP_URL);
 
     private static volatile Path cachedStage;
 
@@ -162,7 +154,7 @@ public final class AbapCliRuntime {
                 base = Activator.getDefault().getStateLocation().toFile().toPath();
             } catch (IllegalStateException e) {
                 throw new IOException(
-                        "Plugin state location unavailable; cannot provision abap-cli runtime.", e);
+                        Messages.get("runtime.stateUnavailableProvision"), e);
             }
             Path target = base.resolve(STAGE_DIR_NAME);
 
@@ -260,7 +252,7 @@ public final class AbapCliRuntime {
             base = Activator.getDefault().getStateLocation().toFile().toPath();
         } catch (IllegalStateException e) {
             throw new IOException(
-                    "Plugin state location unavailable; cannot install abap-cli runtime.", e);
+                    Messages.get("runtime.stateUnavailableInstall"), e);
         }
         Path target = base.resolve(STAGE_DIR_NAME);
 
@@ -269,11 +261,11 @@ public final class AbapCliRuntime {
             try {
                 tmpZip = Files.createTempFile("abap-cli-stage-", ".zip");
             } catch (IOException e) {
-                throw new IOException("Cannot create a temporary download file.", e);
+                throw new IOException(Messages.get("runtime.tempFileFailed"), e);
             }
             try {
                 downloadStageZip(tmpZip, pm);
-                pm.subTask("Extracting abap-cli runtime...");
+                pm.subTask(Messages.get("runtime.extracting"));
                 deleteManaged(target.resolve("node_modules"));
                 deleteManaged(target.resolve("extensions"));
                 Files.createDirectories(target);
@@ -353,8 +345,7 @@ public final class AbapCliRuntime {
         System.out.println("[AbapCliRuntime] direct Java download failed ("
                 + javaFailure.getMessage().replace('\n', ' ')
                 + ") - trying Windows fallback with system proxy/login credentials");
-        pm.subTask("Direct download blocked (corporate proxy?) -"
-                + " retrying via Windows system proxy...");
+        pm.subTask(Messages.get("runtime.proxyFallback"));
 
         IOException psFailure;
         try {
@@ -377,21 +368,15 @@ public final class AbapCliRuntime {
             bitsFailure = e;
         }
 
-        throw new IOException("Download failed from " + urlSpec
-                + "\n\nDirect (Java): " + firstLine(javaFailure.getMessage())
-                + "\nPowerShell (system proxy): " + firstLine(psFailure.getMessage())
-                + "\nBITS: " + firstLine(bitsFailure.getMessage())
-                + "\n\nHint: HTTP 407 means a corporate proxy requires your Windows"
-                + " login credentials. The fallbacks above use them - if all failed,"
-                + "\nyour proxy may block non-browser downloads entirely. In that case"
-                + " download the zip manually in the browser from\n  "
-                + RUNTIME_ZIP_URL, javaFailure);
+        throw new IOException(Messages.format("runtime.downloadFailed", urlSpec,
+                firstLine(javaFailure.getMessage()), firstLine(psFailure.getMessage()),
+                firstLine(bitsFailure.getMessage())), javaFailure);
     }
 
     /** First line of a (possibly multi-line) exception message. */
     private static String firstLine(String msg) {
         if (msg == null) {
-            return "(no message)";
+            return Messages.get("runtime.noMessage");
         }
         int i = msg.indexOf('\n');
         return i >= 0 ? msg.substring(0, i) : msg;
@@ -401,13 +386,14 @@ public final class AbapCliRuntime {
     private static void downloadViaJava(String urlSpec, Path dest, IProgressMonitor pm)
             throws IOException {
         enableSystemProxies();
-        pm.subTask("Downloading abap-cli runtime from GitHub...");
+        pm.subTask(Messages.get("runtime.downloading"));
         HttpURLConnection conn;
         try {
             URL url = URI.create(urlSpec).toURL();
             conn = (HttpURLConnection) url.openConnection();
         } catch (IOException e) {
-            throw new IOException("Cannot open " + urlSpec + ": " + e.getMessage(), e);
+            throw new IOException(Messages.format("runtime.cannotOpen", urlSpec,
+                    e.getMessage()), e);
         }
         conn.setConnectTimeout(15_000);
         conn.setReadTimeout(60_000);
@@ -417,18 +403,15 @@ public final class AbapCliRuntime {
             if (code != HttpURLConnection.HTTP_OK) {
                 String hint = "";
                 if (code == HttpURLConnection.HTTP_NOT_FOUND) {
-                    hint = "\n(The runtime asset 'abap-cli-runtime.zip' is missing at the"
-                            + "\n dedicated release tag 'abap-cli-runtime'. Please upload"
-                            + "\n it at " + GITHUB_RELEASES_URL + ")";
+                    hint = Messages.format("runtime.hint404", GITHUB_RELEASES_URL);
                 } else if (code == HttpURLConnection.HTTP_PROXY_AUTH) {
-                    hint = "\n(HTTP 407 Proxy Authentication Required - corporate"
-                            + " proxy detected)";
+                    hint = Messages.get("runtime.hint407");
                 }
-                throw new IOException("Download failed: HTTP " + code + " from "
-                        + urlSpec + hint);
+                throw new IOException(Messages.format("runtime.httpFailed", code,
+                        urlSpec, hint));
             }
             long total = conn.getContentLengthLong();
-            pm.beginTask("Downloading abap-cli runtime from GitHub...",
+            pm.beginTask(Messages.get("runtime.downloading"),
                     total > 0 ? (int) Math.min(total / 1024, Integer.MAX_VALUE)
                             : IProgressMonitor.UNKNOWN);
             try (InputStream in = conn.getInputStream();
@@ -438,7 +421,7 @@ public final class AbapCliRuntime {
                 int n;
                 while ((n = in.read(buf)) >= 0) {
                     if (pm.isCanceled()) {
-                        throw new IOException("Installation cancelled by user.");
+                        throw new IOException(Messages.get("runtime.cancelled"));
                     }
                     out.write(buf, 0, n);
                     done += n;
@@ -491,7 +474,8 @@ public final class AbapCliRuntime {
         try {
             proc = pb.start();
         } catch (IOException e) {
-            throw new IOException("Cannot start powershell: " + e.getMessage(), e);
+            throw new IOException(Messages.format("runtime.cannotStartPowershell",
+                    e.getMessage()), e);
         }
         StringBuilder output = new StringBuilder();
         try (InputStream in = proc.getInputStream()) {
@@ -504,16 +488,17 @@ public final class AbapCliRuntime {
         try {
             if (!proc.waitFor(timeoutSec, java.util.concurrent.TimeUnit.SECONDS)) {
                 proc.destroyForcibly();
-                throw new IOException("powershell timed out after " + timeoutSec + " s");
+                throw new IOException(Messages.format("runtime.powershellTimeout",
+                        timeoutSec));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("Download interrupted.", e);
+            throw new IOException(Messages.get("runtime.downloadInterrupted"), e);
         }
         if (proc.exitValue() != 0) {
             String out = output.toString().trim();
-            throw new IOException("powershell exit code " + proc.exitValue()
-                    + (out.isEmpty() ? "" : ": " + firstLine(out)));
+            throw new IOException(Messages.format("runtime.powershellExitCode",
+                    proc.exitValue(), out.isEmpty() ? "" : ": " + firstLine(out)));
         }
         verifyZipFile(dest);
     }
@@ -521,17 +506,16 @@ public final class AbapCliRuntime {
     /** {@code true} when the file exists, is not trivially small and starts with the ZIP magic. */
     private static void verifyZipFile(Path file) throws IOException {
         if (!Files.isRegularFile(file)) {
-            throw new IOException("Downloaded file is missing: " + file);
+            throw new IOException(Messages.format("runtime.downloadMissing", file));
         }
         long size = Files.size(file);
         if (size < 1024) {
-            throw new IOException("Downloaded file is too small (" + size + " bytes).");
+            throw new IOException(Messages.format("runtime.downloadTooSmall", size));
         }
         try (InputStream in = Files.newInputStream(file)) {
             byte[] magic = new byte[2];
             if (in.read(magic) != 2 || magic[0] != 'P' || magic[1] != 'K') {
-                throw new IOException("Downloaded file is not a zip archive"
-                        + " (a proxy error page?).");
+                throw new IOException(Messages.get("runtime.downloadNotZip"));
             }
         }
     }
@@ -550,7 +534,7 @@ public final class AbapCliRuntime {
             ZipEntry e;
             while ((e = zin.getNextEntry()) != null) {
                 if (pm.isCanceled()) {
-                    throw new IOException("Installation cancelled by user.");
+                    throw new IOException(Messages.get("runtime.cancelled"));
                 }
                 String name = e.getName();
                 if (name == null || name.isEmpty()) {
@@ -572,12 +556,8 @@ public final class AbapCliRuntime {
         }
         if (!Files.isRegularFile(targetNorm.resolve(
                 AbapGitImportSupport.ABAP_CLI_INDEX_REL))) {
-            throw new IOException(
-                    "The downloaded archive does not contain a valid abap-cli runtime ('"
-                            + AbapGitImportSupport.ABAP_CLI_INDEX_REL + "' missing)."
-                            + "\nPlease verify/re-upload the asset 'abap-cli-runtime.zip'"
-                            + " of release tag 'abap-cli-runtime' at\n  "
-                            + GITHUB_RELEASES_URL);
+            throw new IOException(Messages.format("runtime.invalidArchive",
+                    AbapGitImportSupport.ABAP_CLI_INDEX_REL, GITHUB_RELEASES_URL));
         }
     }
 
@@ -644,7 +624,8 @@ public final class AbapCliRuntime {
     private static void extractBundledRuntime(Path target) throws IOException {
         Bundle bundle = Platform.getBundle(Activator.PLUGIN_ID);
         if (bundle == null) {
-            throw new IOException("Plugin bundle " + Activator.PLUGIN_ID + " is not active.");
+            throw new IOException(Messages.format("runtime.bundleNotActive",
+                    Activator.PLUGIN_ID));
         }
 
         System.out.println("[AbapCliRuntime] extracting bundled abap-cli runtime -> " + target);
@@ -654,9 +635,8 @@ public final class AbapCliRuntime {
 
         Enumeration<URL> entries = bundle.findEntries("/abap-cli", "*", true);
         if (entries == null || !entries.hasMoreElements()) {
-            throw new IOException(
-                    "Bundled abap-cli runtime not found at " + BUNDLE_PREFIX
-                            + " — the plugin was built without it (run build.ps1).");
+            throw new IOException(Messages.format("runtime.bundledNotFound",
+                    BUNDLE_PREFIX));
         }
 
         int copied = 0;
@@ -680,7 +660,8 @@ public final class AbapCliRuntime {
             Files.createDirectories(out.getParent());
             try (InputStream in = url.openStream()) {
                 if (in == null) {
-                    throw new IOException("Cannot read bundled resource: " + path);
+                    throw new IOException(Messages.format("runtime.cannotReadResource",
+                            path));
                 }
                 Files.copy(in, out, StandardCopyOption.REPLACE_EXISTING);
             }

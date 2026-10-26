@@ -55,9 +55,8 @@ public class AutoCompletionPreferencePage extends PreferencePage
     }
 
     public AutoCompletionPreferencePage() {
-        super("ABAP AI Auto-Completion Settings");
-        setDescription("Configure when AI code completion should be triggered automatically "
-                + "and maintain the trigger characters.");
+        super(Messages.get("autoPage.title"));
+        setDescription(Messages.get("autoPage.description"));
     }
 
     @Override
@@ -82,32 +81,27 @@ public class AutoCompletionPreferencePage extends PreferencePage
 
     private void createAutoCompletionGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("ABAP AI Auto-Completion Settings");
+        g.setText(Messages.get("autoPage.title"));
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         chkAutoComplete = new Button(g, SWT.CHECK);
-        chkAutoComplete.setText("Auto-complete while typing");
+        chkAutoComplete.setText(Messages.get("autoPage.checkbox.autoComplete"));
         GridData ckGd = new GridData(GridData.FILL_HORIZONTAL);
         ckGd.horizontalSpan = 2;
         chkAutoComplete.setLayoutData(ckGd);
 
-        createLabel(g, "Delay after typing (ms):");
+        createLabel(g, Messages.get("autoPage.label.delay"));
         txtAutoDelay = createText(g);
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("How long to wait after you stop typing before AI suggests code.\n"
-                + "Auto-completion triggers when the text before the cursor is empty/spaces,\n"
-                + "or ends with an active Trigger Character.\n"
-                + "Recommended: 1500-3000 ms. Lower values = more requests to the API.");
+        note.setText(Messages.get("autoPage.note.delay"));
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 2;
         note.setLayoutData(nd);
 
         Label key = new Label(g, SWT.WRAP);
-        key.setText("Manual trigger key: Ctrl+Shift+.\n"
-                + "To change this keybinding: Window > Preferences > General > Keys\n"
-                + "Search for 'ABAP AI completion'");
+        key.setText(Messages.get("autoPage.note.manualKey"));
         GridData kd = new GridData(GridData.FILL_HORIZONTAL);
         kd.horizontalSpan = 2;
         kd.horizontalIndent = 10;
@@ -116,7 +110,7 @@ public class AutoCompletionPreferencePage extends PreferencePage
 
     private void createTriggerCharGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Trigger Characters");
+        g.setText(Messages.get("autoPage.group.triggerChars"));
         g.setLayout(new GridLayout(1, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
@@ -129,15 +123,15 @@ public class AutoCompletionPreferencePage extends PreferencePage
         table.setLayoutData(tgd);
 
         TableColumn colChar = new TableColumn(table, SWT.LEFT);
-        colChar.setText("Trigger Character");
+        colChar.setText(Messages.get("autoPage.column.triggerChar"));
         colChar.setWidth(150);
 
         TableColumn colActive = new TableColumn(table, SWT.CENTER);
-        colActive.setText("Active");
+        colActive.setText(Messages.get("autoPage.column.active"));
         colActive.setWidth(55);
 
         TableColumn colDesc = new TableColumn(table, SWT.LEFT);
-        colDesc.setText("Description");
+        colDesc.setText(Messages.get("autoPage.column.description"));
         colDesc.setWidth(300);
 
         // Buttons
@@ -146,18 +140,18 @@ public class AutoCompletionPreferencePage extends PreferencePage
         btnBar.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_BEGINNING));
 
         Button addBtn = new Button(btnBar, SWT.PUSH);
-        addBtn.setText("Add");
+        addBtn.setText(Messages.get("autoPage.button.add"));
         addBtn.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
-                items.add(new TriggerChar("", true, "New trigger"));
+                items.add(new TriggerChar("", true, Messages.get("autoPage.newTriggerDesc")));
                 refreshTable();
                 setValid(true);
             }
         });
 
         Button removeBtn = new Button(btnBar, SWT.PUSH);
-        removeBtn.setText("Remove");
+        removeBtn.setText(Messages.get("autoPage.button.remove"));
         removeBtn.addSelectionListener(new SelectionAdapter() {
             @Override
             public void widgetSelected(SelectionEvent e) {
@@ -171,11 +165,7 @@ public class AutoCompletionPreferencePage extends PreferencePage
         });
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("Three columns: Trigger Character (may contain spaces, but not all-spaces),\n"
-                + "Active (only active characters trigger completion, all enabled by default), and\n"
-                + "Description.\n"
-                + "Auto-completion triggers after the delay when the text before the cursor is empty/\n"
-                + "only-spaces, or ends with an active trigger character. Add/Remove maintain the list.");
+        note.setText(Messages.get("autoPage.note.triggerChars"));
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.horizontalSpan = 1;
         note.setLayoutData(nd);
@@ -270,7 +260,7 @@ public class AutoCompletionPreferencePage extends PreferencePage
         // 触发字符不能为空或全为空格
         for (TriggerChar data : items) {
             if (data.triggerChar == null || data.triggerChar.trim().isEmpty()) {
-                setErrorMessage("Trigger Character cannot be empty or contain only spaces.");
+                setErrorMessage(Messages.get("autoPage.error.triggerCharEmpty"));
                 setValid(false);
                 return false;
             }
@@ -279,12 +269,12 @@ public class AutoCompletionPreferencePage extends PreferencePage
         String delay = txtAutoDelay.getText().trim();
         try {
             if (Integer.parseInt(delay) <= 0) {
-                setErrorMessage("Delay after typing must be a positive integer.");
+                setErrorMessage(Messages.get("autoPage.error.delayPositive"));
                 setValid(false);
                 return false;
             }
         } catch (NumberFormatException e) {
-            setErrorMessage("Delay after typing must be a positive integer.");
+            setErrorMessage(Messages.get("autoPage.error.delayPositive"));
             setValid(false);
             return false;
         }

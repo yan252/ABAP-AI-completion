@@ -75,7 +75,7 @@ public class AbapAIStatusLineContribution extends WorkbenchWindowControlContribu
         if (logoImage != null) {
             button.setImage(logoImage);
         }
-        button.setToolTipText("ABAP AI Completion");
+        button.setToolTipText(Messages.get("statusLine.tooltip"));
         button.pack();
 
         // Position the button at (0,0) filling the composite.

@@ -197,10 +197,10 @@ public class AIClient {
         }
 
         if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            throw new AIClientException("API Base URL is not configured.");
+            throw new AIClientException(Messages.get("client.error.noBaseUrl"));
         }
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            throw new AIClientException("API Key is not configured.");
+            throw new AIClientException(Messages.get("client.error.noApiKey"));
         }
         if (model == null || model.trim().isEmpty()) {
             model = "gpt-4";
@@ -243,12 +243,12 @@ public class AIClient {
             if (isCacheErrorBody(errorBody)) {
                 return "{\"cacheError\":true,\"error\":" + quoteJson(truncate(errorBody, 500)) + "}";
             }
-            throw new AIClientException("HTTP " + responseCode + ": " + errorBody);
+            throw new AIClientException(Messages.format("client.error.http", responseCode, errorBody));
 
         } catch (AIClientException e) {
             throw e;
         } catch (Exception e) {
-            throw new AIClientException("Failed to call AI API: " + e.getMessage(), e);
+            throw new AIClientException(Messages.format("client.error.callFailed", e.getMessage()), e);
         }
     }
 
@@ -377,10 +377,10 @@ public class AIClient {
         }
 
         if (baseUrl == null || baseUrl.trim().isEmpty()) {
-            throw new AIClientException("API Base URL is not configured.");
+            throw new AIClientException(Messages.get("client.error.noBaseUrl"));
         }
         if (apiKey == null || apiKey.trim().isEmpty()) {
-            throw new AIClientException("API Key is not configured.");
+            throw new AIClientException(Messages.get("client.error.noApiKey"));
         }
         if (model == null || model.trim().isEmpty()) {
             model = "gpt-4";
@@ -422,7 +422,7 @@ public class AIClient {
                 responseBody = readStream(conn.getInputStream());
             } else {
                 String errorBody = readStream(conn.getErrorStream());
-                throw new AIClientException("HTTP " + responseCode + ": " + errorBody);
+                throw new AIClientException(Messages.format("client.error.http", responseCode, errorBody));
             }
 
             // Parse JSON response manually (no Gson needed)
@@ -431,7 +431,7 @@ public class AIClient {
         } catch (AIClientException e) {
             throw e;
         } catch (Exception e) {
-            throw new AIClientException("Failed to call AI API: " + e.getMessage(), e);
+            throw new AIClientException(Messages.format("client.error.callFailed", e.getMessage()), e);
         }
     }
 
@@ -586,24 +586,24 @@ public class AIClient {
                         int endIdx = findStringEnd(json, startIdx + 1);
                         if (endIdx >= 0) {
                             String errorMsg = json.substring(startIdx + 1, endIdx);
-                            throw new AIClientException("API error: " + errorMsg);
+                            throw new AIClientException(Messages.format("client.error.apiError", errorMsg));
                         }
                     }
                 }
-                throw new AIClientException("API returned an error");
+                throw new AIClientException(Messages.get("client.error.apiReturnedError"));
             }
 
             // Try to extract from "choices" array
             String choicesKey = "\"choices\"";
             int choicesIdx = json.indexOf(choicesKey);
             if (choicesIdx < 0) {
-                throw new AIClientException("API response: no choices found");
+                throw new AIClientException(Messages.get("client.error.noChoices"));
             }
 
             // Find the first object in the array
             int firstBrace = json.indexOf('{', choicesIdx);
             if (firstBrace < 0) {
-                throw new AIClientException("API response: invalid choices format");
+                throw new AIClientException(Messages.get("client.error.invalidChoices"));
             }
 
             // Try "message"."content" (Chat Completions)
@@ -640,11 +640,11 @@ public class AIClient {
                 }
             }
 
-            throw new AIClientException("API response: could not parse completion text");
+            throw new AIClientException(Messages.get("client.error.parseCompletion"));
         } catch (AIClientException e) {
             throw e;
         } catch (Exception e) {
-            throw new AIClientException("Failed to parse API response: " + e.getMessage());
+            throw new AIClientException(Messages.format("client.error.parseFailed", e.getMessage()));
         }
     }
 

@@ -38,21 +38,21 @@ public class AICompletionHandler extends AbstractHandler {
         try {
             return doExecute(event);
         } catch (Exception e) {
-            showMessage("Handler Error: " + e.getMessage());
+            showMessage(Messages.format("handler.error.prefix", e.getMessage()));
             return null;
         }
     }
 
     private Object doExecute(ExecutionEvent event) {
         if (!AIConfiguration.isPluginEnabled()) {
-            showStatus(event, "Plugin disabled. Enable in Preferences.");
+            showStatus(event, Messages.get("handler.status.pluginDisabled"));
             return null;
         }
 
         ITextEditor editor = getTextEditor(event);
         if (editor == null) {
-            showStatus(event, "Not in a text editor.");
-            showMessage("Please open an ABAP code editor first.");
+            showStatus(event, Messages.get("handler.status.notTextEditor"));
+            showMessage(Messages.get("handler.dialog.openEditor"));
             return null;
         }
 
@@ -69,8 +69,8 @@ public class AICompletionHandler extends AbstractHandler {
             // SAP ADT 远程文件(如 $tmp)可能没有本地 IFile
             // 仍然尝试通过编辑器和文档判断是否为 ABAP
             if (!AbapLanguageDetector.isAbapContext(editor, null, doc)) {
-                showStatus(event, "Not an ABAP source.");
-                showMessage("ABAP AI Completion only runs in ABAP source files.");
+                showStatus(event, Messages.get("handler.status.notAbap"));
+                showMessage(Messages.get("handler.dialog.abapOnly"));
                 return null;
             }
             // file 为 null 时继续执行(后续流程不严格依赖 file/project)
@@ -79,8 +79,8 @@ public class AICompletionHandler extends AbstractHandler {
 
             // ABAP 门控: 非 ABAP 源码不触发补全
             if (!AbapLanguageDetector.isAbapContext(editor, file, doc)) {
-                showStatus(event, "Not an ABAP source.");
-                showMessage("ABAP AI Completion only runs in ABAP source files.");
+                showStatus(event, Messages.get("handler.status.notAbap"));
+                showMessage(Messages.get("handler.dialog.abapOnly"));
                 return null;
             }
         }
@@ -111,14 +111,14 @@ public class AICompletionHandler extends AbstractHandler {
         // 在 UI 线程捕获 IWorkbenchPage,传递给后台线程使用
         IWorkbenchPage workbenchPage = editor.getSite().getPage();
 
-        showStatus(event, "AI completion in progress...");
+        showStatus(event, Messages.get("handler.status.inProgress"));
 
         AICompletionService.requestCompletion(
             file, textBefore, textAfter, fullDoc, project, workbenchPage,
             result -> Display.getDefault().asyncExec(() -> {
                 if (result == null || result.trim().isEmpty()) {
                     // 去重后为空或无可用补全时，提示无可用补全，而不再停留在“AI 补全进行中”状态
-                    showStatus(event, "No completion code available");
+                    showStatus(event, Messages.get("handler.status.noCompletion"));
                     return;
                 }
                 if (viewer != null && doc != null) {
@@ -147,7 +147,7 @@ public class AICompletionHandler extends AbstractHandler {
                 clearStatus(event);
             }),
             error -> Display.getDefault().asyncExec(() -> {
-                showStatus(event, "AI error: " + error);
+                showStatus(event, Messages.format("handler.status.aiError", error));
             })
         );
 
@@ -188,7 +188,7 @@ public class AICompletionHandler extends AbstractHandler {
         Display.getDefault().asyncExec(() -> {
             Shell shell = Display.getDefault().getActiveShell();
             if (shell != null) {
-                MessageDialog.openInformation(shell, "ABAP AI Completion", msg);
+                MessageDialog.openInformation(shell, Messages.get("handler.dialog.title"), msg);
             }
         });
     }

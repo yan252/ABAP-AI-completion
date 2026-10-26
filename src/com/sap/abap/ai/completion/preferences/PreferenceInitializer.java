@@ -20,6 +20,8 @@ public class PreferenceInitializer extends AbstractPreferenceInitializer {
         store.setDefault(PreferenceConstants.PLUGIN_ENABLED, PreferenceConstants.DEFAULT_PLUGIN_ENABLED);
         store.setDefault(PreferenceConstants.AUTO_COMPLETION_ENABLED, PreferenceConstants.DEFAULT_AUTO_COMPLETION_ENABLED);
         store.setDefault(PreferenceConstants.AUTO_COMPLETE_DELAY, PreferenceConstants.DEFAULT_AUTO_COMPLETE_DELAY);
+        store.setDefault(PreferenceConstants.PLUGIN_LANGUAGE,
+                PreferenceConstants.DEFAULT_PLUGIN_LANGUAGE);
 
         store.setDefault(PreferenceConstants.COMPLETION_COLOR, PreferenceConstants.DEFAULT_COMPLETION_COLOR);
         store.setDefault(PreferenceConstants.MANUAL_COMPLETION_MODE, PreferenceConstants.DEFAULT_MANUAL_COMPLETION_MODE);

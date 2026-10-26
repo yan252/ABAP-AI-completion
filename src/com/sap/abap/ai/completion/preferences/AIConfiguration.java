@@ -66,7 +66,7 @@ public final class AIConfiguration {
         }
         // 无条目则返回空默认条目（向后兼容）
         AIConnectionEntry def = new AIConnectionEntry();
-        def.name = "Default";
+        def.name = Messages.get("connPage.defaultConnectionName");
         def.isDefault = true;
         return def;
     }

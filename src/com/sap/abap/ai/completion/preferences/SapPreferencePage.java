@@ -46,18 +46,8 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
     private IPreferenceStore store;
 
     public SapPreferencePage() {
-        super("SAP Connection Config");
-        setDescription("Configure the abapGit (abap-cli) connection used by \"Test Connection\" "
-                + "and the template import. Provide the abap-cli URL and, if required, the "
-                + "Client / User / Password / Language used to authenticate against the ABAP "
-                + "system.\n\n"
-                + "Note: \"Test Connection\" uses the abap-cli URL at the top and probes it via the "
-                + "abapGit (abap-cli) approach (tls / auth / adt), without relying on "
-                + "~/.abap-cli/systems.json profile.\n\n"
-                + "Scope: the SAP connection configured on this page only applies to the "
-                + "features under the \"Templates\" menu (e.g. SAP Connection Config, "
-                + "template import). It does not affect AI code completion or any other "
-                + "plugin features.");
+        super(Messages.get("sapPage.title"));
+        setDescription(Messages.get("sapPage.description"));
     }
 
     @Override
@@ -83,37 +73,37 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
 
     private void createConnectionGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("SAP Connection Settings");
+        g.setText(Messages.get("sapPage.group.connection"));
         g.setLayout(new GridLayout(2, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-        createLabel(g, "abap-cli URL (Optional):");
+        createLabel(g, Messages.get("sapPage.label.abapCliUrl"));
         txtAbapCliUrl = createText(g);
 
-        createLabel(g, "System Number:");
+        createLabel(g, Messages.get("sapPage.label.systemNumber"));
         txtSystemNumber = createText(g);
 
-        createLabel(g, "Client:");
+        createLabel(g, Messages.get("sapPage.label.client"));
         txtClient = createText(g);
 
-        createLabel(g, "Language:");
+        createLabel(g, Messages.get("sapPage.label.language"));
         txtLanguage = createText(g);
 
-        createLabel(g, "User:");
+        createLabel(g, Messages.get("sapPage.label.user"));
         txtUser = createText(g);
 
-        createLabel(g, "Password:");
+        createLabel(g, Messages.get("sapPage.label.password"));
         txtPassword = createText(g);
         txtPassword.setEchoChar('*');
 
         // 按钮行：Download abap-cli 与 Test Connection 同一行（分占两列）
         Button downloadBtn = new Button(g, SWT.PUSH);
-        downloadBtn.setText("Download abap-cli");
+        downloadBtn.setText(Messages.get("sapPage.button.download"));
         downloadBtn.setLayoutData(new GridData(SWT.BEGINNING, SWT.CENTER, false, false));
         downloadBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> downloadAbapCli()));
 
         Button testBtn = new Button(g, SWT.PUSH);
-        testBtn.setText("Test Connection");
+        testBtn.setText(Messages.get("sapPage.button.testConnection"));
         testBtn.setLayoutData(new GridData(SWT.BEGINNING, SWT.CENTER, false, false));
         testBtn.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> testConnection()));
 
@@ -127,18 +117,12 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
 
     private void createHintGroup(Composite parent) {
         Group g = new Group(parent, SWT.NONE);
-        g.setText("Usage Hints");
+        g.setText(Messages.get("sapPage.group.hints"));
         g.setLayout(new GridLayout(1, false));
         g.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         Label note = new Label(g, SWT.WRAP);
-        note.setText("- Template import uses the abapGit (abap-cli) approach from the\n"
-                + "  stage directory (node abap-cli + prog-* extensions).\n"
-                + "- \"Test Connection\" uses the abap-cli URL at the top (e.g.\n"
-                + "  https://s4devapp.sap.com.cn:1443) and probes tls / auth / adt\n"
-                + "  without relying on ~/.abap-cli/systems.json.\n"
-                + "- Client / User / Password / Language are used for authentication against\n"
-                + "  the ABAP system when testing the abapGit (abap-cli) connection.");
+        note.setText(Messages.get("sapPage.note.hints"));
         GridData nd = new GridData(GridData.FILL_HORIZONTAL);
         nd.verticalSpan = 1;
         nd.widthHint = 500;
@@ -193,27 +177,24 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
      */
     private void downloadAbapCli() {
         if (AbapCliRuntime.isInstalled()) {
-            boolean reinstall = MessageDialog.openQuestion(getShell(), "abap-cli Runtime",
-                    "The abap-cli runtime is already installed in this workspace"
-                            + "\n(.metadata/.plugins/com.sap.abap.ai.completion/abap-cli-stage/)."
-                            + "\n\nRe-download and re-install it anyway?"
-                            + "\n(Use this after the runtime zip on GitHub was updated.)");
+            boolean reinstall = MessageDialog.openQuestion(getShell(), Messages.get("sapPage.dialog.runtime.title"),
+                    Messages.get("sapPage.dialog.runtime.reinstall"));
             if (!reinstall) {
-                setTestResult("abap-cli runtime: already installed", SWT.COLOR_DARK_GREEN);
+                setTestResult(Messages.get("sapPage.runtime.alreadyInstalled"), SWT.COLOR_DARK_GREEN);
                 return;
             }
             if (AbapCliInstallPrompt.installWithProgress(getShell())) {
-                setTestResult("SUCCESS: abap-cli runtime re-installed", SWT.COLOR_DARK_GREEN);
+                setTestResult(Messages.get("sapPage.runtime.reinstallSuccess"), SWT.COLOR_DARK_GREEN);
             } else {
-                setTestResult("abap-cli runtime re-install failed or was cancelled",
+                setTestResult(Messages.get("sapPage.runtime.reinstallFailed"),
                         SWT.COLOR_RED);
             }
             return;
         }
         if (AbapCliInstallPrompt.ensureInstalledWithPrompt(getShell())) {
-            setTestResult("SUCCESS: abap-cli runtime installed", SWT.COLOR_DARK_GREEN);
+            setTestResult(Messages.get("sapPage.runtime.installSuccess"), SWT.COLOR_DARK_GREEN);
         } else {
-            setTestResult("abap-cli runtime is not installed", SWT.COLOR_RED);
+            setTestResult(Messages.get("sapPage.runtime.notInstalled"), SWT.COLOR_RED);
         }
     }
 
@@ -229,15 +210,15 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
     private void testConnection() {
         // ===== [0] abap-cli 运行时必须已安装（未安装则弹一键安装对话框） =====
         if (!AbapCliInstallPrompt.ensureInstalledWithPrompt(getShell())) {
-            setTestResult("CANCELLED: abap-cli runtime is not installed", SWT.COLOR_RED);
+            setTestResult(Messages.get("sapPage.test.cancelled"), SWT.COLOR_RED);
             return;
         }
 
         final String url = txtAbapCliUrl.getText().trim();
         if (url.isEmpty()) {
-            setTestResult("FAILED: please fill in the abap-cli URL", SWT.COLOR_RED);
-            MessageDialog.openError(getShell(), "abapGit Connection Test Failed",
-                    "Please fill in the 'abap-cli URL' field before testing the connection.");
+            setTestResult(Messages.get("sapPage.test.failedNoUrl"), SWT.COLOR_RED);
+            MessageDialog.openError(getShell(), Messages.get("sapPage.dialog.testFailed.title"),
+                    Messages.get("sapPage.dialog.testFailed.noUrl"));
             return;
         }
         final String client = txtClient.getText().trim();
@@ -245,32 +226,30 @@ public class SapPreferencePage extends PreferencePage implements IWorkbenchPrefe
         final String password = txtPassword.getText().trim();
         final String language = txtLanguage.getText().trim();
 
-        setTestResult("Testing abapGit (abap-cli) connection...", SWT.COLOR_BLUE);
+        setTestResult(Messages.get("sapPage.test.testing"), SWT.COLOR_BLUE);
 
         new Thread(() -> {
             AbapCliConnectionTester.Result r = AbapCliConnectionTester.testConnection(
                     url, client, user, password, language);
             Display.getDefault().asyncExec(() -> {
                 if (r.success) {
-                    setTestResult("SUCCESS: abapGit connection OK (" + r.layersSummary + ")",
+                    setTestResult(Messages.format("sapPage.test.success", r.layersSummary),
                             SWT.COLOR_DARK_GREEN);
                     MessageDialog.openInformation(getShell(),
-                            "abapGit Connection Test Succeeded",
-                            "abapGit (abap-cli) connection succeeded.\n\n"
-                                    + "Target: " + url + "\n\n"
-                                    + "Layers: " + r.layersSummary + "\n\n"
-                                    + "Details:\n" + r.detail);
+                            Messages.get("sapPage.dialog.testSucceeded.title"),
+                            Messages.format("sapPage.dialog.testSucceeded.message",
+                                    url, r.layersSummary, r.detail));
                 } else {
-                    setTestResult("FAILED: abapGit connection failed", SWT.COLOR_RED);
+                    setTestResult(Messages.get("sapPage.test.failed"), SWT.COLOR_RED);
                     Activator.getDefault().getLog().log(new org.eclipse.core.runtime.Status(
                             org.eclipse.core.runtime.IStatus.ERROR, Activator.PLUGIN_ID,
                             "abapGit (abap-cli) connection test failed: " + r.detail, null));
                     MessageDialog.openError(getShell(),
-                            "abapGit Connection Test Failed",
-                            "abapGit (abap-cli) connection test failed"
-                                    + (url.isEmpty() ? "" : " (target '" + url + "')")
-                                    + ".\n\n" + r.detail
-                                    + "\n\nSee Window -> Show View -> Error Log for details.");
+                            Messages.get("sapPage.dialog.testFailed.title"),
+                            Messages.format("sapPage.dialog.testFailed.message",
+                                    url.isEmpty() ? ""
+                                            : Messages.format("sapPage.dialog.testFailed.target", url),
+                                    r.detail));
                 }
             });
         }, "abap-git-conn-test").start();

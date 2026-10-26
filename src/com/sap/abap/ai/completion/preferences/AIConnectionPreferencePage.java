@@ -56,9 +56,8 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     private boolean refreshingList;
 
     public AIConnectionPreferencePage() {
-        super("AI Connections");
-        setDescription("Manage multiple AI connections. Select a connection on the left "
-                + "to edit its details on the right.");
+        super(Messages.get("connPage.title"));
+        setDescription(Messages.get("connPage.description"));
         // 隐藏 Eclipse 预置页底部的 "Restore Defaults" 按钮；
         // 本页在列表下方提供自定义的 "Restore Default" 按钮（还原内置连接）
         noDefaultButton();
@@ -83,7 +82,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         left.setLayoutData(leftGd);
 
         Label lblList = new Label(left, SWT.NONE);
-        lblList.setText("AI Connections:");
+        lblList.setText(Messages.get("connPage.label.list"));
         lblList.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         lstConnections = new List(left, SWT.BORDER | SWT.V_SCROLL);
@@ -107,16 +106,16 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         listBtns.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
         btnAdd = new Button(listBtns, SWT.PUSH);
-        btnAdd.setText("Add");
+        btnAdd.setText(Messages.get("connPage.button.add"));
         btnAdd.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> addConnection()));
 
         btnRemove = new Button(listBtns, SWT.PUSH);
-        btnRemove.setText("Remove");
+        btnRemove.setText(Messages.get("connPage.button.remove"));
         btnRemove.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> removeConnection()));
 
         // "Restore Default" 横跨两列：丢弃当前全部连接，还原 FREE_AI / deepseek 两个内置连接
         btnRestore = new Button(listBtns, SWT.PUSH);
-        btnRestore.setText("Restore Default");
+        btnRestore.setText(Messages.get("connPage.button.restoreDefault"));
         GridData restoreGd = new GridData(GridData.FILL_HORIZONTAL);
         restoreGd.horizontalSpan = 2;
         btnRestore.setLayoutData(restoreGd);
@@ -128,23 +127,23 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         right.setLayout(new GridLayout(2, false));
         right.setLayoutData(new GridData(GridData.FILL_BOTH));
 
-        createLabel(right, "AI Connection Name:");
+        createLabel(right, Messages.get("connPage.label.name"));
         txtConnName = createText(right);
 
-        createLabel(right, "API Base URL:");
+        createLabel(right, Messages.get("connPage.label.baseUrl"));
         txtBaseUrl = createText(right);
 
-        createLabel(right, "Model Name:");
+        createLabel(right, Messages.get("connPage.label.model"));
         txtModel = createText(right);
 
-        createLabel(right, "API Key:");
+        createLabel(right, Messages.get("connPage.label.apiKey"));
         txtApiKey = createText(right);
         txtApiKey.setEchoChar('*');
 
-        createLabel(right, "Max Tokens:");
+        createLabel(right, Messages.get("connPage.label.maxTokens"));
         txtMaxTokens = createText(right);
 
-        createLabel(right, "Temperature:");
+        createLabel(right, Messages.get("connPage.label.temperature"));
         txtTemperature = createText(right);
 
         // Button row
@@ -155,15 +154,15 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         btnRow.setLayoutData(btnRowGd);
 
         btnSetDefault = new Button(btnRow, SWT.PUSH);
-        btnSetDefault.setText("Set as Default");
+        btnSetDefault.setText(Messages.get("connPage.button.setDefault"));
         btnSetDefault.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> setAsDefault()));
 
         btnTest = new Button(btnRow, SWT.PUSH);
-        btnTest.setText("Test Connection");
+        btnTest.setText(Messages.get("connPage.button.test"));
         btnTest.addSelectionListener(SelectionListener.widgetSelectedAdapter(e -> testConnection()));
 
         Button btnClear = new Button(btnRow, SWT.PUSH);
-        btnClear.setText("Clear");
+        btnClear.setText(Messages.get("connPage.button.clear"));
         btnClear.addSelectionListener(
                 SelectionListener.widgetSelectedAdapter(e -> clearFormWithConfirm()));
 
@@ -175,13 +174,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
 
         // Hint
         Label hint = new Label(right, SWT.WRAP);
-        hint.setText("Add several AI connections and select any one in the list on the left.\n"
-                + "Double-click a connection name to show its details on the right.\n"
-                + "Click \"Set as Default\" to make the displayed connection the one used by the plugin; "
-                + "its name is then marked with \"(Default)\".\n"
-                + "\"Restore Default\" discards all connections and restores the built-in "
-                + "FREE_AI (default) and deepseek connections.\n"
-                + "\"Test Connection\" tests the connection currently shown on the right.");
+        hint.setText(Messages.get("connPage.hint"));
         GridData hintGd = new GridData(GridData.FILL_HORIZONTAL);
         hintGd.horizontalSpan = 2;
         hint.setLayoutData(hintGd);
@@ -229,7 +222,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
             for (AIConnectionEntry entry : connections) {
                 String displayName = entry.name;
                 if (entry.isDefault) {
-                    displayName += " (Default)";
+                    displayName += Messages.get("connPage.defaultSuffix");
                 }
                 lstConnections.add(displayName);
             }
@@ -287,9 +280,8 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
      * "Clear" 按钮入口：仅清空右侧表单字段（不从列表删除连接），执行前弹出确认对话框。
      */
     private void clearFormWithConfirm() {
-        boolean confirm = MessageDialog.openConfirm(getShell(), "Clear Form",
-                "Clear all fields shown on the right? The connection itself is not removed, "
-                        + "but any unsaved edits will be lost.");
+        boolean confirm = MessageDialog.openConfirm(getShell(), Messages.get("connPage.dialog.clear.title"),
+                Messages.get("connPage.dialog.clear.message"));
         if (!confirm) return;
         clearForm();
     }
@@ -310,7 +302,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     private void addConnection() {
         syncFormToEntry(); // save any unsaved edits first
         AIConnectionEntry newEntry = new AIConnectionEntry();
-        newEntry.name = uniqueName("New Connection");
+        newEntry.name = uniqueName(Messages.get("connPage.newConnectionName"));
         connections.add(newEntry);
         saveConnections();
         refreshConnectionList();
@@ -336,20 +328,20 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     private void removeConnection() {
         int idx = lstConnections.getSelectionIndex();
         if (idx < 0 || connections == null || connections.isEmpty()) {
-            MessageDialog.openWarning(getShell(), "Remove Connection",
-                    "Please select a connection to remove.");
+            MessageDialog.openWarning(getShell(), Messages.get("connPage.dialog.remove.title"),
+                    Messages.get("connPage.dialog.remove.selectConnection"));
             return;
         }
         String name = connections.get(idx).name;
-        boolean confirm = MessageDialog.openConfirm(getShell(), "Remove Connection",
-                "Remove the connection \"" + name + "\"?");
+        boolean confirm = MessageDialog.openConfirm(getShell(), Messages.get("connPage.dialog.remove.title"),
+                Messages.format("connPage.dialog.remove.confirm", name));
         if (!confirm) return;
         boolean removedWasDefault = connections.get(idx).isDefault;
         connections.remove(idx);
         if (connections.isEmpty()) {
             // 至少保留一个空默认连接，保证插件始终有可用连接
             AIConnectionEntry def = new AIConnectionEntry();
-            def.name = "Default";
+            def.name = Messages.get("connPage.defaultConnectionName");
             def.isDefault = true;
             connections.add(def);
         } else if (removedWasDefault) {
@@ -368,10 +360,8 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
      */
     private void restoreDefaults() {
         boolean confirm = MessageDialog.openConfirm(getShell(),
-                "Restore Default Connections",
-                "This will remove all current AI connections and restore the built-in "
-                        + "defaults:\n  - FREE_AI (set as default)\n  - deepseek\n\n"
-                        + "Do you want to continue?");
+                Messages.get("connPage.dialog.restore.title"),
+                Messages.get("connPage.dialog.restore.message"));
         if (!confirm) return;
 
         // 丢弃右侧表单中尚未保存的编辑，避免写回已被还原的旧条目
@@ -398,13 +388,13 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     private void setAsDefault() {
         syncFormToEntry();
         if (currentEntry == null) {
-            MessageDialog.openWarning(getShell(), "Set as Default",
-                    "Please select a connection first.");
+            MessageDialog.openWarning(getShell(), Messages.get("connPage.dialog.setDefault.title"),
+                    Messages.get("connPage.dialog.setDefault.selectFirst"));
             return;
         }
         if (currentEntry.name == null || currentEntry.name.trim().isEmpty()) {
-            MessageDialog.openWarning(getShell(), "Set as Default",
-                    "Please enter an AI connection name first.");
+            MessageDialog.openWarning(getShell(), Messages.get("connPage.dialog.setDefault.title"),
+                    Messages.get("connPage.dialog.setDefault.enterName"));
             return;
         }
         for (AIConnectionEntry e : connections) {
@@ -420,7 +410,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     private void testConnection() {
         syncFormToEntry();
         if (currentEntry == null) {
-            setTestResult("Please select or add a connection first", SWT.COLOR_RED);
+            setTestResult(Messages.get("connPage.test.selectFirst"), SWT.COLOR_RED);
             return;
         }
         String baseUrl = currentEntry.baseUrl.trim();
@@ -430,15 +420,15 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
         String tempStr = currentEntry.temperature.trim();
 
         if (baseUrl.isEmpty()) {
-            setTestResult("Please enter API Base URL", SWT.COLOR_RED);
+            setTestResult(Messages.get("connPage.test.enterBaseUrl"), SWT.COLOR_RED);
             return;
         }
         if (apiKey.isEmpty()) {
-            setTestResult("Please enter API Key", SWT.COLOR_RED);
+            setTestResult(Messages.get("connPage.test.enterApiKey"), SWT.COLOR_RED);
             return;
         }
 
-        setTestResult("Testing connection to " + baseUrl + "...", SWT.COLOR_BLUE);
+        setTestResult(Messages.format("connPage.test.testing", baseUrl), SWT.COLOR_BLUE);
 
         new Thread(() -> {
             try {
@@ -451,13 +441,13 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
                         model.isEmpty() ? "gpt-4" : model, apiKey, maxTokens, temp);
 
                 Display.getDefault().asyncExec(() ->
-                    setTestResult("SUCCESS: " + result, SWT.COLOR_DARK_GREEN));
+                    setTestResult(Messages.format("connPage.test.success", result), SWT.COLOR_DARK_GREEN));
             } catch (AIClientException ex) {
                 Display.getDefault().asyncExec(() ->
-                    setTestResult("FAILED: " + ex.getMessage(), SWT.COLOR_RED));
+                    setTestResult(Messages.format("connPage.test.failed", ex.getMessage()), SWT.COLOR_RED));
             } catch (Exception ex) {
                 Display.getDefault().asyncExec(() ->
-                    setTestResult("ERROR: " + ex.getMessage(), SWT.COLOR_RED));
+                    setTestResult(Messages.format("connPage.test.error", ex.getMessage()), SWT.COLOR_RED));
             }
         }).start();
     }

@@ -45,44 +45,44 @@ public class TriggerChar {
         List<TriggerChar> list = new ArrayList<>();
 
         // 2.1 结构导航与组件访问符
-        list.add(new TriggerChar("->", true, "Instance component selector: suggests attributes or methods of an instance"));
-        list.add(new TriggerChar("=>", true, "Static component selector: accesses static members of a class or interface"));
-        list.add(new TriggerChar("~", true, "Interface component selector: accesses methods or attributes of an interface"));
+        list.add(new TriggerChar("->", true, Messages.get("trigger.default.1")));
+        list.add(new TriggerChar("=>", true, Messages.get("trigger.default.2")));
+        list.add(new TriggerChar("~", true, Messages.get("trigger.default.3")));
 
         // 2.2 语句与语法终止符
-        list.add(new TriggerChar(":", true, "Chained statement colon: suggests field list/parameters after WRITE:, DATA:"));
-        list.add(new TriggerChar("(", true, "Opening parenthesis: suggests parameters of function/method calls"));
-        list.add(new TriggerChar("[", true, "Opening bracket: suggests internal table index expression itab[ ... ]"));
-        list.add(new TriggerChar(",", true, "Comma: continues field list in SELECT, DATA declaration or parameter list"));
-        list.add(new TriggerChar("\"", true, "Double quote: starts a line comment, suggests comment text"));
+        list.add(new TriggerChar(":", true, Messages.get("trigger.default.4")));
+        list.add(new TriggerChar("(", true, Messages.get("trigger.default.5")));
+        list.add(new TriggerChar("[", true, Messages.get("trigger.default.6")));
+        list.add(new TriggerChar(",", true, Messages.get("trigger.default.7")));
+        list.add(new TriggerChar("\"", true, Messages.get("trigger.default.8")));
 
         // 2.3 赋值与比较运算符（带空格，光标在空格后时触发）
-        list.add(new TriggerChar("= ", true, "Assignment operator: suggests right-hand operand, literal or expression"));
-        list.add(new TriggerChar("?= ", true, "Down cast assignment operator: suggests superclass reference or object"));
-        list.add(new TriggerChar("<> ", true, "Not-equal comparison operator"));
-        list.add(new TriggerChar("< ", true, "Less-than comparison operator"));
-        list.add(new TriggerChar("> ", true, "Greater-than comparison operator"));
-        list.add(new TriggerChar("<= ", true, "Less-than-or-equal comparison operator"));
-        list.add(new TriggerChar(">= ", true, "Greater-than-or-equal comparison operator"));
+        list.add(new TriggerChar("= ", true, Messages.get("trigger.default.9")));
+        list.add(new TriggerChar("?= ", true, Messages.get("trigger.default.10")));
+        list.add(new TriggerChar("<> ", true, Messages.get("trigger.default.11")));
+        list.add(new TriggerChar("< ", true, Messages.get("trigger.default.12")));
+        list.add(new TriggerChar("> ", true, Messages.get("trigger.default.13")));
+        list.add(new TriggerChar("<= ", true, Messages.get("trigger.default.14")));
+        list.add(new TriggerChar(">= ", true, Messages.get("trigger.default.15")));
 
         // 2.4 算术与字符串运算符（带空格，光标在空格后时触发）
-        list.add(new TriggerChar("+ ", true, "Addition arithmetic operator"));
-        list.add(new TriggerChar("- ", true, "Subtraction arithmetic operator"));
-        list.add(new TriggerChar("* ", true, "Multiplication arithmetic operator"));
-        list.add(new TriggerChar("/ ", true, "Division arithmetic operator"));
-        list.add(new TriggerChar("&& ", true, "String concatenation operator (new syntax)"));
+        list.add(new TriggerChar("+ ", true, Messages.get("trigger.default.16")));
+        list.add(new TriggerChar("- ", true, Messages.get("trigger.default.17")));
+        list.add(new TriggerChar("* ", true, Messages.get("trigger.default.18")));
+        list.add(new TriggerChar("/ ", true, Messages.get("trigger.default.19")));
+        list.add(new TriggerChar("&& ", true, Messages.get("trigger.default.20")));
 
         // 2.5 特定上下文关键字（后需带空格的触发词）
-        list.add(new TriggerChar("DATA ", true, "Declare a variable (requires trailing space)"));
-        list.add(new TriggerChar("@DATA(", true, "Inline declaration with value assignment"));
-        list.add(new TriggerChar("TYPE ", true, "Specify a data type (requires trailing space)"));
-        list.add(new TriggerChar("VALUE ", true, "VALUE operator: constructs complex data structures (requires trailing space)"));
-        list.add(new TriggerChar("CORRESPONDING ", true, "CORRESPONDING: structure assignment by component name (requires trailing space)"));
-        list.add(new TriggerChar("NEW ", true, "Constructor operator: creates an object instance (requires trailing space)"));
-        list.add(new TriggerChar("CONV ", true, "Conversion operator: type conversion (requires trailing space)"));
-        list.add(new TriggerChar("SELECT ", true, "Query selection (requires trailing space)"));
-        list.add(new TriggerChar("FROM ", true, "Data source of a query (requires trailing space)"));
-        list.add(new TriggerChar("WHERE ", true, "Query condition (requires trailing space)"));
+        list.add(new TriggerChar("DATA ", true, Messages.get("trigger.default.21")));
+        list.add(new TriggerChar("@DATA(", true, Messages.get("trigger.default.22")));
+        list.add(new TriggerChar("TYPE ", true, Messages.get("trigger.default.23")));
+        list.add(new TriggerChar("VALUE ", true, Messages.get("trigger.default.24")));
+        list.add(new TriggerChar("CORRESPONDING ", true, Messages.get("trigger.default.25")));
+        list.add(new TriggerChar("NEW ", true, Messages.get("trigger.default.26")));
+        list.add(new TriggerChar("CONV ", true, Messages.get("trigger.default.27")));
+        list.add(new TriggerChar("SELECT ", true, Messages.get("trigger.default.28")));
+        list.add(new TriggerChar("FROM ", true, Messages.get("trigger.default.29")));
+        list.add(new TriggerChar("WHERE ", true, Messages.get("trigger.default.30")));
 
         return list;
     }
@@ -114,6 +114,26 @@ public class TriggerChar {
     public static void saveAll(List<TriggerChar> list, IPreferenceStore store) {
         if (store == null) return;
         store.setValue(PreferenceConstants.AUTO_COMPLETE_TRIGGER_CHARS, toJson(list));
+    }
+
+    /**
+     * 按当前语言的默认值刷新 trigger char 描述。
+     * 仅更新那些 {@link #triggerChar} 匹配内置默认的条目；用户自行添加的
+     * 条目（triggerChar 不在 defaults() 中）保持描述不变。
+     * 调用前需确保 Java ResourceBundle 缓存已清除、Locale 已切换到新语言
+     * （否则 defaults() 返回的仍是旧语言描述）。
+     */
+    public static void refreshDefaultDescriptions(List<TriggerChar> current) {
+        if (current == null || current.isEmpty()) return;
+        List<TriggerChar> newDefaults = defaults();
+        for (TriggerChar entry : current) {
+            for (TriggerChar def : newDefaults) {
+                if (def.triggerChar.equals(entry.triggerChar)) {
+                    entry.description = def.description;
+                    break;
+                }
+            }
+        }
     }
 
     /**
