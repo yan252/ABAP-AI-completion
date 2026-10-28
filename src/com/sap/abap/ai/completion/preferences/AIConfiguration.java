@@ -81,6 +81,11 @@ public final class AIConfiguration {
         return getStore().getBoolean(PreferenceConstants.AUTO_COMPLETION_ENABLED);
     }
 
+    /** 保存 ABAP 对象时是否自动记录到 Project Explorer 的 "Recently Modified" 节点。 */
+    public static boolean isRecentlyModifiedOnSaveEnabled() {
+        return getStore().getBoolean(PreferenceConstants.RECENTLY_MODIFIED_ON_SAVE_ENABLED);
+    }
+
     // === Auto Completion Settings ===
 
     public static int getAutoCompleteDelay() {

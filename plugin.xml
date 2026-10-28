@@ -120,4 +120,40 @@
       </menuContribution>
    </extension>
 
+   <!-- "Recently Modified" node contributed to the ADT Project Explorer tree.
+        A self-contained navigatorContent (own content/label provider and sorter)
+        listed under each ABAP project; it is only shown once at least one ABAP
+        object has been saved in that project. Data is kept locally by
+        RecentlyModifiedStore, so no backend support is required. -->
+   <extension point="org.eclipse.ui.navigator.navigatorContent">
+      <navigatorContent
+            id="com.sap.abap.ai.completion.recentlyModifiedContent"
+            name="%recent.content.name"
+            contentProvider="com.sap.abap.ai.completion.recent.RecentlyModifiedContentProvider"
+            labelProvider="com.sap.abap.ai.completion.recent.RecentlyModifiedLabelProvider"
+            activeByDefault="true">
+         <triggerPoints>
+            <or>
+               <instanceof value="org.eclipse.core.resources.IProject"/>
+            </or>
+         </triggerPoints>
+         <commonSorter
+               class="com.sap.abap.ai.completion.recent.RecentlyModifiedSorter"
+               id="com.sap.abap.ai.completion.recent.sorter">
+         </commonSorter>
+         <actionProvider
+               class="com.sap.abap.ai.completion.recent.RecentlyModifiedActionProvider"
+               id="com.sap.abap.ai.completion.recentlyModifiedActions">
+         </actionProvider>
+      </navigatorContent>
+   </extension>
+
+   <extension point="org.eclipse.ui.navigator.viewer">
+      <viewerContentBinding viewerId="org.eclipse.ui.navigator.ProjectExplorer">
+         <includes>
+            <contentExtension pattern="com.sap.abap.ai.completion.recentlyModifiedContent"/>
+         </includes>
+      </viewerContentBinding>
+   </extension>
+
 </plugin>

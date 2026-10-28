@@ -20,6 +20,7 @@ import org.osgi.framework.BundleContext;
 
 import com.sap.abap.ai.completion.editor.AICompletionListener;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
+import com.sap.abap.ai.completion.recent.RecentlyModifiedOnSaveListener;
 import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
 public class Activator extends AbstractUIPlugin implements IStartup {
@@ -30,6 +31,13 @@ public class Activator extends AbstractUIPlugin implements IStartup {
 
     /** 自动补全监听器（整个插件生命周期单例） */
     private AICompletionListener autoCompletionListener;
+
+    /** 保存时记录到"最近修改"节点的监听器（整个插件生命周期单例） */
+    private RecentlyModifiedOnSaveListener recentlyModifiedOnSaveListener;
+
+    /** 已注册过 part listener 的页面（防止同一 listener 被重复注册导致事件触发两次）。 */
+    private final java.util.Set<IWorkbenchPage> registeredPages =
+            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
 
     /** 是否已注册窗口监听器 */
     private boolean windowListenerRegistered = false;
@@ -46,6 +54,16 @@ public class Activator extends AbstractUIPlugin implements IStartup {
 
     public static AICompletionListener staticGetAutoCompletionListener() {
         return plugin != null ? plugin.getAutoCompletionListener() : null;
+    }
+
+    /**
+     * 获取"保存时记录到最近修改节点"监听器（必要时创建）。
+     */
+    public synchronized RecentlyModifiedOnSaveListener getRecentlyModifiedOnSaveListener() {
+        if (recentlyModifiedOnSaveListener == null) {
+            recentlyModifiedOnSaveListener = new RecentlyModifiedOnSaveListener();
+        }
+        return recentlyModifiedOnSaveListener;
     }
 
     @Override
@@ -138,14 +156,17 @@ public class Activator extends AbstractUIPlugin implements IStartup {
             if (window == null) return;
             final AICompletionListener listener = staticGetAutoCompletionListener();
             if (listener == null) return;
+            final RecentlyModifiedOnSaveListener recentListener =
+                    getRecentlyModifiedOnSaveListener();
 
             // 注册 page listener，捕获后续创建的页面
             window.addPageListener(new org.eclipse.ui.IPageListener() {
                 @Override
                 public void pageOpened(IWorkbenchPage page) {
-                    page.addPartListener(listener);
-                    Platform.getLog(getBundle()).log(new Status(IStatus.INFO, PLUGIN_ID,
-                            "pageOpened: part listener registered"));
+                    if (registerPartListeners(page, listener, recentListener)) {
+                        Platform.getLog(getBundle()).log(new Status(IStatus.INFO, PLUGIN_ID,
+                                "pageOpened: part listener registered"));
+                    }
                 }
                 @Override
                 public void pageClosed(IWorkbenchPage page) { }
@@ -155,7 +176,7 @@ public class Activator extends AbstractUIPlugin implements IStartup {
 
             // 遍历窗口中已有页面注册 part listener
             for (IWorkbenchPage page : window.getPages()) {
-                page.addPartListener(listener);
+                registerPartListeners(page, listener, recentListener);
             }
 
             // 尝试附加到当前激活编辑器
@@ -166,9 +187,33 @@ public class Activator extends AbstractUIPlugin implements IStartup {
         }
     }
 
+    /**
+     * 向页面注册 part listener（同一页面只注册一次）。
+     *
+     * <p>attachListenerToWindow 会由 windowOpened、已有窗口遍历和 earlyStartup
+     * 多次触发，若不记录已注册页面，同一个 listener 实例会被重复添加到同一页面，
+     * 导致每次事件触发两次回调。</p>
+     *
+     * @return true 表示本次执行了注册，false 表示该页面已注册过
+     */
+    private boolean registerPartListeners(IWorkbenchPage page,
+            AICompletionListener listener, RecentlyModifiedOnSaveListener recentListener) {
+        if (page == null) return false;
+        synchronized (registeredPages) {
+            if (!registeredPages.add(page)) return false;
+        }
+        page.addPartListener(listener);
+        if (recentListener != null) {
+            page.addPartListener(recentListener);
+            recentListener.attachOpenEditors(page);
+        }
+        return true;
+    }
+
     @Override
     public void stop(BundleContext context) throws Exception {
         autoCompletionListener = null;
+        recentlyModifiedOnSaveListener = null;
         plugin = null;
         super.stop(context);
     }

@@ -48,6 +48,7 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
     private Text txtSkillDir;
     private Button chkSkillEnabled;
     private Text txtSystemPrompt;    private Button chkPluginEnabled;    private ColorSelector colorSelector;    private Button chkParentResolution;
+    private Button chkRecentlyModified;
     private Combo cmbLanguage;
     private Text txtSearchDepth;
     private Text txtMaxContextChars;
@@ -138,6 +139,14 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
 
         chkPluginEnabled = new Button(g, SWT.CHECK);
         chkPluginEnabled.setText(Messages.get("mainPage.checkbox.enablePlugin"));
+
+        chkRecentlyModified = new Button(g, SWT.CHECK);
+        chkRecentlyModified.setText(Messages.get("mainPage.checkbox.recentlyModified"));
+
+        Label favNote = new Label(g, SWT.WRAP);
+        favNote.setText(Messages.get("mainPage.note.recentlyModified"));
+        GridData fnGd = new GridData(GridData.FILL_HORIZONTAL);
+        favNote.setLayoutData(fnGd);
 
         Composite langRow = new Composite(g, SWT.NONE);
         langRow.setLayout(new GridLayout(2, false));
@@ -309,6 +318,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtSystemPrompt.setText(store.getString(PreferenceConstants.SYSTEM_PROMPT));
 
         chkPluginEnabled.setSelection(store.getBoolean(PreferenceConstants.PLUGIN_ENABLED));
+        chkRecentlyModified.setSelection(
+                store.getBoolean(PreferenceConstants.RECENTLY_MODIFIED_ON_SAVE_ENABLED));
         cmbLanguage.select(PreferenceConstants.LANG_ZH.equals(
                 store.getString(PreferenceConstants.PLUGIN_LANGUAGE)) ? 0 : 1);
         loadedLanguage = store.getString(PreferenceConstants.PLUGIN_LANGUAGE);
@@ -348,6 +359,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         store.setValue(PreferenceConstants.SYSTEM_PROMPT, txtSystemPrompt.getText());
 
         store.setValue(PreferenceConstants.PLUGIN_ENABLED, chkPluginEnabled.getSelection());
+        store.setValue(PreferenceConstants.RECENTLY_MODIFIED_ON_SAVE_ENABLED,
+                chkRecentlyModified.getSelection());
         store.setValue(PreferenceConstants.PLUGIN_LANGUAGE, cmbLanguage.getSelectionIndex() == 0
                 ? PreferenceConstants.LANG_ZH : PreferenceConstants.LANG_EN);
 
@@ -500,6 +513,8 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
         txtSystemPrompt.setText(PreferenceConstants.DEFAULT_SYSTEM_PROMPT);
 
         chkPluginEnabled.setSelection(PreferenceConstants.DEFAULT_PLUGIN_ENABLED);
+        chkRecentlyModified.setSelection(
+                PreferenceConstants.DEFAULT_RECENTLY_MODIFIED_ON_SAVE_ENABLED);
         cmbLanguage.select(PreferenceConstants.LANG_ZH.equals(
                 PreferenceConstants.DEFAULT_PLUGIN_LANGUAGE) ? 0 : 1);
 
