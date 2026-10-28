@@ -30,6 +30,8 @@ public final class PreferenceConstants {
     public static final String AUTO_COMPLETION_ENABLED = "autoCompletionEnabled";
     /** 保存 ABAP 对象时自动记录到 Project Explorer 的 "Recently Modified" 节点（本地存储）。 */
     public static final String RECENTLY_MODIFIED_ON_SAVE_ENABLED = "recentlyModifiedOnSaveEnabled";
+    /** "Recently Modified" 节点下每个项目最多保留的最近修改对象数。 */
+    public static final String RECENTLY_MODIFIED_MAX_ENTRIES = "recentlyModifiedMaxEntries";
 
     // === Plugin UI Language ===
     /** 插件界面语言: zh-中文, en-英文。默认按操作系统语言推导（仅未保存过配置时生效）。 */
@@ -137,6 +139,7 @@ public final class PreferenceConstants {
     public static final boolean DEFAULT_PLUGIN_ENABLED = true;
     public static final boolean DEFAULT_AUTO_COMPLETION_ENABLED = true;
     public static final boolean DEFAULT_RECENTLY_MODIFIED_ON_SAVE_ENABLED = true;
+    public static final int DEFAULT_RECENTLY_MODIFIED_MAX_ENTRIES = 10;
     public static final String DEFAULT_AUTO_COMPLETE_DELAY = "2000";
     public static final String DEFAULT_COMPLETION_COLOR = "0,128,0";
     public static final String DEFAULT_MANUAL_COMPLETION_MODE = "direct";

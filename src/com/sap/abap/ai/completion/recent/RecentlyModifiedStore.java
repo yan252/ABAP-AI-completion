@@ -24,7 +24,7 @@ import org.eclipse.core.runtime.Status;
 import org.osgi.framework.Bundle;
 
 import com.sap.abap.ai.completion.Activator;
-import com.sap.abap.ai.completion.preferences.AIConfiguration;
+import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
 /**
  * "最近修改" 本地存储：按项目名分组，持久化到工作区 .metadata 下。
@@ -34,7 +34,6 @@ import com.sap.abap.ai.completion.preferences.AIConfiguration;
  */
 public final class RecentlyModifiedStore {
 
-    private static final int MAX_ENTRIES_PER_PROJECT = 30;
     private static final String LINE_SEP = "\n";
     private static final String FIELD_SEP = "|";
 
@@ -106,12 +105,45 @@ public final class RecentlyModifiedStore {
                 projectName, name, type, System.currentTimeMillis(), filePath, uri);
         list.add(0, entry);
 
-        if (list.size() > MAX_ENTRIES_PER_PROJECT) {
-            list = new ArrayList<>(list.subList(0, MAX_ENTRIES_PER_PROJECT));
-            projectEntries.put(projectName, list);
-        }
+        trimList(list, getMaxEntries());
 
         save();
+    }
+
+    /** 配置的每个项目最大保留条数（默认 10，最小 1）。 */
+    public static int getMaxEntries() {
+        try {
+            int max = Activator.getDefault().getPreferenceStore()
+                    .getInt(PreferenceConstants.RECENTLY_MODIFIED_MAX_ENTRIES);
+            return Math.max(1, max);
+        } catch (Throwable t) {
+            return PreferenceConstants.DEFAULT_RECENTLY_MODIFIED_MAX_ENTRIES;
+        }
+    }
+
+    /**
+     * 把所有项目的条目裁剪到当前配置的最大条数（移除最旧的对象）。
+     *
+     * @return 受影响（有裁减）的项目名列表，用于刷新 Project Explorer
+     */
+    public synchronized List<String> trimAllToMax() {
+        int max = getMaxEntries();
+        List<String> affected = new ArrayList<>();
+        for (Map.Entry<String, List<RecentlyModifiedEntry>> e : projectEntries.entrySet()) {
+            List<RecentlyModifiedEntry> list = e.getValue();
+            if (list.size() > max) {
+                trimList(list, max);
+                affected.add(e.getKey());
+            }
+        }
+        if (!affected.isEmpty()) save();
+        return affected;
+    }
+
+    private static void trimList(List<RecentlyModifiedEntry> list, int max) {
+        if (list.size() > max) {
+            list.subList(max, list.size()).clear();
+        }
     }
 
     // ==================== 持久化 ====================

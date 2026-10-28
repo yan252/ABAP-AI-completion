@@ -36,6 +36,13 @@
             class="com.sap.abap.ai.completion.preferences.SapPreferencePage"
             name="%prefpage.sap">
       </page>
+      <!-- SAP 扩展功能配置页（Recently Modified 等 SAP 相关扩展） -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.sapExtension"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.SapExtensionPreferencePage"
+            name="%prefpage.extension">
+      </page>
    </extension>
 
    <extension point="org.eclipse.core.runtime.preferences">
