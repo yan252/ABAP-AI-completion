@@ -195,6 +195,9 @@ public class RecentlyModifiedOnSaveListener implements IPartListener2 {
 
             logInfo("recorded " + object.name + " (" + object.type + ") in " + projectName);
 
+            // 同时加入 ADT 标准 "Favorite Objects" 节点（后台 Job，先移除再添加）
+            AdtFavoritesUpdater.addToFavoritesAsync(object.project, object.name, object.type);
+
             // 始终刷新项目节点：CNF 只在项目节点的子节点被刷新后才会重新调用
             // content provider。若仅刷新"最近修改"根节点，而该节点尚未出现在
             // 树中（上一次缓存为"无子节点"），刷新是空操作，节点永远不会出现。

@@ -139,7 +139,7 @@ public final class PreferenceConstants {
     public static final boolean DEFAULT_PLUGIN_ENABLED = true;
     public static final boolean DEFAULT_AUTO_COMPLETION_ENABLED = true;
     public static final boolean DEFAULT_RECENTLY_MODIFIED_ON_SAVE_ENABLED = true;
-    public static final int DEFAULT_RECENTLY_MODIFIED_MAX_ENTRIES = 10;
+    public static final int DEFAULT_RECENTLY_MODIFIED_MAX_ENTRIES = 20;
     public static final String DEFAULT_AUTO_COMPLETE_DELAY = "2000";
     public static final String DEFAULT_COMPLETION_COLOR = "0,128,0";
     public static final String DEFAULT_MANUAL_COMPLETION_MODE = "direct";
