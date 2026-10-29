@@ -2,19 +2,25 @@ package com.sap.abap.ai.completion.recent;
 
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IAdaptable;
+import org.eclipse.jface.viewers.TreeNode;
 
 /**
  * "最近修改" 根节点（每个 ABAP 项目下各一个）。
+ *
+ * <p>继承 {@link TreeNode}：作为 ADT 原生 Repository Object 节点
+ * （{@code AbapRepositoryObjectGenericNode(TreeViewer, IProject, TreeNode, IRepositoryObject)}）
+ * 的父节点传入，ADT 展开子节点时需要有效的父 TreeNode 与 TreeViewer。</p>
  *
  * <p>{@link #equals(Object)} / {@link #hashCode()} 按项目名判定相等，
  * 这样刷新时可以新建实例作为 {@code CommonViewer#refresh(Object)} 的目标，
  * 无需缓存节点实例。</p>
  */
-public final class RecentlyModifiedRoot implements IAdaptable {
+public final class RecentlyModifiedRoot extends TreeNode implements IAdaptable {
 
     private final IProject project;
 
     public RecentlyModifiedRoot(IProject project) {
+        super(project);
         this.project = project;
     }
 

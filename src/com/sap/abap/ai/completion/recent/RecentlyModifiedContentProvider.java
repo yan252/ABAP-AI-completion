@@ -58,7 +58,7 @@ public class RecentlyModifiedContentProvider implements ITreeContentProvider {
         }
         if (parentElement instanceof RecentlyModifiedRoot) {
             RecentlyModifiedRoot root = (RecentlyModifiedRoot) parentElement;
-            return getFilesForProject(root.getProject().getName());
+            return getFilesForProject(root);
         }
         // 其他任何父节点（包括 ADT 的虚拟包装对象）一律返回空，避免套娃。
         return EMPTY;
@@ -70,10 +70,14 @@ public class RecentlyModifiedContentProvider implements ITreeContentProvider {
      * <p>优先构造 ADT 原生的 Repository Object 节点（可双击打开、可展开子节点）；
      * ADT bundle 缺失时回退到返回 IFile（只能双击打开、不能展开）。</p>
      */
-    private static Object[] getFilesForProject(String projectName) {
+    private static Object[] getFilesForProject(RecentlyModifiedRoot root) {
+        String projectName = root.getProject().getName();
         List<RecentlyModifiedEntry> entries = RecentlyModifiedStore.getInstance()
                 .getEntries(projectName);
         if (entries.isEmpty()) return EMPTY;
+
+        // ADT 原生节点构造需要宿主 TreeViewer（否则展开子节点 NPE）
+        Object viewer = NavigatorUtil.findProjectExplorerViewer();
 
         java.util.ArrayList<Object> nodes = new java.util.ArrayList<>();
         for (RecentlyModifiedEntry entry : entries) {
@@ -81,7 +85,7 @@ public class RecentlyModifiedContentProvider implements ITreeContentProvider {
             IProject project = ResourcesPlugin.getWorkspace().getRoot()
                     .getProject(projectName);
             Object node = AdtNodeFactory.createObjectNode(
-                    project, entry.getName(), entry.getType(),
+                    viewer, project, root, entry.getName(), entry.getType(),
                     entry.getFilePath(), entry.getUri());
             if (node != null) {
                 nodes.add(node);

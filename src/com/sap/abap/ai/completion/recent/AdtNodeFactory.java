@@ -75,10 +75,16 @@ public final class AdtNodeFactory {
     /**
      * 构造一个 ADT 原生的可展开/可双击的 Repository Object 树节点。
      *
+     * <p>优先使用 4 参构造器
+     * {@code AbapRepositoryObjectGenericNode(TreeViewer, IProject, TreeNode, IRepositoryObject)}：
+     * ADT 展开子节点时会访问节点的 viewer 字段，2 参构造器会留下 null viewer 导致 NPE。</p>
+     *
+     * @param viewer 宿主 TreeViewer（Project Explorer 的 CommonViewer），可为 null（退回 2 参构造器）
+     * @param parent 父 TreeNode（RecentlyModifiedRoot），可为 null
      * @return 可直接放进 CNF 的节点对象，失败返回 null
      */
-    public static Object createObjectNode(IProject project, String name, String type,
-            String filePath, String uri) {
+    public static Object createObjectNode(Object viewer, IProject project, Object parent,
+            String name, String type, String filePath, String uri) {
         if (project == null || name == null || name.isEmpty()) return null;
 
         // 优先让 ADT 自己解析 URI（IAdtUriMappingService.getAdtUri），
@@ -107,7 +113,18 @@ public final class AdtNodeFactory {
             setFieldCrossHierarchy(repoObj, listItemClass, "technicalName", name);
             setFieldCrossHierarchy(repoObj, listItemClass, "displayName", name);
             setFieldCrossHierarchy(repoObj, listItemClass, "type", type);
-            setFieldCrossHierarchy(repoObj, listItemClass, "nodeId", type + "/" + name);
+            // 注意：不要自造 nodeId！展开子节点时 AbapRepositoryObjectGenericNode
+            // 会把 RepositoryObjectListItem.nodeId 作为 parentNodeIds 传给后端
+            // readTreeContent；自造 id 后端无法解析 → 子节点为空。
+            // 留空时 ADT 回退为 ["000000"]，后端按 parentName+parentType 解析顶层对象。
+
+            // hasChildren() 读的是 expandable 字段：可展开类型设为 true，
+            // 展开时 ADT 异步走 RepositoryTreeService.readTreeContent 加载子节点
+            // （字典结构/类型组/类/字段等），与 "Favorite Objects" 下的对象树一致。
+            try {
+                listItemClass.getMethod("setExpandable", boolean.class)
+                        .invoke(repoObj, isExpandableType(type));
+            } catch (Throwable ignored) { }
 
             // 反射设 URI —— 关键：AdtObjectReference.getUri() 读的是父类 .uri 字段，
             // 不是 RepositoryObjectListItem.vitUri！先调 setter（继承链里能找到），
@@ -134,9 +151,26 @@ public final class AdtNodeFactory {
                 logDebug("AbapRepositoryObjectGenericNode not available");
                 return null;
             }
-            java.lang.reflect.Constructor<?> ctor = nodeClass
-                    .getConstructor(IProject.class, repoObjClass);
-            Object node = ctor.newInstance(project, repoObj);
+            Object node = null;
+            // 优先 4 参构造器（带 TreeViewer + 父 TreeNode），展开子节点不 NPE
+            if (viewer instanceof org.eclipse.jface.viewers.TreeViewer
+                    && parent instanceof org.eclipse.jface.viewers.TreeNode) {
+                try {
+                    java.lang.reflect.Constructor<?> ctor4 = nodeClass.getConstructor(
+                            org.eclipse.jface.viewers.TreeViewer.class,
+                            IProject.class,
+                            org.eclipse.jface.viewers.TreeNode.class,
+                            repoObjClass);
+                    node = ctor4.newInstance(viewer, project, parent, repoObj);
+                } catch (NoSuchMethodException e) {
+                    logDebug("4-arg constructor not found, fallback to 2-arg");
+                }
+            }
+            if (node == null) {
+                java.lang.reflect.Constructor<?> ctor = nodeClass
+                        .getConstructor(IProject.class, repoObjClass);
+                node = ctor.newInstance(project, repoObj);
+            }
             logDebug("created ADT node for " + name + " (" + type + "), uri=" + uri);
             return node;
         } catch (Throwable t) {
@@ -217,6 +251,18 @@ public final class AdtNodeFactory {
         }
 
         return base + lowerName + "/source/main";
+    }
+
+    /** 该类型在 ADT 对象树中是否有下级子节点（叶子类型如 include、函数模块返回 false）。 */
+    private static boolean isExpandableType(String type) {
+        if (type == null) return false;
+        return type.startsWith("PROG/P")     // 程序（含 include/字典结构/类型组等）
+                || type.startsWith("CLAS/")  // 类（方法/属性等）
+                || type.startsWith("INTF/")  // 接口
+                || type.startsWith("TABL/")  // 表（字段）
+                || type.startsWith("STRU/")  // 结构（字段）
+                || type.startsWith("DDLS/")  // CDS 视图
+                || type.startsWith("FUGR/F");// 函数组（函数模块）
     }
 
     /** 跨类继承链反射设字段：子类没有就找父类。 */
