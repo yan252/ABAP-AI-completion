@@ -423,6 +423,11 @@ public class AICompletionPreferencePage extends PreferencePage implements IWorkb
             } catch (org.osgi.service.prefs.BackingStoreException e) {
                 // ignore - hard restart below means loss is acceptable
             }
+            // 把 -nl 持久化到 eclipse.ini：否则用户从快捷方式手动冷启动时，
+            // Equinox 在 OSGi 初始化期按操作系统语言解析 plugin.xml 的 %key 标签
+            // （配置页树节点名称），与插件语言偏好不一致（表现为"设置英文但页名中文"）。
+            // 写入 ini 后任何启动方式都会先用正确语言，无需依赖带 -nl 的重启。
+            PluginLocale.syncEclipseIniNl(newLanguage);
             promptRestartForLanguageChange();
         }
         return true;

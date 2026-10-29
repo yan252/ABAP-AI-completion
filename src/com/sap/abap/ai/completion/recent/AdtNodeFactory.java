@@ -7,6 +7,7 @@ import java.util.Map;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.ILog;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Path;
@@ -113,6 +114,21 @@ public final class AdtNodeFactory {
             setFieldCrossHierarchy(repoObj, listItemClass, "technicalName", name);
             setFieldCrossHierarchy(repoObj, listItemClass, "displayName", name);
             setFieldCrossHierarchy(repoObj, listItemClass, "type", type);
+
+            // 对象描述：与 "Favorite Objects" 一致，在名称后显示 ADT 对象描述。
+            // ADT 标签提供器的 getDescription(Object) 直接读
+            // IRepositoryObject.getDescription()（继承自 AdtObjectReference.description），
+            // 描述保存在工作区同目录的属性文件里（zewme00120.asprog ↔ zewme00120.approg，
+            // 内容是 XML，含 adtcore:description 属性），因此可离线读取，无需后端调用。
+            String description = readDescriptionFromMetadata(filePath);
+            if (description != null && !description.isEmpty()) {
+                try {
+                    listItemClass.getMethod("setDescription", String.class)
+                            .invoke(repoObj, description);
+                } catch (Throwable ignored) {
+                    setFieldCrossHierarchy(repoObj, listItemClass, "description", description);
+                }
+            }
             // 注意：不要自造 nodeId！展开子节点时 AbapRepositoryObjectGenericNode
             // 会把 RepositoryObjectListItem.nodeId 作为 parentNodeIds 传给后端
             // readTreeContent；自造 id 后端无法解析 → 子节点为空。
@@ -171,7 +187,8 @@ public final class AdtNodeFactory {
                         .getConstructor(IProject.class, repoObjClass);
                 node = ctor.newInstance(project, repoObj);
             }
-            logDebug("created ADT node for " + name + " (" + type + "), uri=" + uri);
+            logDebug("created ADT node for " + name + " (" + type + "), uri=" + uri
+                    + ", description=" + description);
             return node;
         } catch (Throwable t) {
             logDebug("createObjectNode failed for " + name + " (" + type + "): " + t.getMessage());
@@ -263,6 +280,70 @@ public final class AdtNodeFactory {
                 || type.startsWith("STRU/")  // 结构（字段）
                 || type.startsWith("DDLS/")  // CDS 视图
                 || type.startsWith("FUGR/F");// 函数组（函数模块）
+    }
+
+    /**
+     * 从 ADT 工作区属性文件读取对象描述。
+     *
+     * <p>源文件 {@code name.asXxx} 的属性文件是同目录的 {@code name.apXxx}
+     * （如 {@code zewme00120.asprog ↔ zewme00120.approg}），其中含有
+     * {@code adtcore:description="..."} 属性。文件不存在或解析失败返回 null，
+     * 节点照常显示，只是名称后没有描述。</p>
+     */
+    static String readDescriptionFromMetadata(String filePath) {
+        if (filePath == null || filePath.isEmpty()) return null;
+        try {
+            IResource src = ResourcesPlugin.getWorkspace().getRoot()
+                    .findMember(new Path(filePath));
+            if (src == null) return null;
+            String name = src.getName();
+            int dot = name.lastIndexOf('.');
+            if (dot < 0) return null;
+            String ext = name.substring(dot + 1);   // 如 "asprog"
+            if (!ext.startsWith("as")) return null;
+            String metaName = name.substring(0, dot) + ".ap" + ext.substring(2);
+
+            // 优先按工作区资源读；semantic FS 资源可能尚未在索引中，退回本地磁盘文件
+            String xml = null;
+            if (src instanceof IFile && src.getParent() != null) {
+                IFile meta = src.getParent().getFile(new Path(metaName));
+                if (meta.exists()) {
+                    try (java.io.InputStream in = meta.getContents()) {
+                        xml = new String(in.readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                }
+                if (xml == null && src.getParent().getLocation() != null) {
+                    java.io.File raw = new java.io.File(
+                            src.getParent().getLocation().toFile(), metaName);
+                    if (raw.isFile()) {
+                        xml = new String(java.nio.file.Files.readAllBytes(raw.toPath()),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                }
+            }
+            return extractDescription(xml);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 从 ADT 属性 XML 中提取 {@code adtcore:description} 的值。 */
+    static String extractDescription(String xml) {
+        if (xml == null) return null;
+        String marker = "adtcore:description=\"";
+        int idx = xml.indexOf(marker);
+        if (idx < 0) return null;
+        int start = idx + marker.length();
+        int end = xml.indexOf('"', start);
+        if (end < 0) return null;
+        return unescapeXml(xml.substring(start, end)).trim();
+    }
+
+    private static String unescapeXml(String s) {
+        return s.replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&quot;", "\"").replace("&apos;", "'")
+                .replace("&amp;", "&");
     }
 
     /** 跨类继承链反射设字段：子类没有就找父类。 */

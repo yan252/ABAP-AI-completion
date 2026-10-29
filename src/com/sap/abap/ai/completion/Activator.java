@@ -20,6 +20,7 @@ import org.osgi.framework.BundleContext;
 
 import com.sap.abap.ai.completion.editor.AICompletionListener;
 import com.sap.abap.ai.completion.preferences.AIConfiguration;
+import com.sap.abap.ai.completion.preferences.PluginLocale;
 import com.sap.abap.ai.completion.recent.RecentlyModifiedOnSaveListener;
 import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
@@ -80,10 +81,24 @@ public class Activator extends AbstractUIPlugin implements IStartup {
         // Bundle-Localization) follow the selected language after a restart,
         // even when the OS language differs.
         String uiLang = store.getString(PreferenceConstants.PLUGIN_LANGUAGE);
+        // 本次启动时 JVM 实际使用的语言（来自 eclipse.ini 的 -nl 或操作系统语言）。
+        // 必须在下面的 setDefault 之前取，否则读到的已经是改过的值。
+        String startupLang = Locale.getDefault().getLanguage();
         if (PreferenceConstants.LANG_ZH.equals(uiLang)) {
             Locale.setDefault(Locale.SIMPLIFIED_CHINESE);
         } else if (PreferenceConstants.LANG_EN.equals(uiLang)) {
             Locale.setDefault(Locale.ENGLISH);
+        }
+        // plugin.xml 里的 %prefpage.* 标签（首选项树中的配置页名称）由 Equinox 在
+        // 启动时按 startupLang 解析并缓存，插件语言偏好在启动后才生效，二者不一致时
+        // 页名会显示成"另一个语言"（如英文设置下显示中文页名）。这里把 -nl 写进
+        // eclipse.ini，使下次启动时解析语言与插件语言一致；首次安装时二者都来自
+        // 操作系统语言（英文系统 → 英文页名），因此无需额外处理。
+        boolean langMismatch = PreferenceConstants.LANG_ZH.equals(uiLang)
+                ? !startupLang.toLowerCase(Locale.ROOT).startsWith("zh")
+                : startupLang.toLowerCase(Locale.ROOT).startsWith("zh");
+        if (langMismatch) {
+            PluginLocale.syncEclipseIniNl(uiLang);
         }
 
         // 输出启动日志到 Eclipse Error Log（不依赖插件自身日志级别）
