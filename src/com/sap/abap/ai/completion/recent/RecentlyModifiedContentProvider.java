@@ -78,6 +78,10 @@ public class RecentlyModifiedContentProvider implements ITreeContentProvider {
 
         // ADT 原生节点构造需要宿主 TreeViewer（否则展开子节点 NPE）
         Object viewer = NavigatorUtil.findProjectExplorerViewer();
+        // 兜底安装菜单守卫：正常情况下 inputChanged 已安装，此处防止漏装。
+        if (viewer instanceof Viewer) {
+            RecentlyModifiedActionProvider.installMenuGuard((Viewer) viewer);
+        }
 
         java.util.ArrayList<Object> nodes = new java.util.ArrayList<>();
         for (RecentlyModifiedEntry entry : entries) {
@@ -134,6 +138,10 @@ public class RecentlyModifiedContentProvider implements ITreeContentProvider {
 
     @Override
     public void inputChanged(Viewer viewer, Object oldInput, Object newInput) {
+        // 给宿主 Tree 安装 Delete 菜单守卫（置灰 Recently Modified 下的 Delete）。
+        // 走这里而不是依赖 actionProvider.fillContextMenu：后者能否被 CNF 调用
+        // 取决于对 ADT 子节点的适用性判断，1.2.4 实测对子节点不触发。
+        RecentlyModifiedActionProvider.installMenuGuard(viewer);
     }
 }
 

@@ -45,6 +45,35 @@
       </page>
    </extension>
 
+   <!-- 识别 "Recently Modified" 下节点的 property tester：
+        disabled Delete handler 与 navigatorContent triggerPoints 共用。 -->
+   <extension point="org.eclipse.core.expressions.propertyTesters">
+      <propertyTester
+            id="com.sap.abap.ai.completion.recentlyModifiedNodeTester"
+            namespace="com.sap.abap.ai.completion.recentlyModified"
+            properties="node"
+            type="java.lang.Object"
+            class="com.sap.abap.ai.completion.recent.RecentlyModifiedNodeTester">
+      </propertyTester>
+   </extension>
+
+   <!-- 在 "Recently Modified" 节点上把 Delete 命令（org.eclipse.ui.edit.delete）
+        置灰：handler 始终 disabled，菜单项显示灰色且 Del 快捷键失效，
+        避免从该节点误删 SAP 服务器上的对象。 -->
+   <extension point="org.eclipse.ui.handlers">
+      <handler
+            commandId="org.eclipse.ui.edit.delete"
+            class="com.sap.abap.ai.completion.recent.DisabledDeleteHandler">
+         <activeWhen>
+            <with variable="selection">
+               <iterate ifEmpty="false">
+                  <test property="com.sap.abap.ai.completion.recentlyModified.node"/>
+               </iterate>
+            </with>
+         </activeWhen>
+      </handler>
+   </extension>
+
    <extension point="org.eclipse.core.runtime.preferences">
       <initializer class="com.sap.abap.ai.completion.preferences.PreferenceInitializer"/>
    </extension>
@@ -142,6 +171,9 @@
          <triggerPoints>
             <or>
                <instanceof value="org.eclipse.core.resources.IProject"/>
+               <!-- 让 actionProvider 也能在 "Recently Modified" 的子节点
+                    （ADT Repository Object 节点）上生效，用于置灰 Delete 菜单。 -->
+               <test property="com.sap.abap.ai.completion.recentlyModified.node"/>
             </or>
          </triggerPoints>
          <commonSorter
