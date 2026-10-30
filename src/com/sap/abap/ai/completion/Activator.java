@@ -255,5 +255,7 @@ public class Activator extends AbstractUIPlugin implements IStartup {
         ILog log = Platform.getLog(getBundle());
         log.log(new Status(IStatus.INFO, PLUGIN_ID, "earlyStartup: backup registration"));
         Display.getDefault().asyncExec(this::registerWindowListenerAndAttach);
+        // 确保 "事务码收藏" 的 CNF 扩展已激活并刷新，使节点在项目打开时即显示
+        com.sap.abap.ai.completion.tcode.TcodeFavoriteInitializer.scheduleActivation();
     }
 }

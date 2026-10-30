@@ -13,6 +13,8 @@ import com.sap.abap.ai.completion.Activator;
 public class AIConnectionEntry {
 
     public String name;
+    /** 模型厂商名称（见 {@link AIProvider}）；Custom 表示手动填写。 */
+    public String vendor;
     public String baseUrl;
     public String model;
     public String apiKey;
@@ -22,6 +24,7 @@ public class AIConnectionEntry {
 
     public AIConnectionEntry() {
         this.name = "";
+        this.vendor = AIProvider.byName("DeepSeek").name;
         this.baseUrl = PreferenceConstants.DEFAULT_API_BASE_URL;
         this.model = PreferenceConstants.DEFAULT_API_MODEL;
         this.apiKey = "";
@@ -30,9 +33,10 @@ public class AIConnectionEntry {
         this.isDefault = false;
     }
 
-    public AIConnectionEntry(String name, String baseUrl, String model, String apiKey,
+    public AIConnectionEntry(String name, String vendor, String baseUrl, String model, String apiKey,
                              String maxTokens, String temperature, boolean isDefault) {
         this.name = name;
+        this.vendor = vendor;
         this.baseUrl = baseUrl;
         this.model = model;
         this.apiKey = apiKey;
@@ -55,6 +59,7 @@ public class AIConnectionEntry {
         List<AIConnectionEntry> list = new ArrayList<>();
         list.add(new AIConnectionEntry(
                 PreferenceConstants.DEFAULT_FREE_AI_NAME,
+                "Agnes",
                 PreferenceConstants.DEFAULT_FREE_AI_BASE_URL,
                 PreferenceConstants.DEFAULT_FREE_AI_MODEL,
                 PreferenceConstants.DEFAULT_FREE_AI_API_KEY,
@@ -63,6 +68,7 @@ public class AIConnectionEntry {
                 true));
         list.add(new AIConnectionEntry(
                 PreferenceConstants.DEFAULT_DEEPSEEK_NAME,
+                "DeepSeek",
                 PreferenceConstants.DEFAULT_DEEPSEEK_BASE_URL,
                 PreferenceConstants.DEFAULT_DEEPSEEK_MODEL,
                 PreferenceConstants.DEFAULT_DEEPSEEK_API_KEY,
@@ -109,6 +115,7 @@ public class AIConnectionEntry {
             // 向后兼容：从旧的单连接字段迁移一条默认条目
             AIConnectionEntry defaultEntry = new AIConnectionEntry();
             defaultEntry.name = Messages.get("connPage.defaultConnectionName");
+            defaultEntry.vendor = AIProvider.infer(legacyUrl).name;
             defaultEntry.baseUrl = legacyUrl;
             defaultEntry.model = legacyModel;
             defaultEntry.apiKey = legacyKey;
@@ -133,6 +140,8 @@ public class AIConnectionEntry {
             AIConnectionEntry e = entries.get(i);
             sb.append("{").append("\"name\":")
               .append(escapeJson(e.name)).append(",")
+              .append("\"vendor\":")
+              .append(escapeJson(e.vendor)).append(",")
               .append("\"baseUrl\":")
               .append(escapeJson(e.baseUrl)).append(",")
               .append("\"model\":")
@@ -213,6 +222,11 @@ public class AIConnectionEntry {
         e.name = extractString(item, "name");
         e.baseUrl = extractString(item, "baseUrl");
         e.model = extractString(item, "model");
+        String vendor = extractString(item, "vendor");
+        // 旧版本保存的条目没有 vendor 字段：按已保存的 Base URL 推断厂商
+        e.vendor = (vendor == null || vendor.trim().isEmpty())
+                ? AIProvider.infer(e.baseUrl).name
+                : AIProvider.byName(vendor).name;
         e.apiKey = extractString(item, "apiKey");
         e.maxTokens = extractString(item, "maxTokens");
         e.temperature = extractString(item, "temperature");

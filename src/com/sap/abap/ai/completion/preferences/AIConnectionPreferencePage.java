@@ -8,6 +8,7 @@ import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
@@ -35,6 +36,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
 
     private List lstConnections;
     private Text txtConnName;
+    private Combo cmbVendor;
     private Text txtBaseUrl;
     private Text txtModel;
     private Text txtApiKey;
@@ -54,6 +56,8 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
 
     /** 刷新左侧列表期间置为 true，避免列表控件清空/重填触发选中事件 */
     private boolean refreshingList;
+    /** 程序化设置厂商下拉框选中的期间置为 true，避免触发 URL / 模型自动覆盖 */
+    private boolean refreshingVendor;
 
     public AIConnectionPreferencePage() {
         super(Messages.get("connPage.title"));
@@ -129,6 +133,18 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
 
         createLabel(right, Messages.get("connPage.label.name"));
         txtConnName = createText(right);
+
+        // 模型厂商下拉框：选择内置厂商时自动填充对应的 API Base URL 与推荐模型
+        createLabel(right, Messages.get("connPage.label.vendor"));
+        cmbVendor = new Combo(right, SWT.DROP_DOWN | SWT.READ_ONLY);
+        GridData vendorGd = new GridData(GridData.FILL_HORIZONTAL);
+        vendorGd.widthHint = 260;
+        cmbVendor.setLayoutData(vendorGd);
+        for (AIProvider provider : AIProvider.all()) {
+            cmbVendor.add(provider.displayName());
+        }
+        cmbVendor.addSelectionListener(
+                SelectionListener.widgetSelectedAdapter(e -> onVendorSelected()));
 
         createLabel(right, Messages.get("connPage.label.baseUrl"));
         txtBaseUrl = createText(right);
@@ -259,6 +275,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
 
     private void fillForm(AIConnectionEntry entry) {
         txtConnName.setText(entry.name);
+        selectVendor(entry.vendor);
         txtBaseUrl.setText(entry.baseUrl);
         txtModel.setText(entry.model);
         txtApiKey.setText(entry.apiKey);
@@ -269,11 +286,40 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     private void clearForm() {
         currentEntry = null;
         txtConnName.setText("");
+        selectVendor(AIProvider.CUSTOM);
         txtBaseUrl.setText("");
         txtModel.setText("");
         txtApiKey.setText("");
         txtMaxTokens.setText("");
         txtTemperature.setText("");
+    }
+
+    /**
+     * 选择厂商下拉框中的指定厂商（程序化设置，不触发 URL / 模型自动覆盖）。
+     */
+    private void selectVendor(String vendor) {
+        AIProvider provider = AIProvider.byName(vendor);
+        int index = AIProvider.all().indexOf(provider);
+        refreshingVendor = true;
+        try {
+            cmbVendor.select(index < 0 ? AIProvider.all().size() - 1 : index);
+        } finally {
+            refreshingVendor = false;
+        }
+    }
+
+    /**
+     * 用户在厂商下拉框中切换厂商时，把该厂商的默认 API Base URL 与推荐模型填入表单。
+     * 选择 "Custom" 时不覆盖，保留用户手工填写的 URL / 模型。
+     */
+    private void onVendorSelected() {
+        if (refreshingVendor) return;
+        int index = cmbVendor.getSelectionIndex();
+        if (index < 0 || index >= AIProvider.all().size()) return;
+        AIProvider provider = AIProvider.all().get(index);
+        if (provider.isCustom()) return;
+        txtBaseUrl.setText(provider.baseUrl);
+        txtModel.setText(provider.model);
     }
 
     /**
@@ -292,6 +338,7 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     private void syncFormToEntry() {
         if (currentEntry == null) return;
         currentEntry.name = txtConnName.getText().trim();
+        currentEntry.vendor = selectedVendorName();
         currentEntry.baseUrl = txtBaseUrl.getText().trim();
         currentEntry.model = txtModel.getText().trim();
         currentEntry.apiKey = txtApiKey.getText().trim();
@@ -480,6 +527,13 @@ public class AIConnectionPreferencePage extends PreferencePage implements IWorkb
     }
 
     // ==================== Helpers ====================
+
+    /** 当前厂商下拉框选中项的持久化名称。 */
+    private String selectedVendorName() {
+        int index = cmbVendor.getSelectionIndex();
+        if (index < 0 || index >= AIProvider.all().size()) return AIProvider.CUSTOM;
+        return AIProvider.all().get(index).name;
+    }
 
     private Label createLabel(Composite parent, String text) {
         Label lbl = new Label(parent, SWT.NONE);
