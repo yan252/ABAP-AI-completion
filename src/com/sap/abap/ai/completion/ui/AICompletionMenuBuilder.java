@@ -31,6 +31,8 @@ import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 public final class AICompletionMenuBuilder {
 
     private static final String COMMAND_ID = "com.sap.abap.ai.completion.completeCommand";
+    private static final String CODE_SEARCH_COMMAND_ID =
+            "com.sap.abap.ai.completion.codeSearchCommand";
     private static final String HELP_URL = "https://github.com/yan252/ABAP-AI-completion";
 
     private AICompletionMenuBuilder() {
@@ -165,6 +167,16 @@ public final class AICompletionMenuBuilder {
             }
         });
 
+        // ABAP Code Search directly below "Code Completion".
+        MenuItem codeSearchItem = new MenuItem(menu, SWT.PUSH);
+        codeSearchItem.setText(Messages.get("menu.codeSearch"));
+        codeSearchItem.addSelectionListener(new SelectionAdapter() {
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                executeCommand(CODE_SEARCH_COMMAND_ID);
+            }
+        });
+
         new MenuItem(menu, SWT.SEPARATOR);
 
         MenuItem helpItem = new MenuItem(menu, SWT.PUSH);
@@ -289,11 +301,15 @@ public final class AICompletionMenuBuilder {
     // ==================== Actions ====================
 
     static void triggerCompletion() {
+        executeCommand(COMMAND_ID);
+    }
+
+    private static void executeCommand(String commandId) {
         try {
             IHandlerService hs = PlatformUI.getWorkbench().getService(IHandlerService.class);
             ICommandService cs = PlatformUI.getWorkbench().getService(ICommandService.class);
             if (hs == null || cs == null) return;
-            Command command = cs.getCommand(COMMAND_ID);
+            Command command = cs.getCommand(commandId);
             if (command == null || !command.isDefined()) return;
             ExecutionEvent event = hs.createExecutionEvent(command, null);
             command.executeWithChecks(event);
@@ -301,7 +317,7 @@ public final class AICompletionMenuBuilder {
             try {
                 IHandlerService hs = PlatformUI.getWorkbench().getService(IHandlerService.class);
                 if (hs != null) {
-                    hs.executeCommand(COMMAND_ID, null);
+                    hs.executeCommand(commandId, null);
                 }
             } catch (Exception ignored) {
             }

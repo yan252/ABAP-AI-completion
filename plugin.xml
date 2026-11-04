@@ -89,6 +89,13 @@
             name="%command.complete.name"
             defaultHandler="com.sap.abap.ai.completion.editor.AICompletionHandler">
       </command>
+      <!-- ABAP Code Search: opens the SE38-style find/replace dialog. -->
+      <command
+            id="com.sap.abap.ai.completion.codeSearchCommand"
+            categoryId="com.sap.abap.ai.completion.category"
+            name="%command.codeSearch.name"
+            defaultHandler="com.sap.abap.ai.completion.codesearch.AbapCodeSearchHandler">
+      </command>
    </extension>
 
    <extension point="org.eclipse.ui.bindings">
@@ -98,7 +105,43 @@
             schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
             contextId="org.eclipse.ui.textEditorScope">
       </key>
+      <key
+            sequence="M1+M2+H"
+            commandId="com.sap.abap.ai.completion.codeSearchCommand"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            contextId="org.eclipse.ui.textEditorScope">
+      </key>
    </extension>
+
+   <!-- ABAP Code Search page contributed as the first tab of the standard
+        Eclipse Search dialog (Ctrl+H). tabPosition=0 sorts before the built-in
+        pages (the file search page uses tabPosition=1). -->
+   <!-- The icon attribute is read by SearchPageDescriptor.getImage(); the
+        extension point does NOT use "image" here. -->
+   <extension point="org.eclipse.search.searchPages">
+      <page
+            id="com.sap.abap.ai.completion.codeSearchPage"
+            label="%searchPage.label"
+            class="com.sap.abap.ai.completion.codesearch.AbapCodeSearchPage"
+            icon="icons/SAPLogo1.png"
+            tabPosition="0"
+            sizeHint="480,300">
+      </page>
+   </extension>
+
+   <!-- Result page rendered in the Eclipse Search view for our query results:
+        program/include nodes with expandable matched lines. -->
+   <extension point="org.eclipse.search.searchResultViewPages">
+      <viewPage
+            id="com.sap.abap.ai.completion.codeSearchResultPage"
+            class="com.sap.abap.ai.completion.codesearch.AbapCodeSearchResultPage"
+            searchResultClass="com.sap.abap.ai.completion.codesearch.AbapCodeSearchResult">
+      </viewPage>
+   </extension>
+
+   <!-- Match highlighting in the editor uses the annotation type of the
+        Eclipse Search framework ("org.eclipse.search.results"). A private
+        annotation type declared here was never painted by the ADT editors. -->
 
    <!-- Status bar icon contributed to the status trim area.
         Eclipse provides native drag-and-drop reordering for trim items.

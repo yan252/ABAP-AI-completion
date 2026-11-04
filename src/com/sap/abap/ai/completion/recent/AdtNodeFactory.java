@@ -45,8 +45,29 @@ public final class AdtNodeFactory {
             "com.sap.adt.ris.search.repositoryservice.RepositoryObjectListItem";
     private static final String CLS_REPOSITORY_OBJECT =
             "com.sap.adt.ris.search.repositoryservice.IRepositoryObject";
+    // 收藏夹(VirtualFolder)用的是 AbapRepositoryObjectGenericLaunchableNode
+    // （实现 ILaunchableNode），不是 AbapRepositoryObjectGenericNode。
+    // 实测用基类节点时 PROG/I 展开返回空树，换成 Launchable 子类后与收藏夹行为一致。
     private static final String CLS_ABAP_NODE =
+            "com.sap.adt.projectexplorer.ui.internal.node.AbapRepositoryObjectGenericLaunchableNode";
+    private static final String CLS_ABAP_NODE_BASE =
             "com.sap.adt.projectexplorer.ui.internal.node.AbapRepositoryObjectGenericNode";
+
+    // ADT 虚拟文件夹搜索服务——与收藏夹(VirtualFolder)完全相同的对象发现机制。
+    // 收藏夹通过搜索结果 IObject 构造 RepositoryObjectListItem，type/uri/version
+    // 等字段均由后端搜索返回，保证 readTreeContent 能正确解析子节点。
+    private static final String CLS_VF_SERVICE_FACTORY =
+            "com.sap.adt.ris.search.virtualfolders.AdtRisVirtualFoldersServiceFactory";
+    private static final String CLS_VF_SEARCH_SERVICE =
+            "com.sap.adt.ris.search.virtualfolders.IAdtRisVirtualFoldersSearchService";
+    private static final String CLS_VF_REQUEST_PARAMS =
+            "com.sap.adt.ris.search.virtualfolders.IAdtRisVirtualFoldersRequestParameters";
+    private static final String CLS_VF_RESULT =
+            "com.sap.adt.ris.model.virtualfolders.IVirtualFoldersResult";
+    private static final String CLS_VF_OBJECT =
+            "com.sap.adt.ris.model.virtualfolders.IObject";
+    private static final String ATOM_REL_OBJECTS = "http://www.sap.com/adt/relations/objects";
+    private static final String ATOM_TYPE_SAPGUI = "application/vnd.sap.sapgui";
 
     /** 文件扩展名 → ADT URI 基础路径映射（小写对象名 + /source/main）。 */
     private static final Map<String, String> EXT_TO_URI_BASE = new HashMap<>();
@@ -88,6 +109,15 @@ public final class AdtNodeFactory {
             String name, String type, String filePath, String uri) {
         if (project == null || name == null || name.isEmpty()) return null;
 
+        // === 硬诊断（IStatus.WARNING 不会被 Eclipse 日志过滤）===
+        // 确保我们能确认 V19 是否真的在跑。
+        try {
+            LOG.log(new Status(IStatus.WARNING, Activator.PLUGIN_ID,
+                    "[RecentlyModified] V19 createObjectNode START name=" + name
+                            + " type=" + type + " project="
+                            + (project != null ? project.getName() : "null")));
+        } catch (Throwable ignored) { }
+
         // 优先让 ADT 自己解析 URI（IAdtUriMappingService.getAdtUri），
         // 它对每种对象类型（程序/类/表/结构/函数组…）都给出正确的规范 URI；
         // 失败时才回退到本地路径推断。
@@ -98,6 +128,14 @@ public final class AdtNodeFactory {
         if (uri == null || uri.isEmpty()) {
             uri = buildUriFromFilePath(filePath, name);
         }
+        // 关键：收藏夹(VirtualFolder)用的是对象自链接 URI（不含 /source/main），
+        // 如 /sap/bc/adt/programs/includes/zewme00120_dyn。
+        // 我们之前传的是 source URI（.../source/main），虽然后端 readTreeContent
+        // 请求参数不直接用 URI，但对象自链接 URI 才是 ADT 内部各环节（标签、
+        // 导航、类型解析）公认的对象标识。统一为自链接 URI 与收藏夹行为对齐。
+        if (uri != null && uri.endsWith("/source/main")) {
+            uri = uri.substring(0, uri.length() - "/source/main".length());
+        }
 
         try {
             Class<?> listItemClass = loadClass(BUNDLE_RIS_SEARCH, CLS_REPOSITORY_OBJECT_LIST_ITEM);
@@ -106,14 +144,51 @@ public final class AdtNodeFactory {
                 logDebug("RepositoryObjectListItem/IRepositoryObject not available");
                 return null;
             }
-            Object repoObj = listItemClass.getDeclaredConstructor().newInstance();
+            final URI uriObj = (uri != null && !uri.isEmpty()) ? URI.create(uri) : null;
 
-            // 反射设字段（跨类继承链查找）
-            String lowerName = name.toLowerCase();
-            setFieldCrossHierarchy(repoObj, listItemClass, "name", name);
-            setFieldCrossHierarchy(repoObj, listItemClass, "technicalName", name);
-            setFieldCrossHierarchy(repoObj, listItemClass, "displayName", name);
-            setFieldCrossHierarchy(repoObj, listItemClass, "type", type);
+            // 优先通过 ADT 虚拟文件夹搜索服务获取对象——与收藏夹(VirtualFolder)
+            // 完全相同的对象发现机制。收藏夹用搜索结果 IObject 的 atom link
+            // （self-link URI + SAP GUI vitUri）和 type/version 字段构造
+            // RepositoryObjectListItem，保证后端 readTreeContent 能正确解析子节点。
+            // 搜索失败或服务不可用时回退到本地手动构造。
+            Object repoObj = createRepoObjFromSearch(project, listItemClass, name, type);
+            boolean fromSearch = repoObj != null;
+            if (!fromSearch) {
+                // 回退：本地手动构造（与收藏夹 7 参构造器等价）
+                repoObj = createRepoObjManually(listItemClass, uriObj, type, name);
+            }
+            if (repoObj == null) {
+                logDebug("Failed to create RepositoryObjectListItem for " + name);
+                return null;
+            }
+
+            // === 硬诊断：repoObj 构造完成后反射读所有关键字段 ===
+            try {
+                StringBuilder sb = new StringBuilder();
+                sb.append("V19 repoObj DUMP src=").append(fromSearch ? "search" : "manual");
+                sb.append(" name=").append(name).append(" inputType=").append(type);
+                // 反射读 AOR 字段（type/name/uri 等）
+                sb.append(" AOR.name=").append(readFieldStr(repoObj, "name"));
+                sb.append(" AOR.type=").append(readFieldStr(repoObj, "type"));
+                sb.append(" AOR.uri=").append(readFieldStr(repoObj, "uri"));
+                // ROLI 字段
+                sb.append(" ROLI.technicalName=").append(readFieldStr(repoObj, "technicalName"));
+                sb.append(" ROLI.vitUri=").append(readFieldStr(repoObj, "vitUri"));
+                sb.append(" ROLI.expandable=").append(readFieldStr(repoObj, "expandable"));
+                sb.append(" ROLI.nodeId=").append(readFieldStr(repoObj, "nodeId"));
+                sb.append(" ROLI.parentName=").append(readFieldStr(repoObj, "parentName"));
+                sb.append(" ROLI.userName=").append(readFieldStr(repoObj, "userName"));
+                sb.append(" ROLI.version=").append(readFieldStr(repoObj, "version"));
+                sb.append(" ROLI.description=").append(readFieldStr(repoObj, "description"));
+                LOG.log(new Status(IStatus.WARNING, Activator.PLUGIN_ID,
+                        "[RecentlyModified] " + sb));
+            } catch (Throwable ignored) { }
+
+            // 注意：不设 parentName，与收藏夹(VirtualFolderContentProvider.createObjects)
+            // 完全一致——收藏夹的 7 参构造器不设 parentName（留 null）。
+            // AbapRepositoryObjectGenericNode.getParentName() 会回退到 getDisplayName()=getName()，
+            // 效果与显式设 parentName=name 相同，但保持字段为 null 可避免后端
+            // accept 解析时与 parentName 非空产生的差异。
 
             // 对象描述：与 "Favorite Objects" 一致，在名称后显示 ADT 对象描述。
             // ADT 标签提供器的 getDescription(Object) 直接读
@@ -143,32 +218,42 @@ public final class AdtNodeFactory {
             } catch (Throwable ignored) { }
 
             // 反射设 URI —— 关键：AdtObjectReference.getUri() 读的是父类 .uri 字段，
-            // 不是 RepositoryObjectListItem.vitUri！先调 setter（继承链里能找到），
-            // 再尝试反射设 .uri（父类字段），最后才 fallback 到 .vitUri。
-            if (uri != null && !uri.isEmpty()) {
-                URI uriObj = URI.create(uri);
-                boolean uriSet = false;
-                try {
-                    listItemClass.getMethod("setUri", URI.class).invoke(repoObj, uriObj);
-                    uriSet = true;
-                } catch (Throwable ignored) { }
-                if (!uriSet) {
-                    // 反射设父类 AdtObjectReference.uri
-                    setFieldCrossHierarchy(repoObj, listItemClass, "uri", uriObj);
+            // 不是 RepositoryObjectListItem.vitUri！6 参构造器已设好两者；
+            // 回退路径（无参构造器）需要在这里补上。
+            // 搜索路径已由 atom link 设好 uri/vitUri（vitUri 是 SAP GUI 链接，
+            // 收藏夹同样保留它），不能再用本地 URI 覆盖，否则丢失 vitUri。
+            if (!fromSearch) {
+                if (uriObj != null) {
+                    boolean uriSet = false;
+                    try {
+                        listItemClass.getMethod("setUri", URI.class).invoke(repoObj, uriObj);
+                        uriSet = true;
+                    } catch (Throwable ignored) { }
+                    if (!uriSet) {
+                        // 反射设父类 AdtObjectReference.uri
+                        setFieldCrossHierarchy(repoObj, listItemClass, "uri", uriObj);
+                    }
+                    // RepositoryObjectListItem 的 vitUri 也设一下（某些内部逻辑会用）
+                    setFieldCrossHierarchy(repoObj, listItemClass, "vitUri", uriObj);
+                } else {
+                    logDebug("WARNING: uri still null after buildUriFromFilePath for " + name);
                 }
-                // RepositoryObjectListItem 的 vitUri 也设一下（某些内部逻辑会用）
-                setFieldCrossHierarchy(repoObj, listItemClass, "vitUri", uriObj);
-            } else {
-                logDebug("WARNING: uri still null after buildUriFromFilePath for " + name);
             }
 
+            // 收藏夹用 AbapRepositoryObjectGenericLaunchableNode（实现 ILaunchableNode），
+            // 不是基类 AbapRepositoryObjectGenericNode。优先用 Launchable 子类，
+            // 不可用时回退到基类（基类有 2 参构造器，Launchable 只有 4 参）。
             Class<?> nodeClass = loadClass(BUNDLE_PROJECT_EXPLORER_UI, CLS_ABAP_NODE);
             if (nodeClass == null) {
-                logDebug("AbapRepositoryObjectGenericNode not available");
+                nodeClass = loadClass(BUNDLE_PROJECT_EXPLORER_UI, CLS_ABAP_NODE_BASE);
+            }
+            if (nodeClass == null) {
+                logDebug("AbapRepositoryObjectGeneric(Launchable)Node not available");
                 return null;
             }
             Object node = null;
-            // 优先 4 参构造器（带 TreeViewer + 父 TreeNode），展开子节点不 NPE
+            // 优先 4 参构造器（带 TreeViewer + 父 TreeNode），展开子节点不 NPE。
+            // AbapRepositoryObjectGenericLaunchableNode 只有 4 参构造器。
             if (viewer instanceof org.eclipse.jface.viewers.TreeViewer
                     && parent instanceof org.eclipse.jface.viewers.TreeNode) {
                 try {
@@ -179,19 +264,243 @@ public final class AdtNodeFactory {
                             repoObjClass);
                     node = ctor4.newInstance(viewer, project, parent, repoObj);
                 } catch (NoSuchMethodException e) {
-                    logDebug("4-arg constructor not found, fallback to 2-arg");
+                    logDebug("4-arg constructor not found for " + nodeClass.getSimpleName());
                 }
             }
             if (node == null) {
-                java.lang.reflect.Constructor<?> ctor = nodeClass
-                        .getConstructor(IProject.class, repoObjClass);
-                node = ctor.newInstance(project, repoObj);
+                // 回退到基类的 2 参构造器（Launchable 子类没有 2 参构造器）
+                Class<?> baseClass = loadClass(BUNDLE_PROJECT_EXPLORER_UI, CLS_ABAP_NODE_BASE);
+                if (baseClass != null) {
+                    java.lang.reflect.Constructor<?> ctor = baseClass
+                            .getConstructor(IProject.class, repoObjClass);
+                    node = ctor.newInstance(project, repoObj);
+                }
             }
-            logDebug("created ADT node for " + name + " (" + type + "), uri=" + uri
+            if (node == null) {
+                logDebug("Failed to create ADT node for " + name);
+                return null;
+            }
+            // 对齐 ADT 收藏夹做法（TreeContentAndLabelProvider.getObjectNodes）：
+            // 构造后显式 setParent，保证 getParent() 链完整——RecentlyModifiedNodeTester
+            // 靠它判定节点位于 Recently Modified 根下（hasChildren 聚合的前提）。
+            if (parent instanceof org.eclipse.jface.viewers.TreeNode) {
+                try {
+                    node.getClass().getMethod("setParent",
+                            org.eclipse.jface.viewers.TreeNode.class)
+                            .invoke(node, parent);
+                } catch (Throwable ignored) { }
+            }
+            logDebug("created ADT node for " + name + " (" + type + "), src="
+                    + (fromSearch ? "search" : "manual") + ", uri=" + uri
                     + ", description=" + description);
             return node;
         } catch (Throwable t) {
             logDebug("createObjectNode failed for " + name + " (" + type + "): " + t.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 通过 ADT 虚拟文件夹搜索服务查找对象，并用搜索结果 IObject 构造
+     * RepositoryObjectListItem——与收藏夹(VirtualFolderContentProvider.createObjects)
+     * 完全一致的构造方式。
+     *
+     * <p>搜索结果的 IObject 带有：</p>
+     * <ul>
+     *   <li>atom: rel="objects" 的 self-link URI 和 type="sapgui" 的 vitUri</li>
+     *   <li>后端返回的 type（如 PROG/I）、name、version</li>
+     *   <li>isExpandable() 标志和 text（描述）</li>
+     * </ul>
+     * <p>这些字段保证后端 readTreeContent 能正确识别父对象并返回子节点。</p>
+     *
+     * @return 构造好的 RepositoryObjectListItem；搜索失败返回 null
+     */
+    private static Object createRepoObjFromSearch(IProject project, Class<?> listItemClass,
+            String name, String type) {
+        try {
+            Object iObject = searchIObject(project, name, type);
+            if (iObject == null) return null;
+
+            // 从 IObject 的 atom links 提取 self-link URI 和 SAP GUI vitUri，
+            // 与 VirtualFolderContentProvider.createObjects 完全一致。
+            Object links = iObject.getClass().getMethod("getLinks").invoke(iObject);
+            URI selfUri = findAtomLinkAsUri(links, ATOM_REL_OBJECTS, null);
+            URI vitUri = findAtomLinkAsUri(links, ATOM_REL_OBJECTS, ATOM_TYPE_SAPGUI);
+            if (selfUri == null) {
+                logDebug("search: no self-link atom link for " + name);
+                return null;
+            }
+            String objType = (String) iObject.getClass().getMethod("getType").invoke(iObject);
+            String objName = (String) iObject.getClass().getMethod("getName").invoke(iObject);
+            String version = (String) iObject.getClass().getMethod("getVersion").invoke(iObject);
+
+            // RepositoryObjectListItem(uri, vitUri, type, name, technicalName, "")
+            // 6 参构造器委托 7 参（version=null）。收藏夹用的是 7 参带 version，
+            // 这里也尝试用 7 参构造器以完全对齐。
+            Object repoObj = null;
+            try {
+                Class<?> versionClass = loadClass(BUNDLE_RIS_SEARCH,
+                        "com.sap.adt.ris.search.repositoryservice.IRepositoryObject$Version");
+                if (versionClass != null && version != null) {
+                    Object versionObj = versionClass.getMethod("parse", String.class)
+                            .invoke(null, version);
+                    repoObj = listItemClass.getConstructor(URI.class, URI.class,
+                            String.class, String.class, String.class, String.class, versionClass)
+                            .newInstance(selfUri, vitUri, objType, objName, objName, "", versionObj);
+                }
+            } catch (Throwable ignored) { }
+            if (repoObj == null) {
+                repoObj = listItemClass.getConstructor(URI.class, URI.class,
+                        String.class, String.class, String.class, String.class)
+                        .newInstance(selfUri, vitUri, objType, objName, objName, "");
+            }
+
+            // 对齐收藏夹：setDescription(IObject.getText()) + setExpandable(IObject.isExpandable())
+            try {
+                String text = (String) iObject.getClass().getMethod("getText").invoke(iObject);
+                if (text != null) {
+                    listItemClass.getMethod("setDescription", String.class).invoke(repoObj, text);
+                }
+                Boolean expandable = (Boolean) iObject.getClass().getMethod("isExpandable").invoke(iObject);
+                listItemClass.getMethod("setExpandable", boolean.class).invoke(repoObj, expandable);
+            } catch (Throwable ignored) { }
+
+            logDebug("search: built RepositoryObjectListItem for " + name + " (" + objType
+                    + "), uri=" + selfUri + ", version=" + version);
+            return repoObj;
+        } catch (Throwable t) {
+            logDebug("createRepoObjFromSearch failed for " + name + ": " + t.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 通过 ADT 虚拟文件夹搜索服务按名称查找对象。
+     *
+     * @return 匹配 name（忽略大小写）和 type 的 IObject；未找到返回 null
+     */
+    private static Object searchIObject(IProject project, String name, String type) {
+        try {
+            Class<?> factoryClass = loadClass(BUNDLE_RIS_SEARCH, CLS_VF_SERVICE_FACTORY);
+            if (factoryClass == null) {
+                logDebug("searchIObject: factory class not found: " + CLS_VF_SERVICE_FACTORY);
+                return null;
+            }
+
+            // isVirtualFolderSearchServiceAvailable(IProject)
+            Object available = factoryClass.getMethod("isVirtualFolderSearchServiceAvailable",
+                    IProject.class).invoke(null, project);
+            if (!Boolean.TRUE.equals(available)) {
+                logDebug("searchIObject: virtual folder search service unavailable for "
+                        + project.getName());
+                return null;
+            }
+
+            Object service = factoryClass.getMethod("createVirtualFoldersSearchService",
+                    IProject.class).invoke(null, project);
+            if (service == null) {
+                logDebug("searchIObject: service instance null");
+                return null;
+            }
+
+            Object params = factoryClass.getMethod("createVirtualFolderRequestParameters")
+                    .invoke(null);
+            if (params == null) {
+                logDebug("searchIObject: request parameters null");
+                return null;
+            }
+
+            params.getClass().getMethod("setObjectSearchPattern", String.class)
+                    .invoke(params, name);
+
+            // IAdtRisVirtualFoldersSearchService.getContent(IAdtRisVirtualFoldersRequestParameters, IProgressMonitor)
+            Class<?> paramsClass = loadClass(BUNDLE_RIS_SEARCH, CLS_VF_REQUEST_PARAMS);
+            Object result = service.getClass().getMethod("getContent", paramsClass,
+                    org.eclipse.core.runtime.IProgressMonitor.class)
+                    .invoke(service, params, null);
+            if (result == null) {
+                logDebug("searchIObject: empty result for " + name);
+                return null;
+            }
+
+            Object objects = result.getClass().getMethod("getObject").invoke(result);
+            if (!(objects instanceof java.util.List)) return null;
+
+            Object nameOnlyMatch = null;
+            for (Object obj : (java.util.List<?>) objects) {
+                String objName = (String) obj.getClass().getMethod("getName").invoke(obj);
+                String objType = (String) obj.getClass().getMethod("getType").invoke(obj);
+                if (!name.equalsIgnoreCase(objName)) continue;
+                if (type.equals(objType)) return obj;
+                // 类型串可能因版本差异不一致（如 INCLUDE 的搜索类型），
+                // 先记住同名对象，全部遍历完仍未精确匹配时用它兜底。
+                if (nameOnlyMatch == null) nameOnlyMatch = obj;
+            }
+            if (nameOnlyMatch != null) {
+                logDebug("searchIObject: name-only match for " + name + " (type mismatch)");
+            } else {
+                logDebug("searchIObject: no match for " + name + " (" + type + ")");
+            }
+            return nameOnlyMatch;
+        } catch (Throwable t) {
+            logDebug("searchIObject failed for " + name + ": " + t);
+        }
+        return null;
+    }
+
+    /**
+     * 从 atom link 列表中按 rel（和可选 type）提取 URI。
+     *
+     * <p>替代 ADT 的 IAdtAtomUtil.findAtomLinkAsUri，避免额外依赖。</p>
+     */
+    private static URI findAtomLinkAsUri(Object links, String rel, String type) {
+        if (!(links instanceof java.util.List)) return null;
+        for (Object link : (java.util.List<?>) links) {
+            try {
+                String linkRel = (String) link.getClass().getMethod("getRel").invoke(link);
+                if (!rel.equals(linkRel)) continue;
+                if (type != null) {
+                    String linkType = (String) link.getClass().getMethod("getType").invoke(link);
+                    if (!type.equals(linkType)) continue;
+                }
+                String href = (String) link.getClass().getMethod("getHref").invoke(link);
+                if (href != null && !href.isEmpty()) {
+                    return URI.create(href);
+                }
+            } catch (Throwable ignored) { }
+        }
+        return null;
+    }
+
+    /**
+     * 本地手动构造 RepositoryObjectListItem（搜索服务不可用时的回退路径）。
+     *
+     * <p>与收藏夹 6 参构造器等价：uri=vitUri=本地解析的 URI、technicalName=name、
+     * userName=""、expandable=true（6 参构造器硬编码）。</p>
+     */
+    private static Object createRepoObjManually(Class<?> listItemClass, URI uriObj,
+            String type, String name) {
+        try {
+            Object repoObj = null;
+            if (uriObj != null) {
+                try {
+                    repoObj = listItemClass.getConstructor(URI.class, URI.class,
+                            String.class, String.class, String.class, String.class)
+                            .newInstance(uriObj, uriObj, type, name, name, "");
+                } catch (NoSuchMethodException e) {
+                    logDebug("6-arg RepositoryObjectListItem ctor not found, fallback to no-arg");
+                }
+            }
+            if (repoObj == null) {
+                repoObj = listItemClass.getDeclaredConstructor().newInstance();
+                setFieldCrossHierarchy(repoObj, listItemClass, "name", name);
+                setFieldCrossHierarchy(repoObj, listItemClass, "technicalName", name);
+                setFieldCrossHierarchy(repoObj, listItemClass, "type", type);
+                setFieldCrossHierarchy(repoObj, listItemClass, "userName", "");
+            }
+            return repoObj;
+        } catch (Throwable t) {
+            logDebug("createRepoObjManually failed: " + t.getMessage());
             return null;
         }
     }
@@ -270,10 +579,15 @@ public final class AdtNodeFactory {
         return base + lowerName + "/source/main";
     }
 
-    /** 该类型在 ADT 对象树中是否有下级子节点（叶子类型如 include、函数模块返回 false）。 */
-    private static boolean isExpandableType(String type) {
+    /** 该类型在 ADT 对象树中是否有下级子节点（叶子类型如函数模块返回 false）。
+     *
+     * <p>注意：INCLUDE 程序（PROG/I）在标准 "Favorite Objects" 下同样可展开
+     * （子节点为全局变量、FORM、dynpro 状态等 include 组成对象），这里与之一致；
+     * 是否真的有子节点由后端 readTreeContent 决定，expandable 只控制展开箭头。</p> */
+    static boolean isExpandableType(String type) {
         if (type == null) return false;
-        return type.startsWith("PROG/P")     // 程序（含 include/字典结构/类型组等）
+        return type.startsWith("PROG/P")     // 可执行程序（字典结构/类型组等）
+                || type.startsWith("PROG/I") // INCLUDE 程序（变量/FORM/状态等）
                 || type.startsWith("CLAS/")  // 类（方法/属性等）
                 || type.startsWith("INTF/")  // 接口
                 || type.startsWith("TABL/")  // 表（字段）
@@ -361,6 +675,25 @@ public final class AdtNodeFactory {
                 return;
             }
         }
+    }
+
+    /** 跨类继承链反射读字段，转 String（失败返回 "ERR"）。 */
+    private static String readFieldStr(Object obj, String fieldName) {
+        if (obj == null) return "null";
+        Class<?> current = obj.getClass();
+        while (current != null && current != Object.class) {
+            try {
+                java.lang.reflect.Field f = current.getDeclaredField(fieldName);
+                f.setAccessible(true);
+                Object v = f.get(obj);
+                return v == null ? "null" : v.toString();
+            } catch (NoSuchFieldException e) {
+                current = current.getSuperclass();
+            } catch (Throwable t) {
+                return "ERR:" + t.getClass().getSimpleName();
+            }
+        }
+        return "NF";
     }
 
     private static Class<?> loadClass(String bundleId, String className) {

@@ -1,0 +1,167 @@
+package com.sap.abap.ai.completion.codesearch;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.eclipse.core.resources.IProject;
+
+/**
+ * Orchestrates source collection for the ABAP Code Search feature.
+ *
+ * <p>The main program source is supplied by the caller (read directly from
+ * the already-open ADT editor document so the user sees the latest
+ * uncommitted code). INCLUDE list comes from two sources that we merge:
+ * <ol>
+ *   <li>{@code D010INC} table — SAP's official MASTER↔INCLUDE mapping
+ *       ({@code D010INC.MASTER = mainProgram}).</li>
+ *   <li>Regex scan of the main program source — catches INCLUDE statements
+ *       that may not yet be reflected in D010INC.</li>
+ * </ol>
+ * All INCLUDE sources are then read from the SAP backend through
+ * {@code RPY_PROGRAM_READ} (see {@link AdtSourceReader}).</p>
+ *
+ * <p>If the user is editing an INCLUDE, we first resolve its owning main
+ * program via {@code D010INC.INCLUDE} = current INCLUDE, then collect all
+ * INCLUDEs of that main program.</p>
+ */
+public final class CodeSearchSourceClient {
+
+    /** Hard cap on how many objects we fetch in total to keep the search bounded. */
+    private static final int MAX_OBJECTS = 80;
+
+    private CodeSearchSourceClient() {
+    }
+
+    /** One include program of the prepared scope. */
+    public static final class IncludeProgram {
+        public final String name;
+        public final String source;
+
+        IncludeProgram(String name, String source) {
+            this.name = name;
+            this.source = source;
+        }
+    }
+
+    /** The main program plus every include program discovered in it. */
+    public static final class PreparedSources {
+        public final String mainName;
+        public final String mainType;
+        public final String mainSource;
+        public final List<IncludeProgram> includes;
+
+        PreparedSources(String mainName, String mainType, String mainSource,
+                List<IncludeProgram> includes) {
+            this.mainName = mainName;
+            this.mainType = mainType;
+            this.mainSource = mainSource;
+            this.includes = Collections.unmodifiableList(includes);
+        }
+    }
+
+    /**
+     * Collects main program source + every INCLUDE source into a single result.
+     *
+     * @param project       ADT project (supplies the JCo destination)
+     * @param programName   current program name reported by the active editor
+     * @param programType   current program type, e.g. "PROG/P" or "PROG/I"
+     * @param mainSource    source text of the program the user is currently editing
+     *                      (read directly from the editor document — includes uncommitted changes)
+     * @param includeEntry  true iff the active editor shows an INCLUDE
+     */
+    public static PreparedSources prepare(IProject project, String programName, String programType,
+            String mainSource, boolean includeEntry) throws IOException {
+        try {
+            String mainType = (programType != null && !programType.trim().isEmpty())
+                    ? programType.toUpperCase() : "PROG/P";
+
+            // Determine the "owning main program" for INCLUDE lookup
+            String effectiveMainName;
+            if (includeEntry) {
+                String resolved = AdtSourceReader.resolveMainProgram(project, programName);
+                effectiveMainName = (resolved != null && !resolved.isEmpty())
+                        ? resolved.toUpperCase() : programName.toUpperCase();
+            } else {
+                effectiveMainName = programName.toUpperCase();
+            }
+
+            // ---- Step 1: Collect INCLUDE names ----
+            Set<String> includeSet = new LinkedHashSet<>();
+
+            // 1a. D010INC + REPOSRC: SAP's official MASTER→INCLUDE mapping
+            List<String> fromTable = Collections.emptyList();
+            try {
+                fromTable = AdtSourceReader.includesOfMainProgram(project, effectiveMainName);
+            } catch (AdtSourceReader.SourceException e) {
+                AdtSourceReader.log("prepare: D010INC/REPOSRC lookup failed for "
+                        + effectiveMainName + ": " + e.getMessage());
+            }
+            for (String s : fromTable) includeSet.add(s);
+
+            // 1b. Regex-scan main source (catches non-standard layouts and
+            //     includes that are not yet reflected in D010INC)
+            if (mainSource != null && !mainSource.trim().isEmpty()) {
+                for (String s : AdtSourceReader.extractIncludeNames(mainSource)) includeSet.add(s);
+            }
+
+            // If editing an INCLUDE, make sure it itself is available as a search target
+            if (includeEntry) {
+                includeSet.add(programName.toUpperCase());
+            }
+            AdtSourceReader.log("prepare: main=" + effectiveMainName
+                    + " includeEntry=" + includeEntry
+                    + " candidates(fromTable=" + fromTable.size() + ", merged="
+                    + includeSet.size() + ")=" + includeSet);
+
+            // Apply size cap
+            List<String> includesOrdered = new ArrayList<>();
+            for (String s : includeSet) {
+                if (includesOrdered.size() >= MAX_OBJECTS) break;
+                includesOrdered.add(s);
+            }
+
+            // ---- Step 2: Read every INCLUDE source from the backend ----
+            List<IncludeProgram> includePrograms = new ArrayList<>();
+            if (!includesOrdered.isEmpty()) {
+                Map<String, String> sources = AdtSourceReader.readSources(project, includesOrdered);
+                for (String name : includesOrdered) {
+                    // The include currently open in the editor wins: it holds
+                    // the user's uncommitted changes.
+                    String src = (includeEntry && name.equalsIgnoreCase(programName))
+                            ? mainSource : sources.get(name);
+                    if (src != null && !src.isEmpty()) {
+                        includePrograms.add(new IncludeProgram(name, src));
+                    }
+                }
+            }
+            AdtSourceReader.log("prepare: includes resolved " + includePrograms.size()
+                    + " of " + includesOrdered.size());
+
+            // ---- Step 3: Main program source ----
+            // When the editor shows an INCLUDE, the document is that include and
+            // not the main program, so the main program is read from the backend.
+            String mainProgramSource = mainSource == null ? "" : mainSource;
+            String reportedMainType = mainType;
+            if (includeEntry) {
+                reportedMainType = "PROG/P";
+                try {
+                    String fetched = AdtSourceReader.readSource(project, effectiveMainName);
+                    if (fetched != null && !fetched.isEmpty()) mainProgramSource = fetched;
+                } catch (AdtSourceReader.SourceException e) {
+                    AdtSourceReader.log("prepare: cannot read main program source '"
+                            + effectiveMainName + "': " + e.getMessage());
+                }
+            }
+
+            return new PreparedSources(effectiveMainName, reportedMainType,
+                    mainProgramSource, includePrograms);
+        } catch (AdtSourceReader.SourceException e) {
+            throw new IOException(e.getMessage(), e);
+        }
+    }
+}

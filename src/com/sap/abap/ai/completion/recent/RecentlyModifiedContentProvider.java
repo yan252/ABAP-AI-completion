@@ -60,8 +60,104 @@ public class RecentlyModifiedContentProvider implements ITreeContentProvider {
             RecentlyModifiedRoot root = (RecentlyModifiedRoot) parentElement;
             return getFilesForProject(root);
         }
+        // 诊断：CNF 对 Recently Modified 下的 ADT 对象节点调用 getChildren 时，
+        // 记录节点状态，定位展开无内容的断裂环节。
+        if (RecentlyModifiedNodeTester.isUnderRecentlyModifiedRoot(parentElement)) {
+            logAdtNodeDiagnostics(parentElement);
+        }
         // 其他任何父节点（包括 ADT 的虚拟包装对象）一律返回空，避免套娃。
         return EMPTY;
+    }
+
+    /**
+     * 诊断日志：输出 ADT 对象节点的关键状态，用于定位展开后无下级内容的根因。
+     * 前缀 [RecentlyModified] DIAG，便于在 .metadata/.log 中检索。
+     */
+    private static void logAdtNodeDiagnostics(Object node) {
+        try {
+            StringBuilder sb = new StringBuilder("DIAG getChildren(ADT node) ");
+            sb.append("class=").append(node.getClass().getName());
+            // hasChildren
+            try {
+                Object hc = node.getClass().getMethod("hasChildren").invoke(node);
+                sb.append(", node.hasChildren=").append(hc);
+            } catch (Throwable t) {
+                sb.append(", node.hasChildren=ERR(").append(t.getClass().getSimpleName()).append(")");
+            }
+            // viewer 字段（protected，在父类 AbapRepositoryAsyncListLoaderBaseNode）
+            try {
+                Object viewer = readField(node, "viewer");
+                sb.append(", viewer=").append(viewer != null ? viewer.getClass().getName() : "null");
+            } catch (Throwable t) {
+                sb.append(", viewer=?(").append(t.getClass().getSimpleName()).append(")");
+            }
+            // containedRepositoryObjects / isLoading / loadFailed —— 判断异步作业是否执行过
+            try {
+                Object cro = readField(node, "containedRepositoryObjects");
+                sb.append(", containedRepoObj=").append(cro != null ? cro.getClass().getSimpleName() : "null");
+                Object il = readField(node, "isLoading");
+                sb.append(", isLoading=").append(il);
+                Object lf = readField(node, "loadFailed");
+                sb.append(", loadFailed=").append(lf);
+            } catch (Throwable t) {
+                sb.append(", state=ERR(").append(t.getClass().getSimpleName()).append(")");
+            }
+            // getValue().getType() / expandable / nodeId / technicalName / objectType
+            try {
+                Object value = node.getClass().getMethod("getValue").invoke(node);
+                if (value != null) {
+                    Object type = value.getClass().getMethod("getType").invoke(value);
+                    sb.append(", type=").append(type);
+                    Object objType = value.getClass().getMethod("getObjectType").invoke(value);
+                    sb.append(", objType=").append(objType);
+                    Object exp = value.getClass().getMethod("hasChildren").invoke(value);
+                    sb.append(", repoObj.hasChildren=").append(exp);
+                    Object pn = value.getClass().getMethod("getParentName").invoke(value);
+                    sb.append(", parentName=").append(pn);
+                    Object tn = value.getClass().getMethod("getTechnicalName").invoke(value);
+                    sb.append(", techName=").append(tn);
+                    Object nid = value.getClass().getMethod("getNodeId").invoke(value);
+                    sb.append(", nodeId=").append(nid);
+                    Object un = value.getClass().getMethod("getUserName").invoke(value);
+                    sb.append(", userName=").append(un);
+                }
+            } catch (Throwable t) {
+                sb.append(", value=ERR(").append(t.getClass().getSimpleName()).append(")");
+            }
+            // getRepositoryObjectTree(true) 是否返回 EMPTY
+            try {
+                Object tree = node.getClass().getMethod("getRepositoryObjectTree", boolean.class)
+                        .invoke(node, true);
+                if (tree != null) {
+                    Object types = tree.getClass().getMethod("getObjectTypes").invoke(tree);
+                    int size = types instanceof java.util.Collection
+                            ? ((java.util.Collection<?>) types).size() : -1;
+                    sb.append(", tree.objectTypes.size=").append(size);
+                } else {
+                    sb.append(", tree=null");
+                }
+            } catch (Throwable t) {
+                sb.append(", tree=ERR(").append(t.getClass().getSimpleName()).append(")");
+            }
+            logDebug(sb.toString());
+        } catch (Throwable ignored) { }
+    }
+
+    /** 跨继承链反射读字段。 */
+    private static Object readField(Object obj, String fieldName) {
+        Class<?> cls = obj.getClass();
+        while (cls != null && cls != Object.class) {
+            try {
+                java.lang.reflect.Field f = cls.getDeclaredField(fieldName);
+                f.setAccessible(true);
+                return f.get(obj);
+            } catch (NoSuchFieldException e) {
+                cls = cls.getSuperclass();
+            } catch (Throwable t) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /**
@@ -129,7 +225,42 @@ public class RecentlyModifiedContentProvider implements ITreeContentProvider {
 
     @Override
     public boolean hasChildren(Object element) {
-        return getChildren(element).length > 0;
+        if (element instanceof IProject || element instanceof RecentlyModifiedRoot) {
+            return getChildren(element).length > 0;
+        }
+        // Recently Modified 下的 ADT 对象节点：由本扩展直接回答。CNF 的
+        // hasChildren 是 OR 聚合语义，本扩展返回 true 箭头即出现，不依赖
+        // ADT 扩展侧（v1.2.13 仅靠构造期设 expandable 实测无效）。
+        if (RecentlyModifiedNodeTester.isUnderRecentlyModifiedRoot(element)) {
+            return adtNodeHasChildren(element);
+        }
+        return false;
+    }
+
+    /**
+     * 回答 Recently Modified 下 ADT 对象节点的 hasChildren。
+     *
+     * <p>可展开类型（PROG/I 等）直接返回 true，并防御性补设 expandable=true；
+     * 其他类型反射调节点自身 hasChildren() 返回真实值；任何异常返回 false。</p>
+     */
+    private static boolean adtNodeHasChildren(Object node) {
+        try {
+            Object value = node.getClass().getMethod("getValue").invoke(node);
+            if (value != null) {
+                Object type = value.getClass().getMethod("getType").invoke(value);
+                if (AdtNodeFactory.isExpandableType(type != null ? type.toString() : null)) {
+                    try {
+                        value.getClass().getMethod("setExpandable", boolean.class)
+                                .invoke(value, true);
+                    } catch (Throwable ignored) { }
+                    return true;
+                }
+            }
+            Object result = node.getClass().getMethod("hasChildren").invoke(node);
+            return Boolean.TRUE.equals(result);
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     @Override

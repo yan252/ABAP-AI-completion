@@ -6,7 +6,7 @@ $src = "$proj\src"
 # ("Unresolved compilation problems") which crash the bundle activator at runtime.
 $bin = "$proj\_build"
 $dist = "$proj\dist"
-$jarPath = "$dist\com.sap.abap.ai.completion_1.2.11.jar"
+$jarPath = "$dist\com.sap.abap.ai.completion_1.2.39.jar"
 
 $ecj = "$proj\lib\ecj-4.34.jar"
 $p2Pool = "D:\Users\96000217\eclipse\plugins"
@@ -33,6 +33,7 @@ $deps = @(
     "$p2Pool\org.eclipse.ui.views_*.jar"
     "$p2Pool\org.eclipse.ui.navigator_*.jar"
     "$p2Pool\org.eclipse.ui.forms_*.jar"
+    "$p2Pool\org.eclipse.search_*.jar"
     "$p2Pool\org.eclipse.swt.win32.win32.x86_64_*.jar"
     "$p2Pool\org.eclipse.equinox.preferences_*.jar"
     "$p2Pool\org.osgi.service.prefs_*.jar"
