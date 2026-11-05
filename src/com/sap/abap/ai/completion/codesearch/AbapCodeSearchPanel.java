@@ -231,13 +231,13 @@ public final class AbapCodeSearchPanel {
             }
             cmbInclude.select(selected);
         }
-        // When the active editor shows an INCLUDE, default the scope to
-        // "In include programs" preselected to that very INCLUDE, so users
-        // do not have to click twice.
-        if (context != null && context.includeEntry && cmbInclude.getItemCount() > 0) {
-            rdoIncludeProgram.setSelection(true);
-            rdoMainProgram.setSelection(false);
-        }
+        // The scope always defaults to "In main program", no matter what the
+        // active editor shows (main program, INCLUDE or function module).
+        // The combo above still preselects the edited INCLUDE so switching
+        // the scope manually is a single click.
+        rdoMainProgram.setSelection(true);
+        rdoIncludeProgram.setSelection(false);
+        updateScopeEnabled();
         setBusy(false);
         setStatus(Messages.format("status.ready", prepared.includes.size()));
     }
