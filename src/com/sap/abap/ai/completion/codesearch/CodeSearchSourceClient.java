@@ -31,8 +31,12 @@ import org.eclipse.core.resources.IProject;
  */
 public final class CodeSearchSourceClient {
 
-    /** Hard cap on how many objects we fetch in total to keep the search bounded. */
-    private static final int MAX_OBJECTS = 80;
+    /**
+     * Hard cap on how many objects we fetch in total to keep the search
+     * bounded. Large function pools reach ~180 includes (e.g. SAPLYMMT_*),
+     * so the cap must stay well above that.
+     */
+    private static final int MAX_OBJECTS = 500;
 
     private CodeSearchSourceClient() {
     }
