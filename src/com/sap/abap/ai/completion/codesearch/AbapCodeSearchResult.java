@@ -93,8 +93,13 @@ public final class AbapCodeSearchResult extends AbstractTextSearchResult {
             return false;
         }
         String title = editor.getTitle();
-        boolean shown = title != null && title.toUpperCase().contains(program.getName().toUpperCase());
-        log("matchesEditor title=" + title + " program=" + program.getName() + " -> " + shown);
+        // The identity name is the function module for function includes
+        // (their editor shows the function name), otherwise the program name.
+        String identity = program.getIdentityName().toUpperCase();
+        boolean shown = title != null && (title.toUpperCase().contains(identity)
+                || title.toUpperCase().contains(program.getName().toUpperCase()));
+        log("matchesEditor title=" + title + " program=" + program.getName()
+                + " identity=" + identity + " -> " + shown);
         return shown;
     }
 

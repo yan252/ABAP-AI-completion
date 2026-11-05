@@ -184,8 +184,8 @@ public final class AbapCodeSearchResultPage extends AbstractTextSearchViewPage {
                 AbstractTextSearchResult result = getInput();
                 int count = result == null ? 0 : result.getMatchCount(program);
                 cell.setText(count == 1
-                        ? Messages.format("element.label.one", program.getName(), program.getTypeLabel())
-                        : Messages.format("element.label", program.getName(), program.getTypeLabel(), count));
+                        ? Messages.format("element.label.one", program.getDisplayName(), program.getTypeLabel())
+                        : Messages.format("element.label", program.getDisplayName(), program.getTypeLabel(), count));
             } else if (element instanceof Match) {
                 styles = showMatch((Match) element, cell);
             } else {

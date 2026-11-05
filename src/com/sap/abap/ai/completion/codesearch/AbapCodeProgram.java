@@ -17,13 +17,24 @@ public final class AbapCodeProgram {
     private final String type;
     private final String source;
     private final int[] lineStarts;
+    /** Function module implemented by this include (L<group>U<nn>), or null. */
+    private final String functionName;
+    /** Function group of {@link #functionName}, e.g. "ZFG_DZ". */
+    private final String functionGroup;
 
     public AbapCodeProgram(IProject project, String name, String type, String source) {
+        this(project, name, type, source, null, null);
+    }
+
+    public AbapCodeProgram(IProject project, String name, String type, String source,
+            String functionName, String functionGroup) {
         this.project = project;
         this.name = name;
         this.type = type;
         this.source = normalizeLineEndings(source);
         this.lineStarts = computeLineStarts(this.source);
+        this.functionName = functionName;
+        this.functionGroup = functionGroup;
     }
 
     /**
@@ -60,8 +71,41 @@ public final class AbapCodeProgram {
         return "PROG/I".equalsIgnoreCase(type);
     }
 
+    /** true when this include implements a function module (L<group>U<nn>). */
+    public boolean isFunctionInclude() {
+        return functionName != null && !functionName.isEmpty();
+    }
+
+    public String getFunctionName() {
+        return functionName;
+    }
+
+    public String getFunctionGroup() {
+        return functionGroup;
+    }
+
+    /** Name shown in the result tree: the function module for function includes. */
+    public String getDisplayName() {
+        return isFunctionInclude() ? functionName : name;
+    }
+
+    /**
+     * ADT object identity used to find/open the editor: the function module
+     * (FUGR/FF) for function includes, otherwise the program/include itself.
+     */
+    public String getIdentityName() {
+        return getDisplayName();
+    }
+
+    public String getIdentityType() {
+        return isFunctionInclude() ? "FUGR/FF" : type;
+    }
+
     /** Localized program type used in the result tree. */
     public String getTypeLabel() {
+        if (isFunctionInclude()) {
+            return Messages.get("type.function");
+        }
         return Messages.get(isInclude() ? "type.include" : "type.program");
     }
 

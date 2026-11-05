@@ -41,10 +41,20 @@ public final class CodeSearchSourceClient {
     public static final class IncludeProgram {
         public final String name;
         public final String source;
+        /** Function module name when this include is an L<group>U<nn> function include. */
+        public final String functionName;
+        /** Function group of {@link #functionName}, e.g. "ZFG_DZ" or "/ABC/FG". */
+        public final String functionGroup;
 
         IncludeProgram(String name, String source) {
+            this(name, source, null, null);
+        }
+
+        IncludeProgram(String name, String source, String functionName, String functionGroup) {
             this.name = name;
             this.source = source;
+            this.functionName = functionName;
+            this.functionGroup = functionGroup;
         }
     }
 
@@ -126,6 +136,11 @@ public final class CodeSearchSourceClient {
             }
 
             // ---- Step 2: Read every INCLUDE source from the backend ----
+            // Function group main programs (SAPL<group>) carry their function
+            // modules in L<group>U<nn> includes. Detect them so the result can
+            // name and open the function module instead of the raw include
+            // (the raw include opens read-only in ADT).
+            String functionGroup = functionGroupOf(effectiveMainName);
             List<IncludeProgram> includePrograms = new ArrayList<>();
             if (!includesOrdered.isEmpty()) {
                 Map<String, String> sources = AdtSourceReader.readSources(project, includesOrdered);
@@ -135,7 +150,9 @@ public final class CodeSearchSourceClient {
                     String src = (includeEntry && name.equalsIgnoreCase(programName))
                             ? mainSource : sources.get(name);
                     if (src != null && !src.isEmpty()) {
-                        includePrograms.add(new IncludeProgram(name, src));
+                        String fmName = detectFunctionName(functionGroup, name, src);
+                        includePrograms.add(new IncludeProgram(name, src, fmName,
+                                fmName == null ? null : functionGroup));
                     }
                 }
             }
@@ -166,5 +183,52 @@ public final class CodeSearchSourceClient {
         } catch (AdtSourceReader.SourceException e) {
             throw new IOException(e.getMessage(), e);
         }
+    }
+
+    /**
+     * The function group of a function pool main program, e.g.
+     * {@code SAPLZFG_DZ -> ZFG_DZ} and {@code /ABC/SAPLFG -> /ABC/FG}.
+     * Returns {@code null} for ordinary programs.
+     */
+    private static String functionGroupOf(String mainName) {
+        if (mainName == null) {
+            return null;
+        }
+        String upper = mainName.toUpperCase();
+        int idx = upper.lastIndexOf("SAPL");
+        // The SAPL prefix must lead the name or follow a namespace slash,
+        // otherwise ordinary programs containing "SAPL" would false-positive.
+        if (idx < 0 || (idx > 0 && upper.charAt(idx - 1) != '/')) {
+            return null;
+        }
+        return upper.substring(0, idx) + upper.substring(idx + 4);
+    }
+
+    /**
+     * Returns the function module implemented by an L<group>U<nn> include, or
+     * {@code null} when the include is not a function include. The FUNCTION
+     * statement is only allowed inside function groups, so a line-start match
+     * is a safe indicator. ({@code FUNCTION-POOL} cannot match because of the
+     * mandatory whitespace.)
+     */
+    private static String detectFunctionName(String functionGroup, String includeName, String source) {
+        if (functionGroup == null || includeName == null || source == null) {
+            return null;
+        }
+        String expectedPrefix = (functionGroup.contains("/")
+                ? functionGroup.substring(0, functionGroup.lastIndexOf('/') + 1) + "L"
+                        + functionGroup.substring(functionGroup.lastIndexOf('/') + 1)
+                : "L" + functionGroup);
+        String upper = includeName.toUpperCase();
+        if (!upper.startsWith(expectedPrefix)
+                || !upper.substring(expectedPrefix.length()).matches("U\\d{2}")) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^\\s*FUNCTION\\s+([A-Z0-9_/]+)\\s*\\.",
+                        java.util.regex.Pattern.CASE_INSENSITIVE
+                                | java.util.regex.Pattern.MULTILINE)
+                .matcher(source);
+        return m.find() ? m.group(1).toUpperCase() : null;
     }
 }

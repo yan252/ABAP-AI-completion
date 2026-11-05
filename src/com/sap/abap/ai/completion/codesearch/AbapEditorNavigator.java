@@ -531,15 +531,24 @@ public final class AbapEditorNavigator {
                 for (IWorkbenchPage page : window.getPages()) {
                     for (IEditorPart editor : page.getEditors()) {
                         AdtObjectResolver.AdtObjectInfo info = AdtObjectResolver.getAdtObject(editor);
-                        if (info == null || info.name == null
-                                || !info.name.equalsIgnoreCase(program.getName())) {
+                        if (info == null || info.name == null) {
                             continue;
                         }
-                        if (info.type != null && info.type.equalsIgnoreCase(program.getType())) {
-                            return editor;
+                        if (info.name.equalsIgnoreCase(program.getIdentityName())) {
+                            if (info.type != null && info.type.equalsIgnoreCase(program.getIdentityType())) {
+                                return editor;
+                            }
+                            if (!program.isFunctionInclude() && info.type != null
+                                    && info.type.startsWith("PROG")
+                                    && program.isInclude() == info.type.toUpperCase().contains("/I")) {
+                                return editor;
+                            }
                         }
-                        if (info.type != null && info.type.startsWith("PROG")
-                                && program.isInclude() == info.type.toUpperCase().contains("/I")) {
+                        // The raw include may be open even though we address
+                        // its function module (and vice versa).
+                        if (program.isFunctionInclude()
+                                && info.name.equalsIgnoreCase(program.getName())
+                                && info.type != null && info.type.startsWith("PROG")) {
                             return editor;
                         }
                     }
@@ -569,19 +578,47 @@ public final class AbapEditorNavigator {
                 log("openViaAdt: navigate method not found");
                 return null;
             }
+            // Function includes open the function module editor (editable);
+            // the raw include opens read-only and is only a fallback.
+            if (program.isFunctionInclude()) {
+                IEditorPart part = navigate(service, navigate, project,
+                        program.getFunctionName(), program.getIdentityType(),
+                        functionUri(program, false));
+                if (part == null) {
+                    part = navigate(service, navigate, project,
+                            program.getFunctionName(), program.getIdentityType(),
+                            functionUri(program, true));
+                }
+                if (part != null) {
+                    return part;
+                }
+                log("openViaAdt: function module editor unavailable for "
+                        + program.getFunctionName() + ", falling back to include");
+            }
+            return navigate(service, navigate, project,
+                    program.getName(), program.getType(), objectUri(program));
+        } catch (Throwable t) {
+            log("openViaAdt failed for " + program.getName() + ": " + t.getMessage());
+            return null;
+        }
+    }
+
+    private static IEditorPart navigate(Object service, Method navigate, IProject project,
+            String name, String type, String uri) {
+        try {
             Class<?> refClass = navigate.getParameterTypes()[1];
             Class<?> coreFactoryClass = Class.forName(
                     "com.sap.adt.tools.core.model.adtcore.IAdtCoreFactory", true,
                     refClass.getClassLoader());
             Object factory = coreFactoryClass.getField("eINSTANCE").get(null);
             Object reference = coreFactoryClass.getMethod("createAdtObjectReference").invoke(factory);
-            refClass.getMethod("setName", String.class).invoke(reference, program.getName());
-            refClass.getMethod("setType", String.class).invoke(reference, program.getType());
-            refClass.getMethod("setUri", String.class).invoke(reference, objectUri(program));
+            refClass.getMethod("setName", String.class).invoke(reference, name);
+            refClass.getMethod("setType", String.class).invoke(reference, type);
+            refClass.getMethod("setUri", String.class).invoke(reference, uri);
             Object result = navigate.invoke(service, project, reference, Boolean.FALSE);
             return result instanceof IEditorPart ? (IEditorPart) result : null;
         } catch (Throwable t) {
-            log("openViaAdt failed for " + program.getName() + ": " + t.getMessage());
+            log("navigate failed for " + name + " (" + type + ", " + uri + "): " + t.getMessage());
             return null;
         }
     }
@@ -602,6 +639,20 @@ public final class AbapEditorNavigator {
         return program.isInclude()
                 ? "/sap/bc/adt/programs/includes/" + encoded
                 : "/sap/bc/adt/programs/programs/" + encoded;
+    }
+
+    /**
+     * ADT URI of a function module, e.g.
+     * {@code /sap/bc/adt/functions/groups/zfg_dz/fmodules/zfm_tr_dz_attachment}.
+     * The {@code withSourceMain} variant appends {@code /source/main}, matching
+     * the URI ADT reports for the open function source editor.
+     */
+    private static String functionUri(AbapCodeProgram program, boolean withSourceMain) {
+        String group = program.getFunctionGroup() == null
+                ? "" : program.getFunctionGroup().toLowerCase().replace("/", "%2F");
+        String fm = program.getFunctionName().toLowerCase().replace("/", "%2F");
+        return "/sap/bc/adt/functions/groups/" + group + "/fmodules/" + fm
+                + (withSourceMain ? "/source/main" : "");
     }
 
     private static Class<?> loadClass(String bundleId, String className) {
