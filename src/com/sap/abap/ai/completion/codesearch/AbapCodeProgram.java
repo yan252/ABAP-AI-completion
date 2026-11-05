@@ -21,13 +21,20 @@ public final class AbapCodeProgram {
     private final String functionName;
     /** Function group of {@link #functionName}, e.g. "ZFG_DZ". */
     private final String functionGroup;
+    /** Friendly label for class local-type includes ("Test Classes" etc.). */
+    private final String displayName;
 
     public AbapCodeProgram(IProject project, String name, String type, String source) {
-        this(project, name, type, source, null, null);
+        this(project, name, type, source, null, null, null);
     }
 
     public AbapCodeProgram(IProject project, String name, String type, String source,
             String functionName, String functionGroup) {
+        this(project, name, type, source, functionName, functionGroup, null);
+    }
+
+    public AbapCodeProgram(IProject project, String name, String type, String source,
+            String functionName, String functionGroup, String displayName) {
         this.project = project;
         this.name = name;
         this.type = type;
@@ -35,6 +42,7 @@ public final class AbapCodeProgram {
         this.lineStarts = computeLineStarts(this.source);
         this.functionName = functionName;
         this.functionGroup = functionGroup;
+        this.displayName = displayName;
     }
 
     /**
@@ -84,17 +92,29 @@ public final class AbapCodeProgram {
         return functionGroup;
     }
 
-    /** Name shown in the result tree: the function module for function includes. */
+    /** Friendly label of a class local-type include, or null. */
+    public String getPartLabel() {
+        return displayName;
+    }
+
+    /**
+     * Name shown in the result tree: the friendly label for class local-type
+     * includes, the function module for function includes, else the raw name.
+     */
     public String getDisplayName() {
+        if (displayName != null) {
+            return displayName;
+        }
         return isFunctionInclude() ? functionName : name;
     }
 
     /**
      * ADT object identity used to find/open the editor: the function module
      * (FUGR/FF) for function includes, otherwise the program/include itself.
+     * Never the friendly displayName — editors are matched by object name.
      */
     public String getIdentityName() {
-        return getDisplayName();
+        return isFunctionInclude() ? functionName : name;
     }
 
     public String getIdentityType() {

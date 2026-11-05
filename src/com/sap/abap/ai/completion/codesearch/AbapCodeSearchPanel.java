@@ -344,7 +344,8 @@ public final class AbapCodeSearchPanel {
             }
             for (CodeSearchSourceClient.IncludeProgram include : prepared.includes) {
                 targets.add(new AbapCodeProgram(context.project, include.name, "PROG/I",
-                        include.source, include.functionName, include.functionGroup));
+                        include.source, include.functionName, include.functionGroup,
+                        include.displayName));
             }
             return targets;
         }
@@ -352,7 +353,8 @@ public final class AbapCodeSearchPanel {
         if (index >= 0) {
             CodeSearchSourceClient.IncludeProgram include = prepared.includes.get(index);
             targets.add(new AbapCodeProgram(context.project, include.name, "PROG/I",
-                    include.source, include.functionName, include.functionGroup));
+                    include.source, include.functionName, include.functionGroup,
+                    include.displayName));
         }
         return targets;
     }
@@ -487,7 +489,8 @@ public final class AbapCodeSearchPanel {
                     changedPrograms++;
                     updated.add(new AbapCodeProgram(program.getProject(), program.getName(),
                             program.getType(), document.get(),
-                            program.getFunctionName(), program.getFunctionGroup()));
+                            program.getFunctionName(), program.getFunctionGroup(),
+                            program.getPartLabel()));
                 }
             } catch (BadLocationException e) {
                 failedPrograms++;

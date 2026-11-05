@@ -49,16 +49,24 @@ public final class CodeSearchSourceClient {
         public final String functionName;
         /** Function group of {@link #functionName}, e.g. "ZFG_DZ" or "/ABC/FG". */
         public final String functionGroup;
+        /** Friendly label for class local-type includes ("Test Classes" etc.). */
+        public final String displayName;
 
         IncludeProgram(String name, String source) {
-            this(name, source, null, null);
+            this(name, source, null, null, null);
         }
 
         IncludeProgram(String name, String source, String functionName, String functionGroup) {
+            this(name, source, functionName, functionGroup, null);
+        }
+
+        IncludeProgram(String name, String source, String functionName, String functionGroup,
+                String displayName) {
             this.name = name;
             this.source = source;
             this.functionName = functionName;
             this.functionGroup = functionGroup;
+            this.displayName = displayName;
         }
     }
 
@@ -127,6 +135,18 @@ public final class CodeSearchSourceClient {
             if (includeEntry) {
                 includeSet.add(programName.toUpperCase());
             }
+
+            // 1c. Classes: the editor document covers only the "Global class"
+            //     page. The other class editor pages (class-relevant local
+            //     types, local types, macros, test classes) are class-pool
+            //     includes — add them so the search covers the whole class.
+            boolean classSearch = mainType.startsWith("CLAS/");
+            String classPrefix = classSearch ? classPoolPrefix(effectiveMainName) : null;
+            if (classSearch) {
+                for (String suffix : CLASS_LOCAL_SUFFIXES) {
+                    includeSet.add(classPrefix + suffix);
+                }
+            }
             AdtSourceReader.log("prepare: main=" + effectiveMainName
                     + " includeEntry=" + includeEntry
                     + " candidates(fromTable=" + fromTable.size() + ", merged="
@@ -155,8 +175,10 @@ public final class CodeSearchSourceClient {
                             ? mainSource : sources.get(name);
                     if (src != null && !src.isEmpty()) {
                         String fmName = detectFunctionName(functionGroup, name, src);
+                        String partLabel = classPrefix != null
+                                ? classLocalPartLabel(classPrefix, name) : null;
                         includePrograms.add(new IncludeProgram(name, src, fmName,
-                                fmName == null ? null : functionGroup));
+                                fmName == null ? null : functionGroup, partLabel));
                     }
                 }
             }
@@ -186,6 +208,44 @@ public final class CodeSearchSourceClient {
                     mainProgramSource, includePrograms);
         } catch (AdtSourceReader.SourceException e) {
             throw new IOException(e.getMessage(), e);
+        }
+    }
+
+    /** Local-type page suffixes of a class pool (searched for classes). */
+    private static final String[] CLASS_LOCAL_SUFFIXES = { "CCDEF", "CCIMP", "CCMAC", "CT" };
+
+    /**
+     * Class-pool include prefix: the class name padded with '=' to 28
+     * characters (e.g. {@code CL_SALV_TABLE===============}), shared by every
+     * include of the class pool (&lt;prefix&gt;CP / CU / CMnnn / CCDEF / CCIMP /
+     * CCMAC / CT).
+     */
+    static String classPoolPrefix(String className) {
+        StringBuilder sb = new StringBuilder(className.toUpperCase());
+        while (sb.length() < 28) {
+            sb.append('=');
+        }
+        return sb.toString();
+    }
+
+    /** Localized label of a class local-types include, or null. */
+    private static String classLocalPartLabel(String classPrefix, String includeName) {
+        String upper = includeName.toUpperCase();
+        if (!upper.startsWith(classPrefix)) {
+            return null;
+        }
+        String suffix = upper.substring(classPrefix.length());
+        switch (suffix) {
+            case "CCDEF":
+                return Messages.get("classpart.ccdef");
+            case "CCIMP":
+                return Messages.get("classpart.ccimp");
+            case "CCMAC":
+                return Messages.get("classpart.ccmac");
+            case "CT":
+                return Messages.get("classpart.ct");
+            default:
+                return null;
         }
     }
 
