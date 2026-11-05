@@ -184,7 +184,7 @@ public final class AdtObjectResolver {
      * 依次尝试 getFile()、getIFile() 及 IAdtFileEditorInput 接口方法
      * （与 AICompletionListener.getFile 相同的反射路径）。
      */
-    private static IFile getAdtFile(IEditorInput input) {
+    public static IFile getAdtFile(IEditorInput input) {
         if (input == null) return null;
         try {
             Object file = input.getClass().getMethod("getFile").invoke(input);

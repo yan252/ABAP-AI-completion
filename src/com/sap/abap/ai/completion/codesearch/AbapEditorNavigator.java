@@ -168,10 +168,9 @@ public final class AbapEditorNavigator {
                     || part.getSite().getShell().isDisposed()) {
                 return;
             }
-            ITextEditor editor = part.getAdapter(ITextEditor.class);
-            if (editor == null && part instanceof ITextEditor) {
-                editor = (ITextEditor) part;
-            }
+            // Multi-page editors (ADT class editor) nest the source editor,
+            // textEditorOf resolves it via getActiveEditor/getSelectedPage.
+            ITextEditor editor = CodeSearchContext.textEditorOf(part);
             // A freshly opened ADT editor is still initializing: the text editor
             // adapter, the document and the annotation model only show up after
             // the editor has been created. Retrying instead of giving up keeps
@@ -532,6 +531,14 @@ public final class AbapEditorNavigator {
                     for (IEditorPart editor : page.getEditors()) {
                         AdtObjectResolver.AdtObjectInfo info = AdtObjectResolver.getAdtObject(editor);
                         if (info == null || info.name == null) {
+                            // Multi-page class editor: the generic resolver
+                            // fails (CLAS/I with empty name); match via the
+                            // class name in the editor file path instead.
+                            if (program.isClass()
+                                    && program.getName().equalsIgnoreCase(
+                                            CodeSearchContext.classNameOf(editor))) {
+                                return editor;
+                            }
                             continue;
                         }
                         if (info.name.equalsIgnoreCase(program.getIdentityName())) {

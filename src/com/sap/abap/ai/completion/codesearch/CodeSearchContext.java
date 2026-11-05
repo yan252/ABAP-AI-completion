@@ -45,13 +45,27 @@ public final class CodeSearchContext {
     public static CodeSearchContext fromActiveEditor() {
         IEditorPart editor = activeEditor();
         if (editor == null) {
+            log("fromActiveEditor: no active editor");
             return null;
         }
         AdtObjectResolver.AdtObjectInfo info = AdtObjectResolver.getAdtObject(editor);
         if (info == null || info.name == null || info.type == null) {
+            // The multi-page class editor (MultiPageClassEditor) exposes a
+            // CLAS/I reference with an empty name, so the generic resolver
+            // fails. Recover the class from the editor file path
+            // (.adt/oo/classes/<name>/…).
+            CodeSearchContext classContext = viaClassFilePath(editor);
+            if (classContext != null) {
+                log("fromActiveEditor: resolved class " + classContext.programName
+                        + " via file path");
+                return classContext;
+            }
+            log("fromActiveEditor: ADT object not resolved, editorClass="
+                    + editor.getClass().getName());
             return null;
         }
         String type = info.type.toUpperCase();
+        log("fromActiveEditor: resolved " + info.name + " (" + type + ")");
         if (type.startsWith("FUGR/")) {
             // Function modules live in an include L<group>U<nn> of the
             // function group's main program SAPL<group>.
@@ -69,10 +83,104 @@ public final class CodeSearchContext {
             return new CodeSearchContext(editor, info.project, info.name.toUpperCase(), type, true);
         }
         if (!type.startsWith("PROG/")) {
+            log("fromActiveEditor: unsupported type " + type + " for " + info.name);
             return null;
         }
         return new CodeSearchContext(editor, info.project, info.name.toUpperCase(), type,
                 !"PROG/I".equals(type));
+    }
+
+    /**
+     * Recovers a class context from the editor file path
+     * ({@code .adt/oo/classes/<name>/…}). Used when the generic ADT resolver
+     * cannot name the object (multi-page class editor).
+     */
+    private static CodeSearchContext viaClassFilePath(IEditorPart editor) {
+        try {
+            String name = classNameOf(editor);
+            if (name == null) {
+                return null;
+            }
+            org.eclipse.core.resources.IFile file =
+                    AdtObjectResolver.getAdtFile(editor.getEditorInput());
+            if (file == null || file.getProject() == null) {
+                return null;
+            }
+            return new CodeSearchContext(editor, file.getProject(), name, "CLAS/OC", true);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * The class name from the editor file path, or {@code null} when the
+     * editor does not show a class ({@code .adt/oo/classes/<name>/…}).
+     */
+    public static String classNameOf(IEditorPart editor) {
+        try {
+            org.eclipse.core.resources.IFile file =
+                    AdtObjectResolver.getAdtFile(editor.getEditorInput());
+            if (file == null) {
+                return null;
+            }
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("/oo/classes/([^/]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(file.getFullPath().toString());
+            return m.find() ? m.group(1).toUpperCase() : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * The text editor that actually holds the document of {@code editor}.
+     * Multi-page editors (e.g. the ADT class editor) nest the source editor;
+     * it is reached via {@code getActiveEditor()} / {@code getSelectedPage()}.
+     */
+    public static ITextEditor textEditorOf(IEditorPart editor) {
+        if (editor == null) {
+            return null;
+        }
+        if (editor instanceof ITextEditor) {
+            return (ITextEditor) editor;
+        }
+        Object adapted = org.eclipse.core.runtime.Adapters.adapt(editor, ITextEditor.class);
+        if (adapted instanceof ITextEditor) {
+            return (ITextEditor) adapted;
+        }
+        for (String name : new String[] { "getActiveEditor", "getSelectedPage" }) {
+            try {
+                java.lang.reflect.Method method = null;
+                for (Class<?> c = editor.getClass(); c != null && method == null; c = c.getSuperclass()) {
+                    try {
+                        method = c.getDeclaredMethod(name);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (method == null) {
+                    continue;
+                }
+                method.setAccessible(true);
+                Object inner = method.invoke(editor);
+                if (inner instanceof ITextEditor && inner != editor) {
+                    return (ITextEditor) inner;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    /** Writes a diagnostic entry to the Eclipse Error Log. */
+    private static void log(String message) {
+        try {
+            org.eclipse.core.runtime.Platform
+                    .getLog(org.eclipse.core.runtime.Platform.getBundle("com.sap.abap.ai.completion"))
+                    .log(new org.eclipse.core.runtime.Status(
+                            org.eclipse.core.runtime.IStatus.INFO,
+                            "com.sap.abap.ai.completion", "[CodeSearch] " + message));
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
@@ -104,27 +212,20 @@ public final class CodeSearchContext {
 
     /** Reads the current editor's document text (latest, unsaved edits included). */
     public String readCurrentSource() {
-        if (editor == null) return null;
-        try {
-            if (editor instanceof ITextEditor) {
-                ITextEditor te = (ITextEditor) editor;
-                IDocument doc = te.getDocumentProvider() == null
-                        ? null
-                        : te.getDocumentProvider().getDocument(editor.getEditorInput());
-                if (doc != null) return doc.get();
-            }
-            // Fallback: try adapting to ITextEditor via Eclipse adapter
-            Object adapted = org.eclipse.core.runtime.Adapters.adapt(editor, ITextEditor.class);
-            if (adapted instanceof ITextEditor) {
-                ITextEditor te = (ITextEditor) adapted;
-                IEditorInput input = editor.getEditorInput();
-                IDocument doc = te.getDocumentProvider() == null ? null : te.getDocumentProvider().getDocument(input);
-                if (doc != null) return doc.get();
-            }
-        } catch (Throwable t) {
-            // ignore
+        ITextEditor te = textEditorOf(editor);
+        if (te == null) {
+            return null;
         }
-        return null;
+        try {
+            IEditorInput input = te.getEditorInput() != null ? te.getEditorInput()
+                    : editor.getEditorInput();
+            IDocument doc = te.getDocumentProvider() == null
+                    ? null
+                    : te.getDocumentProvider().getDocument(input);
+            return doc == null ? null : doc.get();
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     public static IEditorPart activeEditor() {
