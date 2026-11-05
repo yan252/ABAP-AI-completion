@@ -18,14 +18,23 @@ public final class CodeSearchContext {
     public final String programName;
     public final String programType;
     public final boolean includeEntry;
+    /**
+     * true iff the editor document holds the source of {@link #programName}
+     * itself. False for function modules: the document shows the function
+     * source while the searched main program is SAPL&lt;group&gt;, which must
+     * be read from the backend.
+     */
+    public final boolean editorShowsMain;
     public final IEditorPart editor;
 
-    private CodeSearchContext(IEditorPart editor, IProject project, String programName, String programType) {
+    private CodeSearchContext(IEditorPart editor, IProject project, String programName,
+            String programType, boolean editorShowsMain) {
         this.editor = editor;
         this.project = project;
         this.programName = programName;
         this.programType = programType;
         this.includeEntry = "PROG/I".equalsIgnoreCase(programType);
+        this.editorShowsMain = editorShowsMain;
     }
 
     /**
@@ -43,10 +52,48 @@ public final class CodeSearchContext {
             return null;
         }
         String type = info.type.toUpperCase();
+        if (type.startsWith("FUGR/")) {
+            // Function modules live in an include L<group>U<nn> of the
+            // function group's main program SAPL<group>.
+            String group = resolveFunctionGroup(info);
+            if (group == null) {
+                return null;
+            }
+            return new CodeSearchContext(editor, info.project,
+                    "SAPL" + group.toUpperCase(), "PROG/P", false);
+        }
         if (!type.startsWith("PROG/")) {
             return null;
         }
-        return new CodeSearchContext(editor, info.project, info.name.toUpperCase(), type);
+        return new CodeSearchContext(editor, info.project, info.name.toUpperCase(), type,
+                !"PROG/I".equals(type));
+    }
+
+    /**
+     * Determines the function group of a FUGR object. The group name is taken
+     * from the ADT URI ({@code …/functions/groups/<group>/…}), falling back
+     * to the workspace file path ({@code .adt/functions/groups/<group>/…}).
+     */
+    private static String resolveFunctionGroup(AdtObjectResolver.AdtObjectInfo info) {
+        if ("FUGR/F".equalsIgnoreCase(info.type) && info.name != null
+                && !info.name.trim().isEmpty()) {
+            return info.name;
+        }
+        String group = groupFromPath(info.uri);
+        if (group == null) {
+            group = groupFromPath(info.filePath);
+        }
+        return group;
+    }
+
+    private static String groupFromPath(String path) {
+        if (path == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("functions/groups/([^/]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(path);
+        return m.find() ? m.group(1) : null;
     }
 
     /** Reads the current editor's document text (latest, unsaved edits included). */

@@ -144,10 +144,13 @@ public final class CodeSearchSourceClient {
 
             // ---- Step 3: Main program source ----
             // When the editor shows an INCLUDE, the document is that include and
-            // not the main program, so the main program is read from the backend.
+            // not the main program. The same applies to function modules, whose
+            // document shows the function source while the searched main program
+            // is SAPL<group>. In both cases the main program (no editor source
+            // supplied) is read from the backend.
             String mainProgramSource = mainSource == null ? "" : mainSource;
             String reportedMainType = mainType;
-            if (includeEntry) {
+            if (includeEntry || mainSource == null || mainSource.trim().isEmpty()) {
                 reportedMainType = "PROG/P";
                 try {
                     String fetched = AdtSourceReader.readSource(project, effectiveMainName);

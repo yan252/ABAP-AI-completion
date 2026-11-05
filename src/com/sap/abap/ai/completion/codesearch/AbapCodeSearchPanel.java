@@ -171,13 +171,18 @@ public final class AbapCodeSearchPanel {
             setStatus(Messages.get("error.noSapProject"));
             return;
         }
-        String mainSource = context.readCurrentSource();
-        if (mainSource == null || mainSource.trim().isEmpty()) {
+        String editorSource = context.readCurrentSource();
+        if (editorSource == null || editorSource.trim().isEmpty()) {
             setStatus(Messages.get("error.noEditorDocument"));
             return;
         }
         setBusy(true);
-        final String capturedSource = mainSource;
+        // Forward the editor document only when it actually holds the main
+        // program (or the INCLUDE being edited). For function modules the
+        // document shows the function source, while the searched main program
+        // is SAPL<group> and must be read from the backend.
+        final String capturedSource = context.editorShowsMain || context.includeEntry
+                ? editorSource : null;
         prepareJob = new Job("ABAP Code Search") {
             @Override
             protected IStatus run(IProgressMonitor monitor) {
