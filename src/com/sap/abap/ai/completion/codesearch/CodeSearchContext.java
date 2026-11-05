@@ -61,7 +61,7 @@ public final class CodeSearchContext {
                 return classContext;
             }
             log("fromActiveEditor: ADT object not resolved, editorClass="
-                    + editor.getClass().getName());
+                    + editor.getClass().getName() + ", title=" + editor.getTitle());
             return null;
         }
         String type = info.type.toUpperCase();
@@ -99,17 +99,33 @@ public final class CodeSearchContext {
         try {
             String name = classNameOf(editor);
             if (name == null) {
+                // Last resort: ADT class editors use the bare class name as
+                // their title.
+                name = classNameFromTitle(editor.getTitle());
+            }
+            if (name == null) {
                 return null;
             }
             org.eclipse.core.resources.IFile file =
                     AdtObjectResolver.getAdtFile(editor.getEditorInput());
-            if (file == null || file.getProject() == null) {
+            IProject project = file != null ? file.getProject()
+                    : AdtObjectResolver.findProject(editor.getEditorInput(), editor);
+            if (project == null) {
                 return null;
             }
-            return new CodeSearchContext(editor, file.getProject(), name, "CLAS/OC", true);
+            return new CodeSearchContext(editor, project, name, "CLAS/OC", true);
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /** The class name from an editor title, or null when it is not a bare name. */
+    private static String classNameFromTitle(String title) {
+        if (title == null) {
+            return null;
+        }
+        String trimmed = title.trim();
+        return trimmed.matches("[A-Za-z0-9_/]{2,40}") ? trimmed.toUpperCase() : null;
     }
 
     /**

@@ -115,6 +115,21 @@ public final class AdtObjectResolver {
                 }
             }
 
+            // The multi-page class editor (MultiPageClassEditor) exposes a
+            // CLAS/I reference with an empty name. Recover the class name from
+            // the URI (…/oo/classes/<name>/…) or the workspace file path.
+            if ((name == null || name.trim().isEmpty()) && type != null
+                    && type.toUpperCase().startsWith("CLAS/")) {
+                String recovered = nameFromClassPath(uri);
+                if (recovered == null && file != null) {
+                    recovered = nameFromClassPath(file.getFullPath().toString());
+                }
+                if (recovered != null) {
+                    name = recovered;
+                    type = "CLAS/OC";
+                }
+            }
+
             if (name == null || name.trim().isEmpty()
                     || type == null || type.trim().isEmpty()) {
                 logDebug("getAdtObject: name/type unavailable (name=" + name
@@ -143,6 +158,17 @@ public final class AdtObjectResolver {
         }
     }
 
+    /** 从 URI 或工作区路径中提取类名（…/oo/classes/<name>/…）。 */
+    private static String nameFromClassPath(String path) {
+        if (path == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("/oo/classes/([^/]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(path);
+        return m.find() ? m.group(1) : null;
+    }
+
     /** 备选路径：编辑器适配为 IAdtFormEditor 后取模型中的名称/类型。 */
     private static String[] viaFormEditor(IEditorPart editor) {
         try {
@@ -163,7 +189,7 @@ public final class AdtObjectResolver {
     }
 
     /** 项目解析兜底（无法从文件反推时使用）。 */
-    private static IProject findProject(IEditorInput input, IEditorPart editor) {
+    public static IProject findProject(IEditorInput input, IEditorPart editor) {
         try {
             IProject project = Adapters.adapt(input, IProject.class);
             if (project != null) return project;
