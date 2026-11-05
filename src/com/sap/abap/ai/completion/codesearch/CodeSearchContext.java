@@ -62,6 +62,12 @@ public final class CodeSearchContext {
             return new CodeSearchContext(editor, info.project,
                     "SAPL" + group.toUpperCase(), "PROG/P", false);
         }
+        if (type.startsWith("CLAS/")) {
+            // The ADT class editor document already holds the entire class
+            // (all sections and method implementations), so it is the single
+            // "main program" search target and offsets match exactly.
+            return new CodeSearchContext(editor, info.project, info.name.toUpperCase(), type, true);
+        }
         if (!type.startsWith("PROG/")) {
             return null;
         }

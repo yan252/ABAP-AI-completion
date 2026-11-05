@@ -595,6 +595,18 @@ public final class AbapEditorNavigator {
                 log("openViaAdt: function module editor unavailable for "
                         + program.getFunctionName() + ", falling back to include");
             }
+            if (program.isClass()) {
+                IEditorPart part = navigate(service, navigate, project,
+                        program.getName(), program.getType(), classUri(program, false));
+                if (part == null) {
+                    part = navigate(service, navigate, project,
+                            program.getName(), program.getType(), classUri(program, true));
+                }
+                if (part != null) {
+                    return part;
+                }
+                log("openViaAdt: class editor unavailable for " + program.getName());
+            }
             return navigate(service, navigate, project,
                     program.getName(), program.getType(), objectUri(program));
         } catch (Throwable t) {
@@ -636,9 +648,22 @@ public final class AbapEditorNavigator {
     private static String objectUri(AbapCodeProgram program) {
         String name = program.getName().toLowerCase();
         String encoded = name.replace("/", "%2F");
+        if (program.isClass()) {
+            return classUri(program, true);
+        }
         return program.isInclude()
                 ? "/sap/bc/adt/programs/includes/" + encoded
                 : "/sap/bc/adt/programs/programs/" + encoded;
+    }
+
+    /**
+     * ADT URI of a class, e.g. {@code /sap/bc/adt/oo/classes/zbp_ce_supplierdelivery}.
+     * The {@code withSourceMain} variant appends {@code /source/main}, matching
+     * the URI ADT reports for the open class source editor.
+     */
+    private static String classUri(AbapCodeProgram program, boolean withSourceMain) {
+        String name = program.getName().toLowerCase().replace("/", "%2F");
+        return "/sap/bc/adt/oo/classes/" + name + (withSourceMain ? "/source/main" : "");
     }
 
     /**

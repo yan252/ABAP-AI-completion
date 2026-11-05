@@ -101,10 +101,18 @@ public final class AbapCodeProgram {
         return isFunctionInclude() ? "FUGR/FF" : type;
     }
 
+    /** true when this target is a class (searched as one document). */
+    public boolean isClass() {
+        return type != null && type.toUpperCase().startsWith("CLAS/");
+    }
+
     /** Localized program type used in the result tree. */
     public String getTypeLabel() {
         if (isFunctionInclude()) {
             return Messages.get("type.function");
+        }
+        if (isClass()) {
+            return Messages.get("type.class");
         }
         return Messages.get(isInclude() ? "type.include" : "type.program");
     }

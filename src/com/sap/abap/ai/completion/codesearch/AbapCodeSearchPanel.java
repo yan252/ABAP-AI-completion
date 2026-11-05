@@ -153,7 +153,14 @@ public final class AbapCodeSearchPanel {
         if (cmbInclude == null || cmbInclude.isDisposed()) {
             return;
         }
-        cmbInclude.setEnabled(rdoIncludeProgram.getSelection() && prepared != null);
+        cmbInclude.setEnabled(!isClassContext()
+                && rdoIncludeProgram.getSelection() && prepared != null);
+    }
+
+    /** true when the searched object is a class (no include scope exists). */
+    private boolean isClassContext() {
+        return context != null && context.programType != null
+                && context.programType.toUpperCase().startsWith("CLAS/");
     }
 
     /** Starts the (background) source loading; call once the form is visible. */
@@ -253,8 +260,11 @@ public final class AbapCodeSearchPanel {
         chkReplace.setEnabled(!busy);
         txtReplace.setEnabled(!busy && chkReplace.getSelection());
         rdoMainProgram.setEnabled(!busy);
-        rdoIncludeProgram.setEnabled(!busy);
-        cmbInclude.setEnabled(!busy && rdoIncludeProgram.getSelection() && prepared != null);
+        // Classes are searched as one document; the include scope does not
+        // exist for them, so the radio stays disabled (not just unselected).
+        rdoIncludeProgram.setEnabled(!busy && !isClassContext());
+        cmbInclude.setEnabled(!busy && !isClassContext()
+                && rdoIncludeProgram.getSelection() && prepared != null);
         if (busy) {
             setStatus(Messages.get("status.loading"));
         } else {
