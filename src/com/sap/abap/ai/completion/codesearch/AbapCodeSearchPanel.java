@@ -60,6 +60,9 @@ public final class AbapCodeSearchPanel {
 
         txtPattern = new Text(root, SWT.BORDER);
         txtPattern.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        // Restore the pattern of the previous search so it does not have to be
+        // re-typed when the dialog / search tab is reopened.
+        txtPattern.setText(savedPattern());
 
         chkCaseSensitive = new Button(root, SWT.CHECK);
         chkCaseSensitive.setText(Messages.get("chk.caseSensitive"));
@@ -174,10 +177,9 @@ public final class AbapCodeSearchPanel {
             setStatus(Messages.get("error.noAbapEditor"));
             return;
         }
-        if (context.project == null) {
-            setStatus(Messages.get("error.noSapProject"));
-            return;
-        }
+        // project may be null for non-ADT / unknown-type editors (editor-only
+        // fallback). The prepare step tolerates that — backend lookups are
+        // skipped gracefully and the editor document still gets searched.
         String editorSource = context.readCurrentSource();
         if (editorSource == null || editorSource.trim().isEmpty()) {
             setStatus(Messages.get("error.noEditorDocument"));
@@ -187,16 +189,18 @@ public final class AbapCodeSearchPanel {
         // Forward the editor document only when it actually holds the main
         // program (or the INCLUDE being edited). For function modules the
         // document shows the function source, while the searched main program
-        // is SAPL<group> and must be read from the backend.
+        // is SAPL<group> and must be read from the backend. For classes, all
+        // page sources are supplied separately via classPages.
         final String capturedSource = context.editorShowsMain || context.includeEntry
                 ? editorSource : null;
+        final java.util.List<CodeSearchContext.ClassPage> classPages = context.classPages;
         prepareJob = new Job("ABAP Code Search") {
             @Override
             protected IStatus run(IProgressMonitor monitor) {
                 try {
                     prepared = CodeSearchSourceClient.prepare(
                             context.project, context.programName, context.programType,
-                            capturedSource, context.includeEntry);
+                            capturedSource, context.includeEntry, classPages);
                 } catch (Throwable t) {
                     prepareError = t.getMessage() == null ? t.toString() : t.getMessage();
                 }
@@ -289,6 +293,32 @@ public final class AbapCodeSearchPanel {
         }
     }
 
+    /** Preference key of the last search pattern. */
+    private static final String PREF_LAST_PATTERN = "codeSearch.lastPattern";
+
+    /** The pattern of the last search, may be empty. */
+    private static String savedPattern() {
+        try {
+            return com.sap.abap.ai.completion.Activator.staticGetPreferenceStore()
+                    .getString(PREF_LAST_PATTERN);
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    /** Persists the pattern of the search that was just started. */
+    private void rememberPattern() {
+        String pattern = txtPattern == null || txtPattern.isDisposed() ? null : txtPattern.getText();
+        if (pattern == null) {
+            return;
+        }
+        try {
+            com.sap.abap.ai.completion.Activator.staticGetPreferenceStore()
+                    .setValue(PREF_LAST_PATTERN, pattern);
+        } catch (Throwable ignored) {
+        }
+    }
+
     public boolean isCaseSensitive() {
         return chkCaseSensitive.getSelection();
     }
@@ -374,6 +404,7 @@ public final class AbapCodeSearchPanel {
         }
         NewSearchUI.runQueryInBackground(new AbapCodeSearchQuery(targets,
                 txtPattern.getText(), true, chkCaseSensitive.getSelection()));
+        rememberPattern();
         return true;
     }
 
@@ -400,6 +431,7 @@ public final class AbapCodeSearchPanel {
         new ReplaceRunner(shell, targets, txtReplace.getText(),
                 CodeSearchMatcher.create(txtPattern.getText(), true, chkCaseSensitive.getSelection()))
                         .start();
+        rememberPattern();
         return true;
     }
 

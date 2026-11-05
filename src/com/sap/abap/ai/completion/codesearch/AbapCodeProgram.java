@@ -132,7 +132,7 @@ public final class AbapCodeProgram {
             return Messages.get("type.function");
         }
         if (isClass()) {
-            return Messages.get("type.class");
+            return Messages.get("type.class.global");
         }
         return Messages.get(isInclude() ? "type.include" : "type.program");
     }

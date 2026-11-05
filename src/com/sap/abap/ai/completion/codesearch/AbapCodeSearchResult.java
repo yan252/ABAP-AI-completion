@@ -96,8 +96,13 @@ public final class AbapCodeSearchResult extends AbstractTextSearchResult {
         // The identity name is the function module for function includes
         // (their editor shows the function name), otherwise the program name.
         String identity = program.getIdentityName().toUpperCase();
-        boolean shown = title != null && (title.toUpperCase().contains(identity)
-                || title.toUpperCase().contains(program.getName().toUpperCase()));
+        // Class local-type includes share the class editor, whose title is the
+        // bare class name — match against it as well.
+        String classOfInclude = CodeSearchSourceClient.classNameOfClassInclude(program.getName());
+        String upperTitle = title == null ? "" : title.toUpperCase();
+        boolean shown = title != null && (upperTitle.contains(identity)
+                || upperTitle.contains(program.getName().toUpperCase())
+                || (classOfInclude != null && upperTitle.contains(classOfInclude)));
         log("matchesEditor title=" + title + " program=" + program.getName()
                 + " identity=" + identity + " -> " + shown);
         return shown;

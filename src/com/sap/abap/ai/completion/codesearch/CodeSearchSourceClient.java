@@ -89,15 +89,23 @@ public final class CodeSearchSourceClient {
     /**
      * Collects main program source + every INCLUDE source into a single result.
      *
-     * @param project       ADT project (supplies the JCo destination)
-     * @param programName   current program name reported by the active editor
-     * @param programType   current program type, e.g. "PROG/P" or "PROG/I"
-     * @param mainSource    source text of the program the user is currently editing
-     *                      (read directly from the editor document — includes uncommitted changes)
-     * @param includeEntry  true iff the active editor shows an INCLUDE
+     * @param project             ADT project (supplies the JCo destination)
+     * @param programName         current program name reported by the active editor
+     * @param programType         current program type, e.g. "PROG/P" or "PROG/I"
+     * @param mainSource          source text of the program the user is currently editing
+     *                            (read directly from the editor document — includes uncommitted changes)
+     * @param includeEntry        true iff the active editor shows an INCLUDE
+     * @param classPages          all class editor pages' sources (global class +
+     *                            CCDEF/CCIMP/CCMAC/CT), collected from the
+     *                            multi-page class editor. Non-null only for
+     *                            class searches; when present it is used
+     *                            directly instead of querying the backend
+     *                            (whose RPY_PROGRAM_READ does not return
+     *                            class-pool include sources).
      */
     public static PreparedSources prepare(IProject project, String programName, String programType,
-            String mainSource, boolean includeEntry) throws IOException {
+            String mainSource, boolean includeEntry,
+            java.util.List<CodeSearchContext.ClassPage> classPages) throws IOException {
         try {
             String mainType = (programType != null && !programType.trim().isEmpty())
                     ? programType.toUpperCase() : "PROG/P";
@@ -136,19 +144,28 @@ public final class CodeSearchSourceClient {
                 includeSet.add(programName.toUpperCase());
             }
 
-            // 1c. Classes: the editor document covers only the "Global class"
-            //     page. The other class editor pages (class-relevant local
-            //     types, local types, macros, test classes) are class-pool
-            //     includes — add them so the search covers the whole class.
+            // 1c. Classes: when the multi-page class editor is available, every
+            //     page's source (global class + CCDEF/CCIMP/CCMAC/CT) is read
+            //     directly from the editor. This avoids the backend, whose
+            //     RPY_PROGRAM_READ does not return class-pool include sources,
+            //     and ensures unsaved edits are searched.
             boolean classSearch = mainType.startsWith("CLAS/");
-            String classPrefix = classSearch ? classPoolPrefix(effectiveMainName) : null;
-            if (classSearch) {
-                for (String suffix : CLASS_LOCAL_SUFFIXES) {
-                    includeSet.add(classPrefix + suffix);
+            boolean useEditorClassPages = classSearch
+                    && classPages != null && !classPages.isEmpty();
+            if (classSearch && !useEditorClassPages) {
+                List<String> localTypes = Collections.emptyList();
+                try {
+                    localTypes = AdtSourceReader.classPoolLocalTypeIncludes(
+                            project, effectiveMainName);
+                } catch (AdtSourceReader.SourceException e) {
+                    AdtSourceReader.log("prepare: class pool include lookup failed for "
+                            + effectiveMainName + ": " + e.getMessage());
                 }
+                for (String s : localTypes) includeSet.add(s);
             }
             AdtSourceReader.log("prepare: main=" + effectiveMainName
                     + " includeEntry=" + includeEntry
+                    + " classPages=" + (useEditorClassPages ? classPages.size() : 0)
                     + " candidates(fromTable=" + fromTable.size() + ", merged="
                     + includeSet.size() + ")=" + includeSet);
 
@@ -166,17 +183,38 @@ public final class CodeSearchSourceClient {
             // (the raw include opens read-only in ADT).
             String functionGroup = functionGroupOf(effectiveMainName);
             List<IncludeProgram> includePrograms = new ArrayList<>();
-            if (!includesOrdered.isEmpty()) {
+
+            if (useEditorClassPages) {
+                // Build the include list straight from the editor pages. The
+                // global class page becomes the main program source; the
+                // local-type pages become includes.
+                for (CodeSearchContext.ClassPage page : classPages) {
+                    if (page.isGlobalClass() || page.source == null
+                            || page.source.trim().isEmpty()) {
+                        continue;
+                    }
+                    String partLabel = classLocalPartLabel(
+                            classPoolPrefix(effectiveMainName), page.name);
+                    includePrograms.add(new IncludeProgram(page.name, page.source,
+                            null, null, partLabel));
+                }
+                AdtSourceReader.log("prepare: class includes from editor: "
+                        + includePrograms.size());
+            } else if (!includesOrdered.isEmpty()) {
                 Map<String, String> sources = AdtSourceReader.readSources(project, includesOrdered);
                 for (String name : includesOrdered) {
                     // The include currently open in the editor wins: it holds
                     // the user's uncommitted changes.
-                    String src = (includeEntry && name.equalsIgnoreCase(programName))
-                            ? mainSource : sources.get(name);
+                    String src;
+                    if (includeEntry && name.equalsIgnoreCase(programName)) {
+                        src = mainSource;
+                    } else {
+                        src = sources.get(name);
+                    }
                     if (src != null && !src.isEmpty()) {
                         String fmName = detectFunctionName(functionGroup, name, src);
-                        String partLabel = classPrefix != null
-                                ? classLocalPartLabel(classPrefix, name) : null;
+                        String partLabel = classSearch
+                                ? classLocalPartLabel(effectiveMainName, name) : null;
                         includePrograms.add(new IncludeProgram(name, src, fmName,
                                 fmName == null ? null : functionGroup, partLabel));
                     }
@@ -191,9 +229,19 @@ public final class CodeSearchSourceClient {
             // document shows the function source while the searched main program
             // is SAPL<group>. In both cases the main program (no editor source
             // supplied) is read from the backend.
+            // For classes, the global class page source comes from the editor
+            // (useEditorClassPages), so no backend read is needed.
             String mainProgramSource = mainSource == null ? "" : mainSource;
             String reportedMainType = mainType;
-            if (includeEntry || mainSource == null || mainSource.trim().isEmpty()) {
+            if (useEditorClassPages) {
+                for (CodeSearchContext.ClassPage page : classPages) {
+                    if (page.isGlobalClass() && page.source != null
+                            && !page.source.trim().isEmpty()) {
+                        mainProgramSource = page.source;
+                        break;
+                    }
+                }
+            } else if (includeEntry || mainSource == null || mainSource.trim().isEmpty()) {
                 reportedMainType = "PROG/P";
                 try {
                     String fetched = AdtSourceReader.readSource(project, effectiveMainName);
@@ -213,6 +261,34 @@ public final class CodeSearchSourceClient {
 
     /** Local-type page suffixes of a class pool (searched for classes). */
     private static final String[] CLASS_LOCAL_SUFFIXES = { "CCDEF", "CCIMP", "CCMAC", "CT" };
+
+    /**
+     * If {@code name} is a class-pool include whose name ends with one of the
+     * local-type page suffixes (e.g. {@code ZCL_FOO===============CCIMP}),
+     * returns the bare class name (everything before the first '=').
+     * Otherwise returns {@code null}.
+     *
+     * <p>The ADT class editor exposes the active page as an IAdtObjectReference
+     * whose name is the padded include name rather than the class name. The
+     * search must recover the class name so that all four pages are fetched.</p>
+     */
+    public static String classNameOfClassInclude(String name) {
+        if (name == null) {
+            return null;
+        }
+        String upper = name.toUpperCase();
+        int eq = upper.indexOf('=');
+        if (eq <= 0) {
+            return null;
+        }
+        String suffix = upper.substring(upper.lastIndexOf('=') + 1);
+        for (String candidate : CLASS_LOCAL_SUFFIXES) {
+            if (candidate.equals(suffix)) {
+                return upper.substring(0, eq);
+            }
+        }
+        return null;
+    }
 
     /**
      * Class-pool include prefix: the class name padded with '=' to 28

@@ -147,7 +147,74 @@ public final class AdtSourceReader {
         return candidates;
     }
 
-    /** Reads the include list from RPY_PROGRAM_READ's INCLUDE_TAB. */
+    /**
+     * Lists the class-pool includes of a class that hold the additional editor
+     * pages: {@code CCDEF} (class-relevant local types), {@code CCIMP} (local
+     * types), {@code CCMAC} (macros) and {@code CT} (test classes).
+     *
+     * <p>The include names are the class name padded with '=' followed by the
+     * page suffix, e.g. {@code ZCL_FOO===============CCIMP}. The padding length
+     * is not assumed: the real names are queried from {@code REPOSRC} by prefix
+     * and filtered by their suffix. Only when that query yields nothing, the
+     * two common layouts are tried as a fallback.</p>
+     */
+    public static List<String> classPoolLocalTypeIncludes(IProject project, String className)
+            throws SourceException {
+        JCoDestination destination = requireDestination(project);
+        String base = className.toUpperCase();
+
+        List<String> result = new ArrayList<>();
+        try {
+            callRfcReadTable(destination, "REPOSRC",
+                    "PROGNAME LIKE '" + escape(base) + "%'",
+                    new String[] { "PROGNAME" },
+                    row -> {
+                        String name = rawName(row.get("PROGNAME"));
+                        if (isLocalTypeInclude(base, name)) addIfAbsent(result, name);
+                    });
+        } catch (Throwable t) {
+            log("classPoolLocalTypeIncludes(" + base + ") REPOSRC failed: "
+                    + t.getClass().getSimpleName() + " — " + t.getMessage());
+        }
+        if (result.isEmpty()) {
+            for (String suffix : CLASS_LOCAL_SUFFIXES) {
+                for (int pad : new int[] { 28, 25 }) {
+                    StringBuilder sb = new StringBuilder(base);
+                    while (sb.length() < pad) sb.append('=');
+                    addIfAbsent(result, sb.append(suffix).toString());
+                }
+            }
+        }
+        log("classPoolLocalTypeIncludes(" + base + ") (" + result.size() + ")=" + result);
+        return result;
+    }
+
+    /** Local-type page suffixes of a class pool. */
+    private static final String[] CLASS_LOCAL_SUFFIXES = { "CCDEF", "CCIMP", "CCMAC", "CT" };
+
+    /**
+     * true when {@code name} is {@code <base>=…<suffix>} for one of the local
+     * type page suffixes. The suffix comparison is case sensitive on purpose:
+     * a real include always spells the suffix in upper case.
+     */
+    private static boolean isLocalTypeInclude(String base, String name) {
+        if (name == null || !name.startsWith(base)) {
+            return false;
+        }
+        String rest = name.substring(base.length());
+        if (rest.isEmpty() || rest.charAt(0) != '=') {
+            return false;
+        }
+        String suffix = rest.substring(rest.lastIndexOf('=') + 1);
+        for (String candidate : CLASS_LOCAL_SUFFIXES) {
+            if (candidate.equals(suffix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Reads an include list from RPY_PROGRAM_READ's INCLUDE_TAB. */
     private static List<String> readIncludeListFromFunction(JCoDestination destination, String programName) {
         List<String> result = new ArrayList<>();
         try {
@@ -610,6 +677,13 @@ public final class AdtSourceReader {
             }
         }
         return null;
+    }
+
+    /** Trims blanks from a table value, keeping the '=' padding inside names. */
+    private static String rawName(String value) {
+        if (value == null) return null;
+        String name = value.trim().toUpperCase();
+        return name.isEmpty() ? null : name;
     }
 
     /** Trims blanks and SAP's CHAR padding characters from a table value. */

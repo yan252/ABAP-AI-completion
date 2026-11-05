@@ -118,6 +118,10 @@ public final class AdtObjectResolver {
             // The multi-page class editor (MultiPageClassEditor) exposes a
             // CLAS/I reference with an empty name. Recover the class name from
             // the URI (…/oo/classes/<name>/…) or the workspace file path.
+            // The original type is kept on purpose: CLAS/I means the editor is
+            // on a local-types page (CCDEF/CCIMP/CCMAC/CT), CLAS/OC means the
+            // global class page. Callers use this to decide whether the editor
+            // document holds the main class source.
             if ((name == null || name.trim().isEmpty()) && type != null
                     && type.toUpperCase().startsWith("CLAS/")) {
                 String recovered = nameFromClassPath(uri);
@@ -126,7 +130,6 @@ public final class AdtObjectResolver {
                 }
                 if (recovered != null) {
                     name = recovered;
-                    type = "CLAS/OC";
                 }
             }
 

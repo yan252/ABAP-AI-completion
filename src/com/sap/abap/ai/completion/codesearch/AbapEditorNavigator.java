@@ -88,9 +88,27 @@ public final class AbapEditorNavigator {
         try {
             IEditorPart part = findOrOpen(program);
             if (part == null) {
-                log("show: could not open editor for " + program.getName());
-                return;
+                // Fallback: the program identity does not map to a known ADT
+                // object (e.g. CDS view, DDIC table, unknown editor type) —
+                // try the currently active editor. The search ran on its
+                // document in the first place (editor-only fallback path),
+                // so it is guaranteed to be the correct target for annotating
+                // and revealing matches.
+                part = CodeSearchContext.activeEditor();
+                if (part == null) {
+                    log("show: could not open editor for " + program.getName()
+                            + " (no active editor either)");
+                    return;
+                }
+                log("show: ADT open failed for " + program.getName()
+                        + ", using active editor " + part.getClass().getName());
             }
+            // For class local-type includes the found editor is always the
+            // MultiPageClassEditor; switch to the correct tab so that the
+            // document we annotate/select is the one that actually contains
+            // the match — textEditorOf(part) returns the active page's editor,
+            // which would otherwise stay on Global Class.
+            switchClassTab(part, program);
             activate(part);
             Match[] sorted = sortByOffset(allMatches);
             int index = match == null ? -1 : indexOf(sorted, match);
@@ -105,8 +123,11 @@ public final class AbapEditorNavigator {
         try {
             IEditorPart part = findOrOpen(program);
             if (part == null) {
-                log("show: could not open editor for " + program.getName());
-                return;
+                part = CodeSearchContext.activeEditor();
+                if (part == null) {
+                    log("show: could not open editor for " + program.getName());
+                    return;
+                }
             }
             activate(part);
             applyWithRetry(part, program, sortByOffset(allMatches), -1, offset, length, null, 0);
@@ -519,6 +540,81 @@ public final class AbapEditorNavigator {
         return getDocument(editor);
     }
 
+    /**
+     * Switches the ADT MultiPageClassEditor to the tab that corresponds to the
+     * given program. Only effective for class local-type includes (class-pool
+     * includes like {@code CL_FOO===============CCIMP}); other editors are
+     * left untouched.
+     *
+     * <p>The ADT MultiPageClassEditor exposes a public method
+     * {@code switchToTab(AbapClassIncludeType)} that we invoke reflectively
+     * to avoid a hard dependency on the ADT OO UI bundle at compile time.</p>
+     */
+    private static void switchClassTab(IEditorPart part, AbapCodeProgram program) {
+        if (part == null || program == null) return;
+        // Short-circuit: not an ADT MultiPageClassEditor at all.
+        String clsName = part.getClass().getName();
+        if (!clsName.contains("MultiPageClassEditor")) return;
+
+        // Determine which AbapClassIncludeType to switch to.
+        // Global Class program → MAIN (no switch needed but harmless).
+        String classIncludeType = resolveClassIncludeType(program);
+        if (classIncludeType == null) {
+            log("switchClassTab: program " + program.getName()
+                    + " does not map to a class include type, skip");
+            return;
+        }
+        // Already on that tab? Let ADT decide — switchToTab is idempotent.
+
+        try {
+            // Load the AbapClassIncludeType enum via the classloader of the
+            // editor class so we don't need a hard bundle dependency.
+            Class<?> enumClass = part.getClass().getClassLoader()
+                    .loadClass("com.sap.adt.oo.model.classes.AbapClassIncludeType");
+            // enumClass.getField(enumConstantName).get(null) → enum instance
+            java.lang.reflect.Field field = enumClass.getField(classIncludeType);
+            Object enumValue = field.get(null);
+
+            Method switchToTab = part.getClass().getMethod("switchToTab", enumClass);
+            switchToTab.invoke(part, enumValue);
+            log("switchClassTab: switched to " + classIncludeType
+                    + " for " + program.getName());
+        } catch (Throwable t) {
+            log("switchClassTab failed for " + program.getName()
+                    + " (type=" + classIncludeType + "): " + t.getMessage());
+        }
+    }
+
+    /**
+     * Maps an AbapCodeProgram to the ADT AbapClassIncludeType enum constant
+     * name (MAIN / DEFINITIONS / IMPLEMENTATIONS / MACROS / TESTCLASSES /
+     * LOCALTYPES). Returns {@code null} when the program is not a class or
+     * class-pool include.
+     */
+    private static String resolveClassIncludeType(AbapCodeProgram program) {
+        if (program.isClass()) {
+            return "MAIN";
+        }
+        String name = program.getName();
+        // Class-pool include names are padded to 28 chars with '=', the suffix
+        // identifies the page: CCDEF / CCIMP / CCMAC / CT.
+        String className = CodeSearchSourceClient.classNameOfClassInclude(name);
+        if (className == null) {
+            return null;
+        }
+        String suffix = name.substring(name.lastIndexOf('=') + 1).toUpperCase();
+        switch (suffix) {
+            case "CCDEF": return "DEFINITIONS";
+            case "CCIMP": return "IMPLEMENTATIONS";
+            case "CCMAC": return "MACROS";
+            case "CT":    return "TESTCLASSES";
+            default:
+                // Unknown suffix — best effort: fall back to implementations
+                // which is usually where Local Types live.
+                return "IMPLEMENTATIONS";
+        }
+    }
+
     private static IEditorPart findOrOpen(AbapCodeProgram program) {
         IEditorPart open = findOpenEditor(program);
         return open != null ? open : openViaAdt(program);
@@ -526,6 +622,9 @@ public final class AbapEditorNavigator {
 
     private static IEditorPart findOpenEditor(AbapCodeProgram program) {
         try {
+            // Class local-type includes share the class editor — match by the
+            // bare class name extracted from the include name.
+            String classOfInclude = CodeSearchSourceClient.classNameOfClassInclude(program.getName());
             for (IWorkbenchWindow window : PlatformUI.getWorkbench().getWorkbenchWindows()) {
                 for (IWorkbenchPage page : window.getPages()) {
                     for (IEditorPart editor : page.getEditors()) {
@@ -539,7 +638,20 @@ public final class AbapEditorNavigator {
                                             CodeSearchContext.classNameOf(editor))) {
                                 return editor;
                             }
+                            if (classOfInclude != null
+                                    && classOfInclude.equalsIgnoreCase(
+                                            CodeSearchContext.classNameOf(editor))) {
+                                return editor;
+                            }
                             continue;
+                        }
+                        // Class include open in the class editor: the editor's
+                        // ADT name is the class name, not the include name.
+                        if (classOfInclude != null
+                                && info.name.equalsIgnoreCase(classOfInclude)
+                                && info.type != null
+                                && info.type.toUpperCase().startsWith("CLAS/")) {
+                            return editor;
                         }
                         if (info.name.equalsIgnoreCase(program.getIdentityName())) {
                             if (info.type != null && info.type.equalsIgnoreCase(program.getIdentityType())) {
@@ -548,6 +660,18 @@ public final class AbapEditorNavigator {
                             if (!program.isFunctionInclude() && info.type != null
                                     && info.type.startsWith("PROG")
                                     && program.isInclude() == info.type.toUpperCase().contains("/I")) {
+                                return editor;
+                            }
+                            // Name-only fallback match: the program identity's
+                            // type might be synthetic (e.g. PROG/P for a CDS
+                            // custom entity found via editor-only search), so
+                            // when the names line up we trust that this editor
+                            // is the right one and skip ADT navigation which
+                            // would otherwise pop a "does not exist" dialog.
+                            if (info.type != null && !info.type.equalsIgnoreCase(program.getIdentityType())) {
+                                log("findOpenEditor: name-only match " + info.name
+                                        + " (editor type=" + info.type
+                                        + " vs program type=" + program.getIdentityType() + ")");
                                 return editor;
                             }
                         }
@@ -613,6 +737,23 @@ public final class AbapEditorNavigator {
                     return part;
                 }
                 log("openViaAdt: class editor unavailable for " + program.getName());
+            }
+            // Class local-type includes (…=CCDEF/CCIMP/CCMAC/CT) are not
+            // standalone program includes — they must open the class editor.
+            String className = CodeSearchSourceClient.classNameOfClassInclude(program.getName());
+            if (className != null) {
+                String classUri = "/sap/bc/adt/oo/classes/"
+                        + className.toLowerCase().replace("/", "%2F");
+                IEditorPart part = navigate(service, navigate, project,
+                        className, "CLAS/OC", classUri);
+                if (part == null) {
+                    part = navigate(service, navigate, project,
+                            className, "CLAS/OC", classUri + "/source/main");
+                }
+                if (part != null) {
+                    return part;
+                }
+                log("openViaAdt: class editor unavailable for include " + program.getName());
             }
             return navigate(service, navigate, project,
                     program.getName(), program.getType(), objectUri(program));
