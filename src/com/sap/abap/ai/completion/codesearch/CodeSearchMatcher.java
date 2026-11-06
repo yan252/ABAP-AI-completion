@@ -63,4 +63,10 @@ final class CodeSearchMatcher {
         }
         return ranges;
     }
+
+    /** Lightweight pre-check: does the source contain at least one match? */
+    boolean hasAny(String source) {
+        if (source == null || source.isEmpty()) return false;
+        return pattern.matcher(source).find();
+    }
 }

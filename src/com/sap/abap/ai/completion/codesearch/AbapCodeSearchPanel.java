@@ -36,6 +36,7 @@ public final class AbapCodeSearchPanel {
     private Button chkCaseSensitive;
     private Button chkReplace;
     private Text txtReplace;
+    private Composite replaceRow;
     private Button rdoMainProgram;
     private Button rdoIncludeProgram;
     private Combo cmbInclude;
@@ -67,7 +68,7 @@ public final class AbapCodeSearchPanel {
         chkCaseSensitive = new Button(root, SWT.CHECK);
         chkCaseSensitive.setText(Messages.get("chk.caseSensitive"));
 
-        Composite replaceRow = new Composite(root, SWT.NONE);
+        replaceRow = new Composite(root, SWT.NONE);
         replaceRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
         replaceRow.setLayout(new GridLayout(2, false));
 
@@ -78,7 +79,6 @@ public final class AbapCodeSearchPanel {
         txtReplace = new Text(replaceRow, SWT.BORDER);
         txtReplace.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
         txtReplace.setEnabled(false);
-
         org.eclipse.swt.widgets.Group scopeGroup = new org.eclipse.swt.widgets.Group(root, SWT.NONE);
         scopeGroup.setText(Messages.get("group.scope"));
         scopeGroup.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
@@ -148,7 +148,50 @@ public final class AbapCodeSearchPanel {
 
     private void updateReplaceEnabled() {
         if (txtReplace != null && !txtReplace.isDisposed()) {
-            txtReplace.setEnabled(chkReplace.getSelection());
+            txtReplace.setEnabled(chkReplace.getSelection() && chkReplace.isEnabled());
+        }
+    }
+
+    /**
+     * Disables the "Replace with" checkbox (and cascades to the replace-text
+     * field). Used by the standard Eclipse Search-dialog tab (Ctrl+H) where
+     * replacement must not be offered — only the standalone ABAP Code Search
+     * dialog (Ctrl+Shift+H) supports in-place replacement.
+     */
+    public void setReplaceDisabled() {
+        if (chkReplace != null && !chkReplace.isDisposed()) {
+            chkReplace.setSelection(false);
+            chkReplace.setEnabled(false);
+        }
+        updateReplaceEnabled();
+    }
+
+    /**
+     * Hides the replace controls (checkbox + text field) entirely. Used by the
+     * standard Eclipse Search-dialog tab (Ctrl+H) where replacement is not
+     * offered. Unlike setReplaceDisabled, this excludes the row from layout
+     * so the form looks like a pure search page.
+     */
+    public void setReplaceHidden() {
+        if (chkReplace != null && !chkReplace.isDisposed()) {
+            chkReplace.setSelection(false);
+            Object d = chkReplace.getLayoutData();
+            if (d instanceof GridData) ((GridData) d).exclude = true;
+            chkReplace.setVisible(false);
+        }
+        if (txtReplace != null && !txtReplace.isDisposed()) {
+            txtReplace.setEnabled(false);
+            Object d = txtReplace.getLayoutData();
+            if (d instanceof GridData) ((GridData) d).exclude = true;
+            txtReplace.setVisible(false);
+        }
+        if (replaceRow != null && !replaceRow.isDisposed()) {
+            Object d = replaceRow.getLayoutData();
+            if (d instanceof GridData) ((GridData) d).exclude = true;
+            replaceRow.setVisible(false);
+        }
+        if (root != null && !root.isDisposed()) {
+            root.layout(true, true);
         }
     }
 
@@ -486,6 +529,14 @@ public final class AbapCodeSearchPanel {
                 return;
             }
             AbapCodeProgram program = targets.get(index++);
+            // Pre-check against the prepared source: no match → skip without
+            // opening the editor. This avoids flashing every INCLUDE (and the
+            // class editor itself) when only a handful of programs actually
+            // contain matches.
+            if (!matcher.hasAny(program.getSource())) {
+                next();
+                return;
+            }
             ITextEditor editor = AbapEditorNavigator.openProgramEditor(program);
             if (editor == null) {
                 failedPrograms++;
