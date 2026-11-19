@@ -515,6 +515,17 @@
     .editor-foot .run { color: #7fd0a0; font-weight: 700; }
     .editor-foot kbd { background: #22384e; border-color: #365069; color: #dbe9f8; }
 
+    .shot { margin: 1.3rem 0 0; }
+    .shot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 28px -20px rgba(9, 30, 50, 0.5);
+    }
+    .shot figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 0.55rem; }
+
     /* ---------- Enhancements ---------- */
     .grid3 {
       display: grid;
@@ -894,6 +905,11 @@
             <span><kbd>Tab</kbd> 接受　<kbd>其他键</kbd> 取消</span>
           </div>
         </div>
+
+        <figure class="shot">
+          <img src="assets/completion-overlay.png" alt="Eclipse ABAP 编辑器中按 Ctrl+Shift+. 后显示的 AI 补全浮动覆盖层" width="949" height="593">
+          <figcaption>实际界面截图：按 Ctrl+Shift+. 后，AI 建议显示在浮动覆盖层中，按 Tab 接受、Esc 取消。</figcaption>
+        </figure>
 
         <div class="callout">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

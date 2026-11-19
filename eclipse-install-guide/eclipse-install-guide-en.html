@@ -515,6 +515,17 @@
     .editor-foot .run { color: #7fd0a0; font-weight: 700; }
     .editor-foot kbd { background: #22384e; border-color: #365069; color: #dbe9f8; }
 
+    .shot { margin: 1.3rem 0 0; }
+    .shot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 28px -20px rgba(9, 30, 50, 0.5);
+    }
+    .shot figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 0.55rem; }
+
     /* ---------- Enhancements ---------- */
     .grid3 {
       display: grid;
@@ -894,6 +905,11 @@
             <span><kbd>Tab</kbd> accept　<kbd>any other key</kbd> dismiss</span>
           </div>
         </div>
+
+        <figure class="shot">
+          <img src="assets/completion-overlay.png" alt="AI completion overlay shown in the Eclipse ABAP editor after pressing Ctrl+Shift+." width="949" height="593">
+          <figcaption>Real screenshot: after pressing Ctrl+Shift+., the AI suggestion appears in a floating overlay. Press Tab to accept or Esc to dismiss.</figcaption>
+        </figure>
 
         <div class="callout">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
