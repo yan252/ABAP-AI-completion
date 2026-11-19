@@ -2,6 +2,8 @@
 
 > 🌐 **语言 / Language**: [English](README.md) | [中文](README_CN.md)
 
+[![安装说明](https://img.shields.io/badge/%E5%AE%89%E8%A3%85%E8%AF%B4%E6%98%8E-%E7%82%B9%E5%87%BB%E6%9F%A5%E7%9C%8B-d32f2f?style=for-the-badge&logo=eclipseide&logoColor=white)](https://yan252.github.io/ABAP-AI-completion/eclipse-install-guide/eclipse-install-guide.html)
+
 ![配置AI ](icons/AI1.png)![按CTRL+ALT+.](icons/AI2.png)![代码补全对比](icons/AI5.png)
 
 
