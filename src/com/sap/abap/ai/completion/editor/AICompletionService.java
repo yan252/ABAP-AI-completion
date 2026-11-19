@@ -143,10 +143,8 @@ public class AICompletionService {
                 if (ex instanceof CancellationException) {
                     return;
                 }
-                String msg = (ex.getCause() instanceof AIClientException)
-                        ? ex.getCause().getMessage()
-                        : ex.getMessage();
-                AILogger.logError(file != null ? file.getName() : "<unknown>", msg);
+                String msg = errorMessage(ex);
+                logFailure(file != null ? file.getName() : "<unknown>", ex, msg);
                 if (errorCallback != null) {
                     errorCallback.accept(msg);
                 }
@@ -194,9 +192,8 @@ public class AICompletionService {
         future.whenComplete((result, ex) -> {
             if (ex != null) {
                 if (ex instanceof CancellationException) return;
-                String msg = (ex.getCause() instanceof AIClientException)
-                        ? ex.getCause().getMessage()
-                        : ex.getMessage();
+                String msg = errorMessage(ex);
+                logFailure("<quick>", ex, msg);
                 if (errorCallback != null) errorCallback.accept(msg);
             } else if (result != null && !result.trim().isEmpty()) {
                 String cleaned = cleanupCompletion(result, null, null);
@@ -207,6 +204,67 @@ public class AICompletionService {
         });
 
         return future;
+    }
+
+    /**
+     * 记录失败详情到接口日志。
+     *
+     * <p>界面只展示 {@code uiMessage}；日志额外记录服务端返回的完整原始
+     * 响应体，便于排查 429/400 等错误的具体内容。</p>
+     */
+    private static void logFailure(String fileName, Throwable ex, String uiMessage) {
+        String raw = null;
+        Throwable t = ex;
+        while (t != null) {
+            if (t instanceof AIClientException) {
+                raw = ((AIClientException) t).getRawResponse();
+                break;
+            }
+            t = t.getCause();
+        }
+        if (raw == null || raw.trim().isEmpty()) {
+            AILogger.logError(fileName, uiMessage);
+        } else {
+            AILogger.logError(fileName,
+                    uiMessage + "\n--- AI raw response ---\n" + raw);
+        }
+    }
+
+    /**
+     * 提取适合展示给用户的错误信息。
+     *
+     * <p>优先沿 cause 链查找 {@link AIClientException}（其 message 已由
+     * {@code AIClient} 归一化为服务端返回的 message）；否则取最外层异常
+     * 的 message，并去掉 {@code java.lang.RuntimeException: } 这类类名前缀。</p>
+     */
+    private static String errorMessage(Throwable ex) {
+        Throwable t = ex;
+        while (t != null) {
+            if (t instanceof java.util.concurrent.TimeoutException) {
+                return Messages.get("service.error.timeout");
+            }
+            if (t instanceof AIClientException) {
+                String m = t.getMessage();
+                if (m != null && !m.trim().isEmpty()) {
+                    return m;
+                }
+            }
+            t = t.getCause();
+        }
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        String m = root.getMessage();
+        if (m == null || m.trim().isEmpty()) {
+            m = root.getClass().getSimpleName();
+        } else {
+            String prefix = root.getClass().getName() + ": ";
+            if (m.startsWith(prefix)) {
+                m = m.substring(prefix.length());
+            }
+        }
+        return m;
     }
 
     /**

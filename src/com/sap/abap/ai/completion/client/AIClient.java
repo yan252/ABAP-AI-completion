@@ -243,7 +243,14 @@ public class AIClient {
             if (isCacheErrorBody(errorBody)) {
                 return "{\"cacheError\":true,\"error\":" + quoteJson(truncate(errorBody, 500)) + "}";
             }
-            throw new AIClientException(Messages.format("client.error.http", responseCode, errorBody));
+            // 服务端返回了明确的错误信息时，界面只展示该信息；
+            // 完整原始响应体随异常携带，由上层写入接口日志。
+            String friendlyError = extractErrorMessage(errorBody);
+            if (friendlyError != null) {
+                throw new AIClientException(friendlyError, errorBody);
+            }
+            throw new AIClientException(Messages.format("client.error.http", responseCode,
+                    truncate(errorBody, 500)), errorBody);
 
         } catch (AIClientException e) {
             throw e;
@@ -340,6 +347,40 @@ public class AIClient {
         return s.length() <= maxLen ? s : s.substring(0, maxLen);
     }
 
+    /**
+     * 从错误响应体中提取可直接展示给用户的错误信息。
+     *
+     * <p>支持 OpenAI 兼容格式 {@code {"error":{"message":"..."}}} 以及
+     * 顶层 {@code {"message":"..."}} / {@code {"error":"..."}}。找不到时
+     * 返回 {@code null}，由调用方回退为「HTTP 状态码 + 原始响应体」。</p>
+     */
+    static String extractErrorMessage(String body) {
+        if (body == null || body.trim().isEmpty()) {
+            return null;
+        }
+        // 1) 顶层或嵌套的 message 字段
+        String msg = extractJsonString(body, "\"message\"");
+        if (msg != null && !msg.trim().isEmpty()) {
+            return truncate(msg.trim(), 300);
+        }
+        // 2) error 为字符串的情况（error 为对象时不能按字符串解析）
+        int errIdx = body.indexOf("\"error\"");
+        if (errIdx >= 0) {
+            int colonIdx = body.indexOf(':', errIdx);
+            if (colonIdx >= 0) {
+                int i = colonIdx + 1;
+                while (i < body.length() && Character.isWhitespace(body.charAt(i))) i++;
+                if (i < body.length() && body.charAt(i) == '"') {
+                    String err = extractJsonString(body, "\"error\"");
+                    if (err != null && !err.trim().isEmpty()) {
+                        return truncate(err.trim(), 300);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public static String testConnection(
             String baseUrl, String model, String apiKey,
             int maxTokens, double temperature) throws AIClientException {
@@ -422,7 +463,14 @@ public class AIClient {
                 responseBody = readStream(conn.getInputStream());
             } else {
                 String errorBody = readStream(conn.getErrorStream());
-                throw new AIClientException(Messages.format("client.error.http", responseCode, errorBody));
+                // 服务端返回了明确的错误信息时，界面只展示该信息；
+                // 完整原始响应体随异常携带，由上层写入接口日志。
+                String friendlyError = extractErrorMessage(errorBody);
+                if (friendlyError != null) {
+                    throw new AIClientException(friendlyError, errorBody);
+                }
+                throw new AIClientException(Messages.format("client.error.http", responseCode,
+                        truncate(errorBody, 500)), errorBody);
             }
 
             // Parse JSON response manually (no Gson needed)
@@ -586,11 +634,12 @@ public class AIClient {
                         int endIdx = findStringEnd(json, startIdx + 1);
                         if (endIdx >= 0) {
                             String errorMsg = json.substring(startIdx + 1, endIdx);
-                            throw new AIClientException(Messages.format("client.error.apiError", errorMsg));
+                            throw new AIClientException(
+                                    Messages.format("client.error.apiError", errorMsg), json);
                         }
                     }
                 }
-                throw new AIClientException(Messages.get("client.error.apiReturnedError"));
+                throw new AIClientException(Messages.get("client.error.apiReturnedError"), json);
             }
 
             // Try to extract from "choices" array

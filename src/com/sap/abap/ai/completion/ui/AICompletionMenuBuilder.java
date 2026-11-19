@@ -15,6 +15,7 @@ import org.eclipse.ui.commands.ICommandService;
 import org.eclipse.ui.handlers.IHandlerService;
 
 import com.sap.abap.ai.completion.Activator;
+import com.sap.abap.ai.completion.preferences.PluginLocale;
 import com.sap.abap.ai.completion.preferences.PreferenceConstants;
 
 /**
@@ -33,7 +34,10 @@ public final class AICompletionMenuBuilder {
     private static final String COMMAND_ID = "com.sap.abap.ai.completion.completeCommand";
     private static final String CODE_SEARCH_COMMAND_ID =
             "com.sap.abap.ai.completion.codeSearchCommand";
-    private static final String HELP_URL = "https://github.com/yan252/ABAP-AI-completion";
+    private static final String HELP_URL_ZH =
+            "https://yan252.github.io/ABAP-AI-completion/eclipse-install-guide/eclipse-install-guide.html";
+    private static final String HELP_URL_EN =
+            "https://yan252.github.io/ABAP-AI-completion/eclipse-install-guide/eclipse-install-guide-en.html";
 
     private AICompletionMenuBuilder() {
     }
@@ -384,14 +388,16 @@ public final class AICompletionMenuBuilder {
     }
 
     static void openHelpUrl() {
+        String helpUrl = "zh".equals(PluginLocale.current().getLanguage())
+                ? HELP_URL_ZH : HELP_URL_EN;
         try {
             PlatformUI.getWorkbench().getBrowserSupport()
                     .getExternalBrowser()
-                    .openURL(new URL(HELP_URL));
+                    .openURL(new URL(helpUrl));
         } catch (Exception e) {
             try {
                 if (java.awt.Desktop.isDesktopSupported()) {
-                    java.awt.Desktop.getDesktop().browse(new java.net.URI(HELP_URL));
+                    java.awt.Desktop.getDesktop().browse(new java.net.URI(helpUrl));
                 }
             } catch (Exception ignored) {
             }
