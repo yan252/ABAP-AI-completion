@@ -1356,6 +1356,27 @@ public final class AbapGitImportSupport {
         }
     }
 
+    /**
+     * 打开 Eclipse Error Log 视图（Window → Show View → Error Log），
+     * 并激活它带到前台。用于模板导入完成后引导用户查看日志。
+     */
+    static void openErrorLogView() {
+        try {
+            Display.getDefault().asyncExec(() -> {
+                try {
+                    IWorkbenchWindow win = PlatformUI.getWorkbench()
+                            .getActiveWorkbenchWindow();
+                    if (win != null && win.getActivePage() != null) {
+                        win.getActivePage().showView("org.eclipse.pde.runtime.LogView");
+                    }
+                } catch (Exception ignored) {
+                    // 视图打开失败不影响主流程
+                }
+            });
+        } catch (Exception ignored) {
+        }
+    }
+
     static void showError(String title, String message) {
         try {
             Display.getDefault().asyncExec(() ->

@@ -189,6 +189,12 @@ public final class BatchTemplateImportService {
             }
             sb.append(ImportMessages.get("importSupport.result.lockedRelease"));
         }
+
+        // 出错时追加一条醒目提示：错误已记录到 Error Log（自动打开了）
+        if (overallSev == IStatus.ERROR) {
+            sb.append(ImportMessages.get("importSupport.result.errorsInErrorLog"));
+        }
+
         sb.append(ImportMessages.get("importSupport.result.detailsWrittenTo"));
         sb.append(ImportMessages.get("importSupport.result.errorLogLine"));
         if (importLogFile != null) {
@@ -199,6 +205,9 @@ public final class BatchTemplateImportService {
                     .append(' ')
                     .append(ImportMessages.get("importSupport.result.logFileUnavailable"));
         }
+
+        // 无论成功失败，都自动打开 Error Log 视图置于前台
+        AbapGitImportSupport.openErrorLogView();
 
         if (overallSev == IStatus.ERROR) {
             MessageDialog.openError(AbapGitImportSupport.getShell(), title, sb.toString());
