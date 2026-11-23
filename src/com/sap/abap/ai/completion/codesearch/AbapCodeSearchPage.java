@@ -23,11 +23,10 @@ public final class AbapCodeSearchPage extends DialogPage implements ISearchPage 
     public void createControl(Composite parent) {
         panel = new AbapCodeSearchPanel();
         Composite form = panel.create(parent);
-        // The standard Eclipse Search dialog (Ctrl+H) only offers search;
-        // replacement is available exclusively through the standalone ABAP
-        // Code Search dialog (Ctrl+Shift+H). Hide the replace controls so
-        // the tab reads as a pure search page.
-        panel.setReplaceHidden();
+        // The Search dialog (Ctrl+H) offers the same find/replace flow as the
+        // standalone ABAP Code Search dialog (Ctrl+Shift+H). The Search button
+        // runs the search; with "Replace with" enabled it starts the
+        // interactive replace instead.
         // The Search dialog has no message area, so attribute the feature to
         // the plugin inside the tab page itself.
         panel.showPluginInfo();
@@ -52,6 +51,9 @@ public final class AbapCodeSearchPage extends DialogPage implements ISearchPage 
         }
         if (container != null) {
             container.setPerformActionEnabled(true);
+        }
+        if (panel.isReplaceEnabled()) {
+            return panel.performReplace(getControl().getShell());
         }
         return panel.performSearch(getControl().getShell());
     }

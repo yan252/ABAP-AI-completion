@@ -3,14 +3,11 @@ package com.sap.abap.ai.completion.codesearch;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.dialogs.MessageDialog;
-import org.eclipse.jface.text.BadLocationException;
-import org.eclipse.jface.text.IDocument;
 import org.eclipse.search.ui.NewSearchUI;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.GridData;
@@ -22,7 +19,6 @@ import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Shell;
 import org.eclipse.swt.widgets.Text;
-import org.eclipse.ui.texteditor.ITextEditor;
 
 /**
  * Shared find/replace form of the ABAP Code Search feature. It is embedded
@@ -36,7 +32,6 @@ public final class AbapCodeSearchPanel {
     private Button chkCaseSensitive;
     private Button chkReplace;
     private Text txtReplace;
-    private Composite replaceRow;
     private Button rdoMainProgram;
     private Button rdoIncludeProgram;
     private Combo cmbInclude;
@@ -49,7 +44,6 @@ public final class AbapCodeSearchPanel {
     private Job prepareJob;
     private boolean started;
     private boolean disposed;
-    private Runnable replaceFinished;
 
     public Composite create(Composite parent) {
         root = new Composite(parent, SWT.NONE);
@@ -68,7 +62,7 @@ public final class AbapCodeSearchPanel {
         chkCaseSensitive = new Button(root, SWT.CHECK);
         chkCaseSensitive.setText(Messages.get("chk.caseSensitive"));
 
-        replaceRow = new Composite(root, SWT.NONE);
+        Composite replaceRow = new Composite(root, SWT.NONE);
         replaceRow.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
         replaceRow.setLayout(new GridLayout(2, false));
 
@@ -78,6 +72,8 @@ public final class AbapCodeSearchPanel {
 
         txtReplace = new Text(replaceRow, SWT.BORDER);
         txtReplace.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+        // Restore the replacement value of the previous session as well.
+        txtReplace.setText(savedReplacement());
         txtReplace.setEnabled(false);
         org.eclipse.swt.widgets.Group scopeGroup = new org.eclipse.swt.widgets.Group(root, SWT.NONE);
         scopeGroup.setText(Messages.get("group.scope"));
@@ -149,49 +145,6 @@ public final class AbapCodeSearchPanel {
     private void updateReplaceEnabled() {
         if (txtReplace != null && !txtReplace.isDisposed()) {
             txtReplace.setEnabled(chkReplace.getSelection() && chkReplace.isEnabled());
-        }
-    }
-
-    /**
-     * Disables the "Replace with" checkbox (and cascades to the replace-text
-     * field). Used by the standard Eclipse Search-dialog tab (Ctrl+H) where
-     * replacement must not be offered — only the standalone ABAP Code Search
-     * dialog (Ctrl+Shift+H) supports in-place replacement.
-     */
-    public void setReplaceDisabled() {
-        if (chkReplace != null && !chkReplace.isDisposed()) {
-            chkReplace.setSelection(false);
-            chkReplace.setEnabled(false);
-        }
-        updateReplaceEnabled();
-    }
-
-    /**
-     * Hides the replace controls (checkbox + text field) entirely. Used by the
-     * standard Eclipse Search-dialog tab (Ctrl+H) where replacement is not
-     * offered. Unlike setReplaceDisabled, this excludes the row from layout
-     * so the form looks like a pure search page.
-     */
-    public void setReplaceHidden() {
-        if (chkReplace != null && !chkReplace.isDisposed()) {
-            chkReplace.setSelection(false);
-            Object d = chkReplace.getLayoutData();
-            if (d instanceof GridData) ((GridData) d).exclude = true;
-            chkReplace.setVisible(false);
-        }
-        if (txtReplace != null && !txtReplace.isDisposed()) {
-            txtReplace.setEnabled(false);
-            Object d = txtReplace.getLayoutData();
-            if (d instanceof GridData) ((GridData) d).exclude = true;
-            txtReplace.setVisible(false);
-        }
-        if (replaceRow != null && !replaceRow.isDisposed()) {
-            Object d = replaceRow.getLayoutData();
-            if (d instanceof GridData) ((GridData) d).exclude = true;
-            replaceRow.setVisible(false);
-        }
-        if (root != null && !root.isDisposed()) {
-            root.layout(true, true);
         }
     }
 
@@ -339,11 +292,24 @@ public final class AbapCodeSearchPanel {
     /** Preference key of the last search pattern. */
     private static final String PREF_LAST_PATTERN = "codeSearch.lastPattern";
 
+    /** Preference key of the last replacement value. */
+    private static final String PREF_LAST_REPLACEMENT = "codeSearch.lastReplacement";
+
     /** The pattern of the last search, may be empty. */
     private static String savedPattern() {
         try {
             return com.sap.abap.ai.completion.Activator.staticGetPreferenceStore()
                     .getString(PREF_LAST_PATTERN);
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    /** The replacement value of the previous session, may be empty. */
+    private static String savedReplacement() {
+        try {
+            return com.sap.abap.ai.completion.Activator.staticGetPreferenceStore()
+                    .getString(PREF_LAST_REPLACEMENT);
         } catch (Throwable t) {
             return "";
         }
@@ -358,6 +324,20 @@ public final class AbapCodeSearchPanel {
         try {
             com.sap.abap.ai.completion.Activator.staticGetPreferenceStore()
                     .setValue(PREF_LAST_PATTERN, pattern);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Persists the replacement value of the current session. */
+    private void rememberReplacement() {
+        String replacement = txtReplace == null || txtReplace.isDisposed()
+                ? null : txtReplace.getText();
+        if (replacement == null) {
+            return;
+        }
+        try {
+            com.sap.abap.ai.completion.Activator.staticGetPreferenceStore()
+                    .setValue(PREF_LAST_REPLACEMENT, replacement);
         } catch (Throwable ignored) {
         }
     }
@@ -448,10 +428,16 @@ public final class AbapCodeSearchPanel {
         NewSearchUI.runQueryInBackground(new AbapCodeSearchQuery(targets,
                 txtPattern.getText(), true, chkCaseSensitive.getSelection()));
         rememberPattern();
+        rememberReplacement();
         return true;
     }
 
-    /** Replaces all matches in the affected editors. */
+    /**
+     * Starts the interactive replace flow: the regular search runs first (the
+     * matches are listed in the Search view without being changed), then every
+     * match is opened and selected in its editor while a small prompt offers
+     * "Replace", "Next Match" and "Replace All from Cursor".
+     */
     public boolean performReplace(Shell shell) {
         if (!chkReplace.getSelection()) {
             MessageDialog.openInformation(shell, Messages.get("replace.title"),
@@ -465,144 +451,31 @@ public final class AbapCodeSearchPanel {
         }
         List<AbapCodeProgram> targets = getTargetPrograms();
         if (targets.isEmpty()) {
+            MessageDialog.openError(shell, Messages.get("dialog.title"),
+                    Messages.get("error.noIncludeSelected"));
             return false;
         }
-        if (!MessageDialog.openConfirm(shell, Messages.get("replace.title"),
-                Messages.get("replace.confirm"))) {
-            return false;
-        }
-        new ReplaceRunner(shell, targets, txtReplace.getText(),
-                CodeSearchMatcher.create(txtPattern.getText(), true, chkCaseSensitive.getSelection()))
-                        .start();
+        String pattern = txtPattern.getText();
+        CodeSearchMatcher matcher = CodeSearchMatcher.create(pattern, true,
+                chkCaseSensitive.getSelection());
+        // Step 1: run the normal search without changing anything, so the
+        // occurrences are listed in the Search view.
+        NewSearchUI.runQueryInBackground(new AbapCodeSearchQuery(targets, pattern, true,
+                chkCaseSensitive.getSelection()));
         rememberPattern();
+        rememberReplacement();
+        // Step 2: walk the matches one by one. The session starts
+        // asynchronously so the search dialog can close first and the target
+        // editor receives the focus.
+        new AbapCodeReplaceSession(targets, pattern, txtReplace.getText(), matcher).start();
         return true;
-    }
-
-    public void setReplaceFinished(Runnable replaceFinished) {
-        this.replaceFinished = replaceFinished;
     }
 
     public void dispose() {
         disposed = true;
+        rememberReplacement();
         if (prepareJob != null) {
             prepareJob.cancel();
-        }
-    }
-
-    /**
-     * Applies the replacement to the documents of the affected programs and
-     * then shows the replaced lines in the Search view. Editors are left dirty
-     * so that the user saves them through the regular ADT flow (transport
-     * handling and activation stay with ADT).
-     */
-    private final class ReplaceRunner {
-
-        private final Shell shell;
-        private final List<AbapCodeProgram> targets;
-        private final String replacement;
-        private final CodeSearchMatcher matcher;
-        private final List<AbapCodeProgram> updated = new ArrayList<>();
-
-        private int index;
-        private int replacedCount;
-        private int changedPrograms;
-        private int failedPrograms;
-
-        ReplaceRunner(Shell shell, List<AbapCodeProgram> targets, String replacement,
-                CodeSearchMatcher matcher) {
-            this.shell = shell;
-            this.targets = targets;
-            this.replacement = replacement;
-            this.matcher = matcher;
-        }
-
-        void start() {
-            next();
-        }
-
-        private void next() {
-            if (disposed) {
-                return;
-            }
-            if (index >= targets.size()) {
-                finish();
-                return;
-            }
-            AbapCodeProgram program = targets.get(index++);
-            // Pre-check against the prepared source: no match → skip without
-            // opening the editor. This avoids flashing every INCLUDE (and the
-            // class editor itself) when only a handful of programs actually
-            // contain matches.
-            if (!matcher.hasAny(program.getSource())) {
-                next();
-                return;
-            }
-            ITextEditor editor = AbapEditorNavigator.openProgramEditor(program);
-            if (editor == null) {
-                failedPrograms++;
-                next();
-                return;
-            }
-            attempt(editor, program, 0);
-        }
-
-        private void attempt(ITextEditor editor, AbapCodeProgram program, int attemptCount) {
-            if (disposed) {
-                return;
-            }
-            IDocument document = AbapEditorNavigator.documentOf(editor);
-            if (document == null || document.getLength() == 0) {
-                if (attemptCount < 10) {
-                    Display.getDefault().timerExec(500,
-                            () -> attempt(editor, program, attemptCount + 1));
-                } else {
-                    failedPrograms++;
-                    next();
-                }
-                return;
-            }
-            try {
-                List<int[]> ranges = matcher.findRanges(document.get());
-                for (int i = ranges.size() - 1; i >= 0; i--) {
-                    int[] range = ranges.get(i);
-                    document.replace(range[0], range[1], replacement);
-                }
-                if (!ranges.isEmpty()) {
-                    replacedCount += ranges.size();
-                    changedPrograms++;
-                    updated.add(new AbapCodeProgram(program.getProject(), program.getName(),
-                            program.getType(), document.get(),
-                            program.getFunctionName(), program.getFunctionGroup(),
-                            program.getPartLabel()));
-                }
-            } catch (BadLocationException e) {
-                failedPrograms++;
-            }
-            next();
-        }
-
-        private void finish() {
-            if (!replacement.isEmpty() && !updated.isEmpty()) {
-                NewSearchUI.runQueryInBackground(new AbapCodeSearchQuery(updated,
-                        replacement, false, false));
-            }
-            if (shell != null && !shell.isDisposed()) {
-                if (replacedCount == 0) {
-                    MessageDialog.openInformation(shell, Messages.get("replace.title"),
-                            Messages.get("replace.noMatches"));
-                } else {
-                    String message = Messages.format("replace.done", replacedCount, changedPrograms);
-                    if (failedPrograms > 0) {
-                        message = message + System.lineSeparator()
-                                + Messages.format("replace.skipped", failedPrograms);
-                    }
-                    MessageDialog.openInformation(shell, Messages.get("replace.title"), message);
-                }
-            }
-            Runnable finished = replaceFinished;
-            if (finished != null && !disposed) {
-                finished.run();
-            }
         }
     }
 }

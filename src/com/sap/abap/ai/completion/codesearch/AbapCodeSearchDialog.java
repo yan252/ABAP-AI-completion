@@ -55,7 +55,9 @@ public final class AbapCodeSearchDialog extends TitleAreaDialog {
             return;
         }
         if (buttonId == REPLACE_ID) {
-            panel.performReplace(getShell());
+            if (panel.performReplace(getShell())) {
+                close();
+            }
             return;
         }
         super.buttonPressed(buttonId);
@@ -64,7 +66,6 @@ public final class AbapCodeSearchDialog extends TitleAreaDialog {
     @Override
     protected Control createContents(Composite parent) {
         Control control = super.createContents(parent);
-        panel.setReplaceFinished(this::close);
         panel.startPrepareIfNeeded();
         getShell().setMinimumSize(480, 320);
         // The shell takes the focus only once it is activated, which happens

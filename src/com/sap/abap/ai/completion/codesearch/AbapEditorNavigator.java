@@ -61,6 +61,23 @@ public final class AbapEditorNavigator {
 
     private static final List<AppliedAnnotation> APPLIED = new ArrayList<>();
 
+    /**
+     * Receives the range of the revealed match inside the real editor
+     * document. Used by the interactive replace flow, which must replace
+     * exactly the occurrence that is currently selected.
+     */
+    public interface RangeListener {
+        /**
+         * @param editor   the resolved text editor, {@code null} when the
+         *                 editor could not be opened / initialized
+         * @param document the editor document, {@code null} on failure
+         * @param offset   offset of the match in {@code document}, negative on
+         *                 failure
+         * @param length   length of the match
+         */
+        void rangeResolved(ITextEditor editor, IDocument document, int offset, int length);
+    }
+
     private AbapEditorNavigator() {
     }
 
@@ -85,6 +102,17 @@ public final class AbapEditorNavigator {
      */
     public static void show(AbapCodeProgram program, Match match, Match[] allMatches,
             CodeSearchMatcher matcher) {
+        show(program, match, allMatches, matcher, null);
+    }
+
+    /**
+     * Same as {@link #show(AbapCodeProgram, Match, Match[], CodeSearchMatcher)}
+     * but reports the resolved range in the real editor document back to the
+     * caller (the interactive replace flow uses this to replace exactly the
+     * currently selected occurrence).
+     */
+    public static void show(AbapCodeProgram program, Match match, Match[] allMatches,
+            CodeSearchMatcher matcher, RangeListener listener) {
         try {
             IEditorPart part = findOrOpen(program);
             if (part == null) {
@@ -98,6 +126,7 @@ public final class AbapEditorNavigator {
                 if (part == null) {
                     log("show: could not open editor for " + program.getName()
                             + " (no active editor either)");
+                    notifyRange(listener, null, null, -1, 0);
                     return;
                 }
                 log("show: ADT open failed for " + program.getName()
@@ -112,9 +141,10 @@ public final class AbapEditorNavigator {
             activate(part);
             Match[] sorted = sortByOffset(allMatches);
             int index = match == null ? -1 : indexOf(sorted, match);
-            applyWithRetry(part, program, sorted, index, -1, -1, matcher, 0);
+            applyWithRetry(part, program, sorted, index, -1, -1, matcher, 0, listener);
         } catch (Throwable t) {
             log("show failed for " + program.getName() + ": " + t.getMessage());
+            notifyRange(listener, null, null, -1, 0);
         }
     }
 
@@ -130,7 +160,7 @@ public final class AbapEditorNavigator {
                 }
             }
             activate(part);
-            applyWithRetry(part, program, sortByOffset(allMatches), -1, offset, length, null, 0);
+            applyWithRetry(part, program, sortByOffset(allMatches), -1, offset, length, null, 0, null);
         } catch (Throwable t) {
             log("show failed for " + program.getName() + ": " + t.getMessage());
         }
@@ -179,14 +209,17 @@ public final class AbapEditorNavigator {
 
     private static void applyWithRetry(final IEditorPart part, final AbapCodeProgram program,
             final Match[] allMatches, final int targetIndex, final int offset,
-            final int length, final CodeSearchMatcher matcher, final int attempt) {
+            final int length, final CodeSearchMatcher matcher, final int attempt,
+            final RangeListener listener) {
         Display display = Display.getDefault();
         if (display == null || display.isDisposed()) {
+            notifyRange(listener, null, null, -1, 0);
             return;
         }
         display.asyncExec(() -> {
             if (part.getSite() == null || part.getSite().getShell() == null
                     || part.getSite().getShell().isDisposed()) {
+                notifyRange(listener, null, null, -1, 0);
                 return;
             }
             // Multi-page editors (ADT class editor) nest the source editor,
@@ -201,21 +234,22 @@ public final class AbapEditorNavigator {
             if (target == null || target.document.getLength() == 0) {
                 if (attempt < 12) {
                     display.timerExec(500, () -> applyWithRetry(part, program, allMatches,
-                            targetIndex, offset, length, matcher, attempt + 1));
+                            targetIndex, offset, length, matcher, attempt + 1, listener));
                 } else {
                     log("applyHighlight(" + program.getName()
                             + "): editor not ready after retries");
+                    notifyRange(listener, editor, null, -1, 0);
                 }
                 return;
             }
             applyHighlight(editor, target, program, allMatches, targetIndex, offset, length,
-                    matcher);
+                    matcher, listener);
         });
     }
 
     private static void applyHighlight(ITextEditor editor, EditorTarget target,
             AbapCodeProgram program, Match[] allMatches, int targetIndex,
-            int offset, int length, CodeSearchMatcher matcher) {
+            int offset, int length, CodeSearchMatcher matcher, RangeListener listener) {
 
         IDocument document = target.document;
         IAnnotationModel model = target.model;
@@ -274,6 +308,8 @@ public final class AbapEditorNavigator {
             revealOffset = offset;
             revealLength = length;
         }
+        int resolvedOffset = -1;
+        int resolvedLength = 0;
         if (revealOffset >= 0) {
             int safeOffset = Math.max(0, Math.min(revealOffset, document.getLength()));
             int safeLength = Math.max(0, Math.min(revealLength, document.getLength() - safeOffset));
@@ -283,7 +319,10 @@ public final class AbapEditorNavigator {
             } else {
                 editor.selectAndReveal(safeOffset, safeLength);
             }
+            resolvedOffset = safeOffset;
+            resolvedLength = safeLength;
         }
+        notifyRange(listener, editor, document, resolvedOffset, resolvedLength);
         StringBuilder detail = new StringBuilder();
         for (int[] range : ranges) {
             detail.append(' ').append(range == null
@@ -834,6 +873,18 @@ public final class AbapEditorNavigator {
             return bundle == null ? null : bundle.loadClass(className);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    private static void notifyRange(RangeListener listener, ITextEditor editor,
+            IDocument document, int offset, int length) {
+        if (listener == null) {
+            return;
+        }
+        try {
+            listener.rangeResolved(editor, document, offset, length);
+        } catch (Throwable t) {
+            log("range listener failed: " + t.getMessage());
         }
     }
 
