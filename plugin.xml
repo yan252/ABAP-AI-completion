@@ -113,9 +113,12 @@
       </key>
    </extension>
 
-   <!-- ABAP Code Search page contributed as the first tab of the standard
-        Eclipse Search dialog (Ctrl+H). tabPosition=0 sorts before the built-in
-        pages (the file search page uses tabPosition=1). -->
+   <!-- ABAP Code Search / ABAP Object Search pages contributed to the
+        standard Eclipse Search dialog (Ctrl+H). SearchPageDescriptor.compareTo()
+        sorts by tabPosition and breaks ties by label, so the two pages get
+        unique negative positions: that puts them before all built-in pages
+        (file search, ADT search, ... use tabPosition=1) and keeps the object
+        search directly behind the code search. -->
    <!-- The icon attribute is read by SearchPageDescriptor.getImage(); the
         extension point does NOT use "image" here. -->
    <extension point="org.eclipse.search.searchPages">
@@ -124,8 +127,21 @@
             label="%searchPage.label"
             class="com.sap.abap.ai.completion.codesearch.AbapCodeSearchPage"
             icon="icons/SAPLogo1.png"
-            tabPosition="0"
+            tabPosition="-2"
             sizeHint="480,300">
+      </page>
+      <!-- ABAP Object Search: searches repository objects (programs, DDIC
+           objects, classes, methods, messages, ...) by name pattern. The
+           search scope is always the SAP system of the active/selected ABAP
+           project, so the scope section of the Search dialog is hidden. -->
+      <page
+            id="com.sap.abap.ai.completion.objectSearchPage"
+            label="%objectSearchPage.label"
+            class="com.sap.abap.ai.completion.objectsearch.AbapObjectSearchPage"
+            icon="icons/SAPLogo1.png"
+            tabPosition="-1"
+            sizeHint="520,340"
+            showScopeSection="false">
       </page>
    </extension>
 
@@ -136,6 +152,13 @@
             id="com.sap.abap.ai.completion.codeSearchResultPage"
             class="com.sap.abap.ai.completion.codesearch.AbapCodeSearchResultPage"
             searchResultClass="com.sap.abap.ai.completion.codesearch.AbapCodeSearchResult">
+      </viewPage>
+      <!-- Result page of the ABAP Object Search: object list with type icon,
+           name and description; double-click opens the ADT editor. -->
+      <viewPage
+            id="com.sap.abap.ai.completion.objectSearchResultPage"
+            class="com.sap.abap.ai.completion.objectsearch.AbapObjectSearchResultPage"
+            searchResultClass="com.sap.abap.ai.completion.objectsearch.AbapObjectSearchResult">
       </viewPage>
    </extension>
 

@@ -8,6 +8,7 @@ import org.eclipse.core.runtime.ILog;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.core.runtime.Status;
+import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.viewers.ITreeContentProvider;
 import org.eclipse.jface.viewers.Viewer;
 import org.eclipse.ui.navigator.CommonViewer;
@@ -46,6 +47,7 @@ public class TcodeFavoriteContentProvider implements ITreeContentProvider {
         }
         if (parentElement instanceof TcodeFavoriteRoot) {
             TcodeFavoriteRoot root = (TcodeFavoriteRoot) parentElement;
+            ensureDefaultsIfNeeded(root);
             String projectName = root.getProject().getName();
             List<TcodeFavoriteStore.Entry> entries =
                     TcodeFavoriteStore.getInstance().getEntries(projectName);
@@ -81,10 +83,53 @@ public class TcodeFavoriteContentProvider implements ITreeContentProvider {
             return project.isAccessible() && isAbapProject(project);
         }
         if (element instanceof TcodeFavoriteRoot) {
-            String projectName = ((TcodeFavoriteRoot) element).getProject().getName();
-            return TcodeFavoriteStore.getInstance().hasEntries(projectName);
+            TcodeFavoriteRoot root = (TcodeFavoriteRoot) element;
+            ensureDefaultsIfNeeded(root);
+            return TcodeFavoriteStore.getInstance().hasEntries(root.getProject().getName());
         }
         return false;
+    }
+
+    /**
+     * 首次展示某项目的收藏节点时预置默认事务码；若本次新写入了默认项，
+     * 则调度后台 Job 通过 RFC 回填事务文本（避免阻塞 UI 线程）。
+     * 幂等：已种子化或已有自定义收藏时直接返回。
+     */
+    private static void ensureDefaultsIfNeeded(TcodeFavoriteRoot root) {
+        try {
+            IProject project = root.getProject();
+            if (project == null || !project.isAccessible()) return;
+            boolean seeded = TcodeFavoriteStore.getInstance()
+                    .ensureDefaults(project.getName());
+            if (seeded) {
+                scheduleDefaultTextFetch(project);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 后台读取默认事务码的事务文本（TSTCT），逐码写回存储并刷新节点。
+     * 用户在此期间删除的条目不再回填（contains 校验）。
+     */
+    private static void scheduleDefaultTextFetch(final IProject project) {
+        Job job = Job.create("Load favorite transaction texts", monitor -> {
+            TcodeFavoriteStore store = TcodeFavoriteStore.getInstance();
+            String projectName = project.getName();
+            for (String tcode : TcodeFavoriteStore.DEFAULT_TCODES) {
+                if (monitor.isCanceled()) return Status.CANCEL_STATUS;
+                if (!store.contains(projectName, tcode)) continue;
+                TcodeTextService.FetchResult result =
+                        TcodeTextService.fetchText(project, tcode);
+                if (result.status == TcodeTextService.FetchResult.Status.OK) {
+                    store.add(projectName, tcode, result.text);
+                }
+            }
+            TcodeFavoriteNavigator.refreshRoot(project);
+            return Status.OK_STATUS;
+        });
+        job.setSystem(true);
+        job.schedule();
     }
 
     /** 是否为 ABAP 项目（ADT 缺席或项目关闭时返回 false）。 */

@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.ILog;
@@ -38,6 +40,14 @@ public final class TcodeFavoriteStore {
     private static final String LINE_SEP = "\n";
     private static final String FIELD_SEP = "|";
 
+    /**
+     * 首次为某个 ABAP 项目展示"事务码收藏"时预置的默认事务码。
+     * 入库后按事务码字母序排列显示。
+     */
+    public static final String[] DEFAULT_TCODES = {
+            "SE09", "SE38", "SE24", "SE37", "SE93", "SE54", "SE55"
+    };
+
     private static final ILog LOG = Platform.getLog(Platform.getBundle(Activator.PLUGIN_ID));
 
     private static volatile TcodeFavoriteStore INSTANCE;
@@ -45,8 +55,12 @@ public final class TcodeFavoriteStore {
     /** 按项目名分组的事务码条目。 */
     private final Map<String, List<Entry>> projectEntries = new HashMap<>();
 
+    /** 已写入过默认事务码的项目（防止用户清空后被反复回填）。 */
+    private final Set<String> seededProjects = new HashSet<>();
+
     private TcodeFavoriteStore() {
         load();
+        loadSeeded();
     }
 
     public static synchronized TcodeFavoriteStore getInstance() {
@@ -116,6 +130,32 @@ public final class TcodeFavoriteStore {
         save();
     }
 
+    /**
+     * 为指定项目预置默认事务码（首次展示收藏时调用）。
+     *
+     * <p>仅当该项目<b>尚未种子化</b>且<b>当前没有任何收藏条目</b>时才写入，
+     * 既不会覆盖用户已有的自定义收藏，也不会在用户清空后反复回填。
+     * 写入后立即持久化并标记该项目为已种子化。</p>
+     *
+     * @return true 表示本次新写入了默认事务码（调用方可据此异步回填事务文本）
+     */
+    public synchronized boolean ensureDefaults(String projectName) {
+        if (projectName == null || projectName.isEmpty()) return false;
+        if (seededProjects.contains(projectName)) return false;
+        if (hasEntries(projectName)) {
+            // 已有自定义收藏：标记为已种子化，避免后续再判定为空时回填。
+            seededProjects.add(projectName);
+            saveSeeded();
+            return false;
+        }
+        for (String tcode : DEFAULT_TCODES) {
+            add(projectName, tcode, "");
+        }
+        seededProjects.add(projectName);
+        saveSeeded();
+        return true;
+    }
+
     // ==================== 持久化 ====================
 
     private File getStorageFile() {
@@ -173,6 +213,48 @@ public final class TcodeFavoriteStore {
             writer.flush();
         } catch (IOException e) {
             logWarn("save failed: " + e.getMessage());
+        }
+    }
+
+    private File getSeededFile() {
+        try {
+            Path metadata = ResourcesPlugin.getWorkspace().getRoot()
+                    .getLocation().toPath().resolve(".metadata");
+            Path dir = metadata.resolve(".plugins").resolve(Activator.PLUGIN_ID);
+            Files.createDirectories(dir);
+            return dir.resolve("tcodeFavorites.seeded.txt").toFile();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private synchronized void loadSeeded() {
+        File file = getSeededFile();
+        if (file == null || !file.exists()) return;
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty() && !line.startsWith("#")) {
+                    seededProjects.add(line);
+                }
+            }
+        } catch (IOException e) {
+            logWarn("loadSeeded failed: " + e.getMessage());
+        }
+    }
+
+    private synchronized void saveSeeded() {
+        File file = getSeededFile();
+        if (file == null) return;
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            for (String projectName : seededProjects) {
+                writer.write(projectName);
+                writer.write(LINE_SEP);
+            }
+            writer.flush();
+        } catch (IOException e) {
+            logWarn("saveSeeded failed: " + e.getMessage());
         }
     }
 

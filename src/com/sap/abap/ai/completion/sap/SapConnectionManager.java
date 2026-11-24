@@ -153,6 +153,17 @@ public final class SapConnectionManager {
     }
 
     /**
+     * true 当偏好页中至少配置了应用服务器主机、系统编号与 Client
+     * (即本插件自己的 JCo 目标可用于 RFC)。
+     */
+    public static boolean isConfigured() {
+        Properties props = buildDestinationProperties();
+        return !props.getProperty(DestinationDataProvider.JCO_ASHOST, "").trim().isEmpty()
+                && !props.getProperty(DestinationDataProvider.JCO_SYSNR, "").trim().isEmpty()
+                && !props.getProperty(DestinationDataProvider.JCO_CLIENT, "").trim().isEmpty();
+    }
+
+    /**
      * 尝试通过 ADT 集成插件(com.sap.conn.jco.eclipse) 注册目标。
      *
      * <p><b>注意 1(类加载)</b>：不能用 {@code Class.forName("com.sap.mw.jco3.eclipse.Registry")}
