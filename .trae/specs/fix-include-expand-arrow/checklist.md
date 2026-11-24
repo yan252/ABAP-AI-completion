@@ -1,0 +1,8 @@
+- [x] AdtNodeFactory 节点创建成功后显式反射 setParent(parent)，parent 为 null/异常时静默跳过
+- [x] AdtNodeFactory.isExpandableType 为包级可见，类型清单未变（PROG/P、PROG/I、CLAS/、INTF/、TABL/、STRU/、DDLS/、FUGR/F）
+- [x] RecentlyModifiedContentProvider.hasChildren：IProject/Root 分支逻辑不变；tester 命中的 ADT 节点按可展开类型直接返回 true（含防御性 setExpandable(true)），其余反射节点自身 hasChildren()；异常返回 false
+- [x] getChildren 逻辑未改动；plugin.xml 未改动
+- [x] MANIFEST.MF 与 build.ps1 版本号均为 1.2.14
+- [x] build.ps1 构建成功，dist/com.sap.abap.ai.completion_1.2.14.jar 生成且类内含新逻辑
+- [x] 新 jar 已部署到 dropins，旧版 jar 已删除
+- [ ] 用户重启 Eclipse 后 PROG/I 对象出现 `>` 箭头且能展开下级内容，PROG/P 行为不受影响

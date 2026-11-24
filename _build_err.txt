@@ -1,0 +1,16 @@
+﻿javac.exe : D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\src\com\sap\abap\ai\completion\recent\
+RecentlyModifiedOnSaveListener.java:266: ����: �Ҳ�������
+所在位置 行:15 字符: 2853
++ ... d_err.txt"; & "$jdkHome\bin\javac.exe" --release 17 -encoding UTF-8 - ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\Users\960002...����: �Ҳ�������:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+                INavigatorContentDescriptor[] activated =
+                ^
+  ����:   �� INavigatorContentDescriptor
+  λ��: �� RecentlyModifiedOnSaveListener
+ע: D:\Users\96000217\Documents\trae_projects\com.sap.abap.ai.completion\src\com\sap\abap\ai\completion\ui\AICompletionM
+enuBuilder.javaʹ�û򸲸����ѹ�ʱ�� API��
+ע: �й���ϸ��Ϣ, ��ʹ�� -Xlint:deprecation ���±��롣
+1 ������

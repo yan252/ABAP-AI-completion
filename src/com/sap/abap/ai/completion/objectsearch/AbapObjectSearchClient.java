@@ -161,15 +161,6 @@ final class AbapObjectSearchClient {
                 log("searchClasses failed: " + describe(t));
             }
         }
-        if (selectedTypes.contains(AbapObjectType.METHOD)) {
-            try {
-                searchMethods(project, destination, pattern, language, monitor, items);
-                succeeded++;
-            } catch (Throwable t) {
-                errors.add("SEOCOMPO/SEOCOMPOTX: " + describe(t));
-                log("searchMethods failed: " + describe(t));
-            }
-        }
         if (selectedTypes.contains(AbapObjectType.MESSAGE)) {
             try {
                 searchMessages(project, destination, pattern, language, monitor, items);
@@ -473,51 +464,6 @@ final class AbapObjectSearchClient {
             }
         }
         if (!namesRead && texts.isEmpty() && firstError != null) {
-            throw new Exception(firstError);
-        }
-    }
-
-    private static void searchMethods(IProject project, JCoDestination destination,
-            String pattern, String language, IProgressMonitor monitor,
-            Map<String, AbapObjectItem> items) throws Exception {
-        Map<String, String> texts = Collections.emptyMap();
-        Throwable firstError = null;
-        try {
-            texts = readTextMap(destination, "SEOCOMPOTX", "CMPNAME", "LANGU", "DESCRIPT",
-                    null, condition("CMPNAME", pattern), language, monitor,
-                    "CLSNAME", "CMPNAME");
-        } catch (Throwable t) {
-            firstError = t;
-            log("SEOCOMPOTX not readable: " + describe(t));
-        }
-
-        List<Map<String, String>> rows = new ArrayList<>();
-        boolean namesRead = false;
-        try {
-            rows = readRows(destination, "SEOCOMPO",
-                    new String[] { "CLSNAME", "CMPNAME", "CMPTYPE" },
-                    Arrays.asList(condition("CMPNAME", pattern), "CMPTYPE EQ 'M'"), monitor);
-            namesRead = true;
-        } catch (Throwable t) {
-            if (firstError == null) {
-                firstError = t;
-            }
-            log("SEOCOMPO not readable: " + describe(t));
-        }
-
-        for (Map<String, String> row : rows) {
-            String className = value(row, "CLSNAME");
-            String methodName = value(row, "CMPNAME");
-            if (className.isEmpty() || methodName.isEmpty()) {
-                continue;
-            }
-            String displayName = className + "=>" + methodName;
-            String description = texts.get(className + "|" + methodName);
-            // The class is opened; the method itself has no standalone ADT URI.
-            add(items, project, AbapObjectType.METHOD, displayName, "CLAS/OC", description,
-                    "/sap/bc/adt/oo/classes/" + encode(className));
-        }
-        if (!namesRead && firstError != null) {
             throw new Exception(firstError);
         }
     }

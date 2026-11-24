@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension point="org.eclipse.ui.startup">
+      <startup class="com.sap.abap.ai.completion.Activator"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.preferencePages">
+      <!-- ABAP AI Completion 主配置页（顶级页面，承载其余功能设置） -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.AICompletionPreferencePage"
+            name="%prefpage.main">
+      </page>
+      <!-- 自动补全设置配置页 - 作为 ABAP AI Completion 的子页面。
+           Eclipse 子页面按名称字母序排列，命名为 "ABAP AI Auto-Completion Settings"
+           以确保显示在 "AI Connections" 前面。 -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.autoCompletion"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.AutoCompletionPreferencePage"
+            name="%prefpage.auto">
+      </page>
+      <!-- AI 连接管理配置页 - 作为 ABAP AI Completion 的子页面，显示在 SAP Connection Config 前面 -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.aiConnections"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.AIConnectionPreferencePage"
+            name="%prefpage.connections">
+      </page>
+      <!-- SAP 连接信息配置页(JCo), 从"模板"菜单的 "SAP Connection Config..." 打开 -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.sap"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.SapPreferencePage"
+            name="%prefpage.sap">
+      </page>
+      <!-- SAP 扩展功能配置页（Recently Modified 等 SAP 相关扩展） -->
+      <page
+            id="com.sap.abap.ai.completion.preferencePage.sapExtension"
+            category="com.sap.abap.ai.completion.preferencePage"
+            class="com.sap.abap.ai.completion.preferences.SapExtensionPreferencePage"
+            name="%prefpage.extension">
+      </page>
+   </extension>
+
+   <!-- 识别 "Recently Modified" 下节点的 property tester：
+        disabled Delete handler 与 navigatorContent triggerPoints 共用。 -->
+   <extension point="org.eclipse.core.expressions.propertyTesters">
+      <propertyTester
+            id="com.sap.abap.ai.completion.recentlyModifiedNodeTester"
+            namespace="com.sap.abap.ai.completion.recentlyModified"
+            properties="node"
+            type="java.lang.Object"
+            class="com.sap.abap.ai.completion.recent.RecentlyModifiedNodeTester">
+      </propertyTester>
+   </extension>
+
+   <!-- 在 "Recently Modified" 节点上把 Delete 命令（org.eclipse.ui.edit.delete）
+        置灰：handler 始终 disabled，菜单项显示灰色且 Del 快捷键失效，
+        避免从该节点误删 SAP 服务器上的对象。 -->
+   <extension point="org.eclipse.ui.handlers">
+      <handler
+            commandId="org.eclipse.ui.edit.delete"
+            class="com.sap.abap.ai.completion.recent.DisabledDeleteHandler">
+         <activeWhen>
+            <with variable="selection">
+               <iterate ifEmpty="false">
+                  <test property="com.sap.abap.ai.completion.recentlyModified.node"/>
+               </iterate>
+            </with>
+         </activeWhen>
+      </handler>
+   </extension>
+
+   <extension point="org.eclipse.core.runtime.preferences">
+      <initializer class="com.sap.abap.ai.completion.preferences.PreferenceInitializer"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.commands">
+      <category
+            id="com.sap.abap.ai.completion.category"
+            name="%category.name">
+      </category>
+      <command
+            id="com.sap.abap.ai.completion.completeCommand"
+            categoryId="com.sap.abap.ai.completion.category"
+            name="%command.complete.name"
+            defaultHandler="com.sap.abap.ai.completion.editor.AICompletionHandler">
+      </command>
+      <!-- ABAP Code Search: opens the SE38-style find/replace dialog. -->
+      <command
+            id="com.sap.abap.ai.completion.codeSearchCommand"
+            categoryId="com.sap.abap.ai.completion.category"
+            name="%command.codeSearch.name"
+            defaultHandler="com.sap.abap.ai.completion.codesearch.AbapCodeSearchHandler">
+      </command>
+   </extension>
+
+   <extension point="org.eclipse.ui.bindings">
+      <key
+            sequence="M1+M2+."
+            commandId="com.sap.abap.ai.completion.completeCommand"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            contextId="org.eclipse.ui.textEditorScope">
+      </key>
+      <key
+            sequence="M1+M2+H"
+            commandId="com.sap.abap.ai.completion.codeSearchCommand"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            contextId="org.eclipse.ui.textEditorScope">
+      </key>
+   </extension>
+
+   <!-- ABAP Code Search / ABAP Object Search pages contributed to the
+        standard Eclipse Search dialog (Ctrl+H). SearchPageDescriptor.compareTo()
+        sorts by tabPosition and breaks ties by label, so the two pages get
+        unique negative positions: that puts them before all built-in pages
+        (file search, ADT search, ... use tabPosition=1) and keeps the object
+        search directly behind the code search. -->
+   <!-- The icon attribute is read by SearchPageDescriptor.getImage(); the
+        extension point does NOT use "image" here. -->
+   <extension point="org.eclipse.search.searchPages">
+      <page
+            id="com.sap.abap.ai.completion.codeSearchPage"
+            label="%searchPage.label"
+            class="com.sap.abap.ai.completion.codesearch.AbapCodeSearchPage"
+            icon="icons/SAPLogo1.png"
+            tabPosition="-2"
+            sizeHint="480,300">
+      </page>
+      <!-- ABAP Object Search: searches repository objects (programs, DDIC
+           objects, classes, methods, messages, ...) by name pattern. The
+           search scope is always the SAP system of the active/selected ABAP
+           project, so the scope section of the Search dialog is hidden. -->
+      <page
+            id="com.sap.abap.ai.completion.objectSearchPage"
+            label="%objectSearchPage.label"
+            class="com.sap.abap.ai.completion.objectsearch.AbapObjectSearchPage"
+            icon="icons/SAPLogo1.png"
+            tabPosition="-1"
+            sizeHint="520,340"
+            showScopeSection="false">
+      </page>
+   </extension>
+
+   <!-- Result page rendered in the Eclipse Search view for our query results:
+        program/include nodes with expandable matched lines. -->
+   <extension point="org.eclipse.search.searchResultViewPages">
+      <viewPage
+            id="com.sap.abap.ai.completion.codeSearchResultPage"
+            class="com.sap.abap.ai.completion.codesearch.AbapCodeSearchResultPage"
+            searchResultClass="com.sap.abap.ai.completion.codesearch.AbapCodeSearchResult">
+      </viewPage>
+      <!-- Result page of the ABAP Object Search: object list with type icon,
+           name and description; double-click opens the ADT editor. -->
+      <viewPage
+            id="com.sap.abap.ai.completion.objectSearchResultPage"
+            class="com.sap.abap.ai.completion.objectsearch.AbapObjectSearchResultPage"
+            searchResultClass="com.sap.abap.ai.completion.objectsearch.AbapObjectSearchResult">
+      </viewPage>
+   </extension>
+
+   <!-- Match highlighting in the editor uses the annotation type of the
+        Eclipse Search framework ("org.eclipse.search.results"). A private
+        annotation type declared here was never painted by the ADT editors. -->
+
+   <!-- Status bar icon contributed to the status trim area.
+        Eclipse provides native drag-and-drop reordering for trim items.
+        The icon is painted to fill the entire trim row height. -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="toolbar:org.eclipse.ui.trim.status">
+         <toolbar
+               id="com.sap.abap.ai.completion.trimstatus.toolbar">
+            <control
+                  id="com.sap.abap.ai.completion.trimstatus.control"
+                  class="com.sap.abap.ai.completion.ui.AbapAIStatusLineContribution">
+            </control>
+         </toolbar>
+      </menuContribution>
+   </extension>
+
+   <!-- "ABAP AI Completion" cascade submenu added to the Eclipse main menu bar
+        (reuses the same content as the status-bar popup and the editor context
+        menu via AICompletionMenuBuilder, including the "模板" submenu). -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="menu:org.eclipse.ui.main.menu?after=additions">
+         <dynamic
+               id="com.sap.abap.ai.completion.mainMenu"
+               class="com.sap.abap.ai.completion.ui.AICompletionMainMenuContribution">
+         </dynamic>
+      </menuContribution>
+   </extension>
+
+   <!-- "ABAP AI Completion" submenu added to the ABAP editor context menu.
+        The dynamic contribution shows the submenu only in ABAP editors.
+
+        HOW TO TARGET THE ABAP EDITOR'S POPUP MENU:
+        The SAP ADT ABAP source editor does NOT reliably register the standard
+        popup ids "org.eclipse.ui.textEditorScope" or "#TextEditorContext".
+        Different ADT releases may use a custom popup id, so a "popup:<specific-id>"
+        contribution is fragile.
+
+        ROBUST SOLUTION:
+        Use "popup:org.eclipse.ui.popup.any?after=additions" WITH allPopups="true".
+        This makes the contribution eligible for EVERY popup menu in the workbench.
+        The dynamic ContributionItem's fill() is then invoked for each popup, and
+        our code (findActiveAbapEditor -> AbapLanguageDetector) adds the submenu
+        ONLY when the active editor is an ABAP editor. For every other popup it
+        simply adds nothing, so other context menus are unaffected. -->
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="popup:org.eclipse.ui.popup.any?after=additions"
+            allPopups="true">
+         <dynamic
+               id="com.sap.abap.ai.completion.editorContextMenu"
+               class="com.sap.abap.ai.completion.ui.AICompletionEditorMenuContribution">
+         </dynamic>
+      </menuContribution>
+   </extension>
+
+   <!-- "Recently Modified" node contributed to the ADT Project Explorer tree.
+        A self-contained navigatorContent (own content/label provider and sorter)
+        listed under each ABAP project; it is only shown once at least one ABAP
+        object has been saved in that project. Data is kept locally by
+        RecentlyModifiedStore, so no backend support is required. -->
+   <extension point="org.eclipse.ui.navigator.navigatorContent">
+      <navigatorContent
+            id="com.sap.abap.ai.completion.recentlyModifiedContent"
+            name="%recent.content.name"
+            contentProvider="com.sap.abap.ai.completion.recent.RecentlyModifiedContentProvider"
+            labelProvider="com.sap.abap.ai.completion.recent.RecentlyModifiedLabelProvider"
+            activeByDefault="true">
+         <triggerPoints>
+            <or>
+               <instanceof value="org.eclipse.core.resources.IProject"/>
+               <!-- 让 actionProvider 也能在 "Recently Modified" 的子节点
+                    （ADT Repository Object 节点）上生效，用于置灰 Delete 菜单。 -->
+               <test property="com.sap.abap.ai.completion.recentlyModified.node"/>
+            </or>
+         </triggerPoints>
+         <commonSorter
+               class="com.sap.abap.ai.completion.recent.RecentlyModifiedSorter"
+               id="com.sap.abap.ai.completion.recent.sorter">
+         </commonSorter>
+         <actionProvider
+               class="com.sap.abap.ai.completion.recent.RecentlyModifiedActionProvider"
+               id="com.sap.abap.ai.completion.recentlyModifiedActions">
+         </actionProvider>
+      </navigatorContent>
+   </extension>
+
+   <!-- "Favorite Transactions" node contributed to the ADT Project Explorer tree.
+        Unlike "Recently Modified", the root node does NOT depend on stored data:
+        it is shown under every accessible ABAP project as soon as the project is
+        opened, so users can add their first transaction via the context menu.
+        Context menus are contributed declaratively below via
+        popup:org.eclipse.ui.popup.any (CNF actionProvider proved unreliable);
+        data is kept locally by TcodeFavoriteStore. -->
+   <extension point="org.eclipse.ui.navigator.navigatorContent">
+      <navigatorContent
+            id="com.sap.abap.ai.completion.tcodeFavoritesContent"
+            name="%tcodefav.content.name"
+            contentProvider="com.sap.abap.ai.completion.tcode.TcodeFavoriteContentProvider"
+            labelProvider="com.sap.abap.ai.completion.tcode.TcodeFavoriteLabelProvider"
+            activeByDefault="true">
+         <triggerPoints>
+            <or>
+               <instanceof value="org.eclipse.core.resources.IProject"/>
+               <instanceof value="com.sap.abap.ai.completion.tcode.TcodeFavoriteRoot"/>
+               <instanceof value="com.sap.abap.ai.completion.tcode.TcodeFavoriteEntry"/>
+            </or>
+         </triggerPoints>
+      </navigatorContent>
+   </extension>
+
+   <!-- Context menus of the "Favorite Transactions" nodes.
+        Root node: Add / Delete; transaction entry: Execute / Delete.
+        Uses popup:org.eclipse.ui.popup.any with allPopups="true" (the same
+        robust pattern as the ABAP editor context menu) gated by visibleWhen
+        on our node classes, so the items only appear on these nodes. -->
+   <extension point="org.eclipse.ui.commands">
+      <command
+            id="com.sap.abap.ai.completion.tcode.add"
+            name="%tcodefav.command.add">
+      </command>
+      <command
+            id="com.sap.abap.ai.completion.tcode.delete"
+            name="%tcodefav.command.delete">
+      </command>
+      <command
+            id="com.sap.abap.ai.completion.tcode.execute"
+            name="%tcodefav.command.execute">
+      </command>
+   </extension>
+
+   <extension point="org.eclipse.ui.handlers">
+      <handler
+            class="com.sap.abap.ai.completion.tcode.AddTcodeHandler"
+            commandId="com.sap.abap.ai.completion.tcode.add">
+      </handler>
+      <handler
+            class="com.sap.abap.ai.completion.tcode.DeleteTcodeHandler"
+            commandId="com.sap.abap.ai.completion.tcode.delete">
+      </handler>
+      <handler
+            class="com.sap.abap.ai.completion.tcode.ExecuteTcodeHandler"
+            commandId="com.sap.abap.ai.completion.tcode.execute">
+      </handler>
+   </extension>
+
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="popup:org.eclipse.ui.popup.any?after=additions"
+            allPopups="true">
+         <!-- Root node: Add... (single selection on TcodeFavoriteRoot) -->
+         <command
+               commandId="com.sap.abap.ai.completion.tcode.add"
+               style="push">
+            <visibleWhen checkEnabled="false">
+               <and>
+                  <count value="1"/>
+                  <iterate ifEmpty="false">
+                     <instanceof value="com.sap.abap.ai.completion.tcode.TcodeFavoriteRoot"/>
+                  </iterate>
+               </and>
+            </visibleWhen>
+         </command>
+         <!-- Transaction entry: Execute (single selection on TcodeFavoriteEntry) -->
+         <command
+               commandId="com.sap.abap.ai.completion.tcode.execute"
+               style="push">
+            <visibleWhen checkEnabled="false">
+               <and>
+                  <count value="1"/>
+                  <iterate ifEmpty="false">
+                     <instanceof value="com.sap.abap.ai.completion.tcode.TcodeFavoriteEntry"/>
+                  </iterate>
+               </and>
+            </visibleWhen>
+         </command>
+         <!-- Delete: on the root node (list picker) or on entry/entries -->
+         <command
+               commandId="com.sap.abap.ai.completion.tcode.delete"
+               style="push">
+            <visibleWhen checkEnabled="false">
+               <or>
+                  <and>
+                     <count value="1"/>
+                     <iterate ifEmpty="false">
+                        <instanceof value="com.sap.abap.ai.completion.tcode.TcodeFavoriteRoot"/>
+                     </iterate>
+                  </and>
+                  <iterate ifEmpty="false">
+                     <instanceof value="com.sap.abap.ai.completion.tcode.TcodeFavoriteEntry"/>
+                  </iterate>
+               </or>
+            </visibleWhen>
+         </command>
+      </menuContribution>
+   </extension>
+
+   <extension point="org.eclipse.ui.navigator.viewer">
+      <viewerContentBinding viewerId="org.eclipse.ui.navigator.ProjectExplorer">
+         <includes>
+            <contentExtension pattern="com.sap.abap.ai.completion.recentlyModifiedContent"/>
+            <contentExtension pattern="com.sap.abap.ai.completion.tcodeFavoritesContent"/>
+         </includes>
+      </viewerContentBinding>
+   </extension>
+
+</plugin>

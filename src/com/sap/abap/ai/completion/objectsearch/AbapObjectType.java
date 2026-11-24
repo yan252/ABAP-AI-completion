@@ -15,7 +15,6 @@ public enum AbapObjectType {
     DATA_ELEMENT("type.dataElement", "D", 0x2E7D32),
     DOMAIN("type.domain", "O", 0x7A7A1F),
     CLASS_INTERFACE("type.classInterface", "K", 0xB23A48),
-    METHOD("type.method", "M", 0x1F4E79),
     MESSAGE("type.message", "!", 0x5F6B7A);
 
     private final String labelKey;
