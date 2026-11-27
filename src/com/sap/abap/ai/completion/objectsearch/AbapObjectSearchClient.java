@@ -39,6 +39,7 @@ import com.sap.conn.jco.JCoTable;
  * <p>Queried tables per category:</p>
  * <ul>
  *   <li>Program: TRDIR + TRDIRT</li>
+ *   <li>Function group / module: TADIR (OBJECT=FUGR) + TFDIR + TFTIT</li>
  *   <li>Database table / structure: DD02L + DD02T</li>
  *   <li>View: DD25L + DD25T</li>
  *   <li>CDS view: TADIR (OBJECT=DDLS) + DD02T</li>
@@ -103,6 +104,15 @@ final class AbapObjectSearchClient {
             } catch (Throwable t) {
                 errors.add("TRDIR/TRDIRT: " + describe(t));
                 log("searchPrograms failed: " + describe(t));
+            }
+        }
+        if (selectedTypes.contains(AbapObjectType.FUNCTION)) {
+            try {
+                searchFunctions(project, destination, pattern, language, monitor, items);
+                succeeded++;
+            } catch (Throwable t) {
+                errors.add("TFDIR/TADIR(FUGR): " + describe(t));
+                log("searchFunctions failed: " + describe(t));
             }
         }
         if (selectedTypes.contains(AbapObjectType.DATABASE_TABLE)
@@ -230,7 +240,86 @@ final class AbapObjectSearchClient {
             String adtType = include ? "PROG/I" : "PROG/P";
             String uri = "/sap/bc/adt/programs/"
                     + (include ? "includes/" : "programs/") + encode(name);
+            // An include generated for a function group is a sub-object of the
+            // group, not a program of its own. Addressed as PROG/I, ADT books a
+            // change as "R3TR PROG <include>" and the transport organizer
+            // rejects it ("component of a system object"); FUGR/I on the group
+            // URI keeps the function group as the transport object, so the
+            // source change is recorded as "LIMU REPS <include>".
+            String functionGroup = include ? AbapObjectItem.functionGroupOfInclude(name) : null;
+            if (functionGroup != null) {
+                adtType = "FUGR/I";
+                uri = "/sap/bc/adt/functions/groups/" + encode(functionGroup)
+                        + "/includes/" + encode(name);
+            }
             add(items, project, AbapObjectType.PROGRAM, name, adtType, texts.get(name), uri);
+        }
+    }
+
+    /**
+     * Function groups (TADIR, {@code OBJECT=FUGR}) and their function modules
+     * (TFDIR, short text from TFTIT). A function module is addressed through
+     * its group — {@code /functions/groups/<group>/fmodules/<module>} — which
+     * is also how ADT opens the (editable) function module editor.
+     */
+    private static void searchFunctions(IProject project, JCoDestination destination,
+            String pattern, String language, IProgressMonitor monitor,
+            Map<String, AbapObjectItem> items) throws Exception {
+        Throwable firstError = null;
+        boolean read = false;
+
+        Map<String, String> texts = Collections.emptyMap();
+        try {
+            texts = readTextMap(destination, "TFTIT", "FUNCNAME", "SPRSL", "STEXT", null,
+                    condition("FUNCNAME", pattern), language, monitor);
+        } catch (Throwable t) {
+            log("TFTIT texts not readable: " + describe(t));
+        }
+
+        try {
+            List<Map<String, String>> rows = readRows(destination, "TFDIR",
+                    new String[] { "FUNCNAME", "PNAME" },
+                    Collections.singletonList(condition("FUNCNAME", pattern)), monitor);
+            read = true;
+            for (Map<String, String> row : rows) {
+                String name = value(row, "FUNCNAME");
+                String group = AbapObjectItem.functionGroupOfMainProgram(value(row, "PNAME"));
+                if (name.isEmpty() || group == null) {
+                    continue;
+                }
+                add(items, project, AbapObjectType.FUNCTION, name, "FUGR/FF", texts.get(name),
+                        "/sap/bc/adt/functions/groups/" + encode(group) + "/fmodules/"
+                                + encode(name));
+            }
+        } catch (Throwable t) {
+            firstError = t;
+            log("TFDIR not readable: " + describe(t));
+        }
+
+        try {
+            List<Map<String, String>> rows = readRows(destination, "TADIR",
+                    new String[] { "OBJ_NAME" },
+                    Arrays.asList("PGMID EQ 'R3TR'", "OBJECT EQ 'FUGR'",
+                            condition("OBJ_NAME", pattern)),
+                    monitor);
+            read = true;
+            for (Map<String, String> row : rows) {
+                String name = value(row, "OBJ_NAME");
+                if (name.isEmpty()) {
+                    continue;
+                }
+                add(items, project, AbapObjectType.FUNCTION, name, "FUGR/F", "",
+                        "/sap/bc/adt/functions/groups/" + encode(name));
+            }
+        } catch (Throwable t) {
+            if (firstError == null) {
+                firstError = t;
+            }
+            log("TADIR(FUGR) not readable: " + describe(t));
+        }
+
+        if (!read && firstError != null) {
+            throw new Exception(firstError);
         }
     }
 
@@ -725,7 +814,9 @@ final class AbapObjectSearchClient {
 
     private static void add(Map<String, AbapObjectItem> items, IProject project,
             AbapObjectType type, String name, String adtType, String description, String uri) {
-        String key = type.name() + '|' + name.toUpperCase();
+        // The ADT type takes part in the key: one category may hold two object
+        // kinds (a program and an include, a function group and a module).
+        String key = type.name() + '|' + adtType + '|' + name.toUpperCase();
         items.putIfAbsent(key, new AbapObjectItem(project, name, adtType,
                 description == null ? "" : description, uri, type));
     }

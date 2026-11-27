@@ -147,8 +147,17 @@ final class AbapObjectNavigator {
         LinkedHashSet<String> uris = new LinkedHashSet<>();
         String type = item.getType() == null ? "" : item.getType().toUpperCase();
         String name = item.getName() == null ? "" : item.getName();
+        boolean functionInclude = type.startsWith("FUGR/I");
+        // Function groups, their includes and function modules are addressed
+        // through the group, not by a URI ADT would derive from the bare name.
+        boolean functionObject = type.startsWith("FUGR/");
 
-        String resolved = resolveCanonicalUri(item.getProject(), type, name);
+        // A function group object has no URI of its own that ADT could compute
+        // from the name alone: it must be addressed through its function group,
+        // otherwise the editor books the change as "R3TR PROG <include>" and
+        // the transport organizer rejects it. The canonical URI is not used.
+        String resolved = functionObject
+                ? null : resolveCanonicalUri(item.getProject(), type, name);
         if (resolved != null && !resolved.isEmpty()) {
             uris.add(resolved);
             uris.add(resolved + "/source/main");
@@ -163,13 +172,23 @@ final class AbapObjectNavigator {
                 || type.startsWith("DTEL/") || type.startsWith("DOMA/");
         if (!discoveryOnly) {
             String stored = item.getUri();
+            if (stored == null || stored.trim().isEmpty()) {
+                stored = fallbackUri(item);
+            }
             if (stored != null && !stored.trim().isEmpty()) {
                 uris.add(stored);
-            } else {
-                String fallback = fallbackUri(item);
-                if (fallback != null && !fallback.trim().isEmpty()) {
-                    uris.add(fallback);
+                if (functionObject) {
+                    uris.add(stored + "/source/main");
                 }
+            }
+            if (functionInclude) {
+                // Last resort only: this editor displays the source as a plain
+                // include, but saving it is the case the transport organizer
+                // rejects, so it is tried after the function group URIs.
+                String includeUri = "/sap/bc/adt/programs/includes/"
+                        + name.toLowerCase().replace("/", "%2F");
+                uris.add(includeUri);
+                uris.add(includeUri + "/source/main");
             }
         }
 
@@ -372,6 +391,23 @@ final class AbapObjectNavigator {
         String type = item.getType() == null ? "" : item.getType().toUpperCase();
         String name = item.getName() == null ? "" : item.getName().toLowerCase();
         String encoded = name.replace("/", "%2F");
+        if (type.startsWith("FUGR/I")) {
+            String functionGroup = AbapObjectItem.functionGroupOfInclude(item.getName());
+            if (functionGroup != null) {
+                return "/sap/bc/adt/functions/groups/"
+                        + functionGroup.toLowerCase().replace("/", "%2F")
+                        + "/includes/" + encoded;
+            }
+            return "/sap/bc/adt/programs/includes/" + encoded;
+        }
+        if (type.startsWith("FUGR/FF")) {
+            // A function module has no URI without its group, and the stored
+            // URI of a search hit always carries it.
+            return null;
+        }
+        if (type.startsWith("FUGR/")) {
+            return "/sap/bc/adt/functions/groups/" + encoded;
+        }
         if (type.startsWith("PROG/I")) {
             return "/sap/bc/adt/programs/includes/" + encoded;
         }

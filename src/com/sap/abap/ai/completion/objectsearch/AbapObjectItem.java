@@ -1,5 +1,8 @@
 package com.sap.abap.ai.completion.objectsearch;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.eclipse.core.resources.IProject;
 
 /**
@@ -11,6 +14,13 @@ import org.eclipse.core.resources.IProject;
  * object (including methods, which have no standalone URI of their own).</p>
  */
 final class AbapObjectItem {
+
+    /**
+     * Suffix of an include generated for a function group: {@code TOP} or one
+     * letter plus two digits ({@code U01}, {@code F01}, {@code I01} …).
+     */
+    private static final Pattern FUGR_INCLUDE_SUFFIX =
+            Pattern.compile("(TOP|[A-Z]\\d{2})$");
 
     private final IProject project;
     private final String name;
@@ -54,6 +64,59 @@ final class AbapObjectItem {
 
     AbapObjectType getObjectType() {
         return objectType;
+    }
+
+    /**
+     * The function group whose generated include {@code name} is:
+     * {@code L<group>TOP}, {@code L<group>U01}, {@code L<group>F01} … (a
+     * namespace prefix is kept, {@code /NS/LFGTOP -> /NS/FG}).
+     *
+     * <p>Returns {@code null} for includes that do not follow that naming
+     * scheme (class includes, ordinary programs, includes created in SE38).</p>
+     */
+    static String functionGroupOfInclude(String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        String upper = name.toUpperCase();
+        int start = 0;
+        if (upper.charAt(0) == '/') {
+            int second = upper.indexOf('/', 1);
+            if (second < 0) {
+                return null;
+            }
+            start = second + 1;
+        }
+        if (start >= upper.length() || upper.charAt(start) != 'L') {
+            return null;
+        }
+        String rest = upper.substring(start + 1);
+        Matcher suffix = FUGR_INCLUDE_SUFFIX.matcher(rest);
+        if (!suffix.find()) {
+            return null;
+        }
+        String group = rest.substring(0, suffix.start());
+        return group.isEmpty() ? null : upper.substring(0, start) + group;
+    }
+
+    /**
+     * The function group of a function pool main program, i.e. the group a
+     * function module belongs to: {@code SAPLZFG_X -> ZFG_X} and
+     * {@code /NS/SAPLFG -> /NS/FG}. Returns {@code null} for other programs.
+     */
+    static String functionGroupOfMainProgram(String mainProgram) {
+        if (mainProgram == null || mainProgram.isEmpty()) {
+            return null;
+        }
+        String upper = mainProgram.toUpperCase();
+        int idx = upper.lastIndexOf("SAPL");
+        // The SAPL prefix must lead the name or follow a namespace slash,
+        // otherwise ordinary programs containing "SAPL" would false-positive.
+        if (idx < 0 || (idx > 0 && upper.charAt(idx - 1) != '/')) {
+            return null;
+        }
+        String group = upper.substring(0, idx) + upper.substring(idx + 4);
+        return group.isEmpty() ? null : group;
     }
 
     /** Text shown in the result view: name followed by the description. */
